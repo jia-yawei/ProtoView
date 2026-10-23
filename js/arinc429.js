@@ -327,126 +327,364 @@ class Arinc429Helper {
     }
 
     /**
-     * 生成面向 AI 开发上位机的标准 Markdown 协议表格规范
-     * 每个数据字对应一张完整独立的字段映射表格
+     * 生成符合航空工程 IC 接口卡片规范的标准独立 HTML 网页（支持离线浏览、浏览器另存、一键打印/导出PDF）
+     */
+    static generateHtmlSpec(protocol) {
+        if (!protocol) return '<h3>无有效协议</h3>';
+        const pName = protocol.name || 'ARINC 429 通信协议';
+        const pDevice = protocol.device || protocol.source || '未指定设备';
+        const mdContent = this.generateMarkdownSpec(protocol);
+
+        // 提取 Markdown 中的 HTML 表格主体部分 (过滤掉前面的一级标题和分隔线)
+        const tablesHtml = mdContent
+            .replace(/^#\s+[^\n]+\n+/, '')
+            .replace(/###\s+[^\n]+/g, '')
+            .replace(/---/g, '');
+
+        return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${pName} - ARINC 429 接口控制卡片规范</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 15mm 12mm 15mm 12mm;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .page-container {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 32px 40px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      border-radius: 8px;
+    }
+    .doc-header {
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .doc-title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #0f172a;
+    }
+    .doc-meta {
+      font-size: 13px;
+      color: #475569;
+    }
+    .no-print-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      background: #e2e8f0;
+      padding: 10px 16px;
+      border-radius: 6px;
+    }
+    .btn-action {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-action:hover {
+      background: #1d4ed8;
+    }
+    .card-wrap {
+      margin-bottom: 32px;
+      page-break-inside: avoid;
+    }
+    table.arinc-spec-card-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 12.5px;
+      border: 1.5px solid #000;
+      color: #000;
+    }
+    table.arinc-spec-card-table td {
+      border: 1px solid #000;
+      padding: 5px 8px;
+      vertical-align: middle;
+    }
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+      .page-container {
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      .no-print-bar {
+        display: none !important;
+      }
+      .card-wrap {
+        page-break-after: auto;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div class="no-print-bar">
+      <span><strong>航电接口卡片文档</strong> (源自 ProtoView 429 协议系统)</span>
+      <button class="btn-action" onclick="window.print()">🖨️ 打印 / 另存为 PDF</button>
+    </div>
+    <div class="doc-header">
+      <div>
+        <h1 class="doc-title">${pName}</h1>
+        <div class="doc-meta" style="margin-top:4px;">设备来源: ${pDevice} | 生成日期: ${new Date().toLocaleDateString()}</div>
+      </div>
+      <div class="doc-meta" style="text-align: right;">
+        <div>符合标准: ARINC 429</div>
+        <div>文档密级: 内部工程使用</div>
+      </div>
+    </div>
+    <div class="doc-body">
+      ${tablesHtml}
+    </div>
+  </div>
+</body>
+</html>`;
+    }
+
+    /**
+     * 生成符合航空工程 IC 接口卡片规范的标准 Markdown / HTML 表格文档
+     * 结构严格对应：
+     * 1. 信号基本属性信息区（信号名称、规范号、信号类型、源、分布、符合标准、单位、信号范围、分辨率、信号格式、精度）
+     * 2. 数据格式双列 1~32 数位分布表（左列 1~16 位，右列 17~32 位，精确到每一个数位的占用、字段名、保留与控制位说明）
+     * 3. 附注说明区（离散状态编码映射、有效性标识、SSM 状态定义等）
      */
     static generateMarkdownSpec(protocol) {
         if (!protocol) return '# 无有效协议\n';
         const pName = protocol.name || 'ARINC 429 通信协议';
-        const pDevice = protocol.device || protocol.source || 'ADC (大气数据计算机)';
+        const pDevice = protocol.device || protocol.source || '未指定设备';
         const pSpeed = protocol.speed || '100kbps';
-        const pParity = protocol.parity === 'odd' ? '奇校验 (Bit 32, Odd)' : (protocol.parity === 'even' ? '偶校验 (Bit 32, Even)' : '无校验');
-        const pMode = protocol.mode === 'bitstream' ? '自由 Bit 流模式 (32位自定义)' : '经典航电模式 (有效载荷 Bits 11~29)';
-        const pDir = protocol.direction || 'Tx';
+        const pParity = protocol.parity === 'odd' ? 'PARITY (奇校验)' : (protocol.parity === 'even' ? 'PARITY (偶校验)' : 'PARITY (无校验)');
+        const pMode = protocol.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式';
         const words = protocol.words || [];
 
-        let md = `# ${pName} - ARINC 429 通信协议表格规范\n\n`;
-        md += `> **给 AI 的系统提示词 (Prompt Context)**：\n`;
-        md += `> 本文档为航空电子设备 **ARINC 429 总线上位机通信协议规范**。请根据下方汇总表及**各数据字的详细字段分配表**，编写上位机软件总线通信解析、遥测监控界面或驱动程序（如 C#/WPF、C++/Qt、Python 等）。每个数据字均为 32 位（Bit 1~32），请严格按照表格中定义的**起始 Bit、占用位数、数据类型、字节序与分辨率**进行位提取与工程量转换。\n\n`;
+        let md = `# ${pName} - ARINC 429 总线IC接口卡片定义规范\n\n`;
 
-        md += `## 一、协议全局参数\n\n`;
-        md += `| 参数项 | 配置值 | 说明 |\n`;
-        md += `| :--- | :--- | :--- |\n`;
-        md += `| **协议名称** | ${pName} | 机载通信总线协议工程名称 |\n`;
-        md += `| **总线类型** | ARINC 429 | 航电串行双绞线数字传输总线 |\n`;
-        md += `| **对端设备** | ${pDevice} | 交互的目标机载设备系统 |\n`;
-        md += `| **默认传输方向** | ${pDir === 'Tx' ? 'Tx (上位机发送/下行)' : 'Rx (上位机接收/上行)'} | 上位机通信方向 |\n`;
-        md += `| **总线调度周期** | ${protocol.period || 20} ms | 协议全局统一总线调度发送周期 |\n`;
-        md += `| **总线传输波特率** | ${pSpeed} | ${pSpeed === '100kbps' ? '高速模式 (100 kbps, 周期脉冲)' : '低速模式 (12.5 kbps)'} |\n`;
-        md += `| **奇偶校验规则** | ${pParity} | ARINC 429 标准 Bit 32 奇偶性检查 |\n`;
-        md += `| **字段划分模式** | ${pMode} | 数据字内部有效载荷的分配形式 |\n`;
-        if (protocol.description) {
-            md += `| **协议说明备注** | ${protocol.description} | 工程背景及技术说明 |\n`;
-        }
-        md += `| **数据字数量** | 共 ${words.length} 个标号字 | 协议中包含的全部数据字总数 |\n\n`;
-
-        md += `## 二、标号字汇总列表 (全部数据字总览)\n\n`;
-        md += `| 序号 | 标号 (八进制) | 标号 (十六进制) | 数据字名称 | 方向 | 调度模式 | 发送周期 | 字段数 |\n`;
-        md += `| :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: |\n`;
-        words.forEach((w, idx) => {
-            const oct = (w.label || '000').toString().padStart(3, '0');
-            const byteVal = this.octalToLabelByte(oct);
-            const hex = '0x' + byteVal.toString(16).toUpperCase().padStart(2, '0');
-            const sendModeStr = w.sendMode === 'event' ? '事件触发' : '周期发送';
-            const sigCount = (w.signals || []).length;
-            md += `| ${idx + 1} | \`${oct}₈\` | \`${hex}\` | **${w.name || '未命名'}** | ${w.direction || pDir} | ${sendModeStr} | ${protocol.period || w.period || 20} ms | ${sigCount} |\n`;
-        });
-        md += `\n`;
-
-        md += `## 三、数据字详细定义与字段映射表\n\n`;
         words.forEach((w, idx) => {
             const oct = (w.label || '000').toString().padStart(3, '0');
             const byteVal = this.octalToLabelByte(oct);
             const hex = '0x' + byteVal.toString(16).toUpperCase().padStart(2, '0');
             const fields = w.signals || [];
-            const sendModeStr = w.sendMode === 'event' ? '事件触发' : '周期发送';
-
             const isBitstream = (protocol && protocol.mode === 'bitstream') || (w.editMode === 'bitstream');
-            let ssmDictStr = '';
-            if (w.ssmDict && Object.keys(w.ssmDict).length > 0) {
-                ssmDictStr = ' [' + Object.entries(w.ssmDict).map(([k, v]) => `${k}:${v}`).join(', ') + ']';
+
+            // 信号名称与规范号
+            const signalName = w.name || `ARINC429 标号字 ${oct}`;
+            const specNo = w.channel ? `${w.channel}-${oct}` : `${pDevice ? pDevice.split(' ')[0] : 'SYS'}-${oct}`;
+            const sourceDevice = w.source || pDevice;
+            const targetDistrib = `${sourceDevice}${w.channel ? ` (${w.channel})` : ''}`;
+
+            // 提取主要物理量参数（优先取主要数值字段，若无则综合显示）
+            let mainUnit = 'V';
+            let mainRange = '0.0~55.0';
+            let mainRes = '0.1';
+            let mainPrec = '2%';
+            let hasFoundMain = false;
+
+            if (fields.length > 0) {
+                // 查找非 bool 的数值型字段作为主展示参数
+                const numField = fields.find(f => f.dataType === 'u16' || f.dataType === 'u8') || fields[0];
+                if (numField) {
+                    mainUnit = numField.unit || '-';
+                    const minStr = (numField.min !== undefined && numField.min !== null && numField.min !== '') ? numField.min : '';
+                    const maxStr = (numField.max !== undefined && numField.max !== null && numField.max !== '') ? numField.max : '';
+                    mainRange = (minStr !== '' || maxStr !== '') ? `${minStr}~${maxStr}` : '-';
+                    mainRes = (numField.resolution !== undefined && numField.resolution !== null && numField.resolution !== '') ? numField.resolution : '-';
+                    mainPrec = (numField.precision !== undefined && numField.precision !== null && numField.precision !== '') ? numField.precision : '-';
+                    hasFoundMain = true;
+                }
             }
-            let sdiDictStr = '';
+            if (!hasFoundMain) {
+                mainUnit = '-';
+                mainRange = '-';
+                mainRes = '-';
+                mainPrec = '-';
+            }
+
+            // 构建 1~32 位每个 bit 的归属说明
+            const bitMap = new Array(33).fill('');
+
+            // Bit 1~8: 标号
+            for (let b = 1; b <= 8; b++) {
+                bitMap[b] = `Label 标号位 (Label: ${oct}₈ / ${hex})`;
+            }
+
+            // 经典模式 Bit 9~10: SDI
+            if (!isBitstream) {
+                bitMap[9] = `SDI 识别码 (B9)`;
+                bitMap[10] = `SDI 识别码 (B10)`;
+            }
+
+            // 映射具体配置的字段
+            fields.forEach(f => {
+                const s = Math.max(1, Math.min(32, Number(f.startBit || 1)));
+                const len = Math.max(1, Number(f.bitCount || f.length || 1));
+                const e = Math.min(32, s + len - 1);
+                const fname = f.name || '未命名数据';
+                for (let b = s; b <= e; b++) {
+                    if (len === 1) {
+                        bitMap[b] = fname;
+                    } else {
+                        bitMap[b] = `${fname} (B${s}~B${e})`;
+                    }
+                }
+            });
+
+            // Bit 30~31: SSM
+            bitMap[30] = 'SSM (有效性/符号状态矩阵)';
+            bitMap[31] = 'SSM (有效性/符号状态矩阵)';
+
+            // Bit 32: Parity
+            bitMap[32] = pParity;
+
+            // 未分配位默认标记为保留
+            for (let b = 1; b <= 32; b++) {
+                if (!bitMap[b]) {
+                    bitMap[b] = '保留 (Reserved)';
+                }
+            }
+
+            // 附注说明整理
+            const notes = [];
+            // 附注 1: 字段状态字典与通断状态说明
+            fields.forEach(f => {
+                const dict = f.dict || {};
+                const entries = Object.entries(dict);
+                if (entries.length > 0) {
+                    const dictDesc = entries.map(([k, v]) => `${k}-${v}`).join(', ');
+                    notes.push(`${f.name} (B${f.startBit}${f.bitCount > 1 ? `~B${Number(f.startBit) + Number(f.bitCount) - 1}` : ''}): ${dictDesc}`);
+                }
+            });
+
+            // 附注 2: SDI 字典 (经典模式)
             if (!isBitstream && w.sdiDict && Object.keys(w.sdiDict).length > 0) {
-                sdiDictStr = ' [' + Object.entries(w.sdiDict).map(([k, v]) => `${k}:${v}`).join(', ') + ']';
+                const sdiMap = { '0': '00', '1': '01', '2': '10', '3': '11' };
+                const sdiStr = Object.entries(w.sdiDict).map(([k, v]) => `${sdiMap[k] || k}:${v}`).join(', ');
+                notes.push(`SDI 系统源标识 (bit9-bit10): ${sdiStr}`);
             }
 
-            md += `### 数据字 #${idx + 1}：标号 ${oct}₈ (${hex}) - ${w.name || '未命名数据字'}\n\n`;
-            md += `- **通信方向**: \`${w.direction || pDir}\`\n`;
-            md += `- **调度属性**: 发送周期: \`${protocol.period || w.period || 20} ms\` (协议全局统一)\n`;
-            if (isBitstream) {
-                md += `- **总线标志位**: SSM 状态: \`${w.ssm !== undefined ? w.ssm : 0}\` (Bits 30~31)${ssmDictStr} | 校验: \`${pParity}\` (Bit 32)\n\n`;
-            } else {
-                md += `- **总线标志位**: SDI 识别码: \`${w.sdi !== undefined ? w.sdi : 0}\` (Bits 9~10)${sdiDictStr} | SSM 状态: \`${w.ssm !== undefined ? w.ssm : 0}\` (Bits 30~31)${ssmDictStr} | 校验: \`${pParity}\` (Bit 32)\n\n`;
+            // 附注 3: SSM 有效性说明
+            const globalSsmDict = (protocol && protocol.ssmDict) || w.ssmDict || { "0": "正常运算 (00)", "1": "无计算数据 (01)", "2": "功能测试 (10)", "3": "故障告警 (11)" };
+            const ssmBitMap = { '0': '00', '1': '01', '2': '10', '3': '11' };
+            const ssmDesc = Object.entries(globalSsmDict).map(([k, v]) => `${ssmBitMap[k] || k} ${v}`).join('; ');
+            notes.push(`SSM 有效性标识 (bit30-bit31): ${ssmDesc}`);
+
+            if (w.remark || protocol.description) {
+                notes.push(`技术备注: ${w.remark || protocol.description}`);
             }
 
-            if (fields.length === 0) {
-                md += `> *说明：此数据字当前暂未划分具体字段*\n\n`;
-            } else {
-                md += `| 序号 | 字段名称 | 数据类型 | 起始Bit | 占用Bit | 位段范围 | 字节序 | 分辨率 | 精度 | 范围 | 单位 | 状态字典 / 编码含义 | 备注 |\n`;
-                md += `| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- | :--- |\n`;
+            // 输出符合用户航空接口卡片标准的大表 (使用 HTML 格式在 Markdown 中渲染，支持完美的行列合并与精确布局)
+            md += `### ${idx + 1}. 接口控制卡片: ${signalName} (标号 ${oct}₈)\n\n`;
+            md += `<table class="arinc-spec-card-table" style="width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 13px; border: 1.5px solid #333;">\n`;
+            md += `  <tbody>\n`;
+            md += `    <tr style="border-bottom: 1px solid #333;">\n`;
+            md += `      <td style="width: 12%; font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center;">信号名称</td>\n`;
+            md += `      <td style="width: 45%; border: 1px solid #333; padding: 6px 10px;">${signalName}</td>\n`;
+            md += `      <td style="width: 15%; font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center;">规范号</td>\n`;
+            md += `      <td style="width: 28%; border: 1px solid #333; padding: 6px 10px;">${specNo}</td>\n`;
+            md += `    </tr>\n`;
 
-                fields.forEach((f, fIdx) => {
-                    const start = Number(f.startBit || 1);
-                    const count = Number(f.bitCount || f.length || 1);
-                    const end = start + count - 1;
-                    const rangeStr = `B${start}${count > 1 ? `~B${end}` : ''}`;
-                    
-                    // 归一化类型 (严格限制为 bool / u8 / u16)
-                    let rawType = (f.dataType || '').toLowerCase();
-                    let dType = 'u16';
-                    if (rawType === 'bool' || rawType === 'discrete') dType = 'bool';
-                    else if (rawType === 'u8' || count <= 8) dType = 'u8';
-                    else dType = 'u16';
+            md += `    <tr style="border-bottom: 1px solid #333;">\n`;
+            md += `      <td style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center;">信号类型</td>\n`;
+            md += `      <td style="border: 1px solid #333; padding: 6px 10px;">32 位信号 (ARINC 429 ${pMode})</td>\n`;
+            md += `      <td style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center;">源</td>\n`;
+            md += `      <td style="border: 1px solid #333; padding: 6px 10px;">${sourceDevice}</td>\n`;
+            md += `    </tr>\n`;
 
-                    // 字节序 (仅 u16 有字节序)
-                    let endianStr = '-';
-                    if (dType === 'u16') {
-                        endianStr = (f.endianness === 'little') ? '小端(LSB)' : '大端(MSB)';
-                    }
+            md += `    <tr style="border-bottom: 1px solid #333;">\n`;
+            md += `      <td rowspan="4" style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center; vertical-align: middle;">信号内容</td>\n`;
+            md += `      <td colspan="3" style="border: 1px solid #333; padding: 6px 10px;"><strong>分布：</strong> ${targetDistrib}</td>\n`;
+            md += `    </tr>\n`;
 
-                    // 分辨率、精度、范围、单位、备注默认情况下都是空的 (未填写则显示 '-')
-                    const resVal = (f.resolution !== undefined && f.resolution !== null && f.resolution !== '') ? f.resolution : '-';
-                    const precVal = (f.precision !== undefined && f.precision !== null && f.precision !== '') ? f.precision : ((f.offset !== undefined && f.offset !== null && f.offset !== '') ? f.offset : '-');
-                    const minStr = (f.min !== undefined && f.min !== null && f.min !== '') ? f.min : '';
-                    const maxStr = (f.max !== undefined && f.max !== null && f.max !== '') ? f.max : '';
-                    const rangeVal = (minStr !== '' || maxStr !== '') ? `${minStr} ~ ${maxStr}` : '-';
-                    const unitStr = (f.unit !== undefined && f.unit !== null && f.unit !== '') ? f.unit : '-';
-                    const remarkStr = (f.remark || f.desc || f.comment || '').trim() || '-';
+            md += `    <tr style="border-bottom: 1px solid #333;">\n`;
+            md += `      <td style="border: 1px solid #333; padding: 6px 10px;"><strong>符合标准：</strong> ARINC429</td>\n`;
+            md += `      <td style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center;">单位</td>\n`;
+            md += `      <td style="border: 1px solid #333; padding: 6px 10px;">${mainUnit}</td>\n`;
+            md += `    </tr>\n`;
 
-                    // 状态字典映射
-                    let dictStr = '-';
-                    const dict = f.dict || {};
-                    const dictEntries = Object.entries(dict);
-                    if (dictEntries.length > 0) {
-                        dictStr = dictEntries.map(([k, v]) => `\`${k}\`:${v}`).join('; ');
-                    }
+            md += `    <tr style="border-bottom: 1px solid #333;">\n`;
+            md += `      <td style="border: 1px solid #333; padding: 6px 10px;"><strong>信号范围：</strong> ${mainRange}</td>\n`;
+            md += `      <td style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center;">分辨率</td>\n`;
+            md += `      <td style="border: 1px solid #333; padding: 6px 10px;">${mainRes}</td>\n`;
+            md += `    </tr>\n`;
 
-                    md += `| ${fIdx + 1} | **${f.name || '未命名'}** | \`${dType}\` | ${start} | ${count} | \`${rangeStr}\` | ${endianStr} | ${resVal} | ${precVal} | ${rangeVal} | ${unitStr} | ${dictStr} | ${remarkStr} |\n`;
+            md += `    <tr style="border-bottom: 1px solid #333;">\n`;
+            md += `      <td style="border: 1px solid #333; padding: 6px 10px;"><strong>信号格式：</strong> 429 航电通信 (速率: ${pSpeed}, 周期: ${protocol.period || w.period || 20}ms)</td>\n`;
+            md += `      <td style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center;">精度</td>\n`;
+            md += `      <td style="border: 1px solid #333; padding: 6px 10px;">${mainPrec}</td>\n`;
+            md += `    </tr>\n`;
+
+            md += `    <tr style="background: #e2e8f0; font-weight: bold; text-align: center; border-bottom: 1.5px solid #333;">\n`;
+            md += `      <td colspan="4" style="border: 1px solid #333; padding: 7px 10px; letter-spacing: 2px;">数 据 格 式</td>\n`;
+            md += `    </tr>\n`;
+
+            md += `    <tr style="background: #f1f5f9; font-weight: bold; text-align: center; border-bottom: 1px solid #333;">\n`;
+            md += `      <td style="border: 1px solid #333; padding: 5px; width: 10%;">数位</td>\n`;
+            md += `      <td style="border: 1px solid #333; padding: 5px; width: 40%;">说明</td>\n`;
+            md += `      <td style="border: 1px solid #333; padding: 5px; width: 10%;">数位</td>\n`;
+            md += `      <td style="border: 1px solid #333; padding: 5px; width: 40%;">说明</td>\n`;
+            md += `    </tr>\n`;
+
+            // 双列循环：左列 1~16 位，右列 17~32 位
+            for (let row = 1; row <= 16; row++) {
+                const leftBit = row;
+                const rightBit = row + 16;
+                const leftDesc = bitMap[leftBit] || '保留';
+                const rightDesc = bitMap[rightBit] || '保留';
+
+                md += `    <tr style="border-bottom: 1px solid #e2e8f0;">\n`;
+                md += `      <td style="border: 1px solid #333; padding: 4px; text-align: center; font-weight: 600;">${leftBit}</td>\n`;
+                md += `      <td style="border: 1px solid #333; padding: 4px 8px;">${leftDesc}</td>\n`;
+                md += `      <td style="border: 1px solid #333; padding: 4px; text-align: center; font-weight: 600;">${rightBit}</td>\n`;
+                md += `      <td style="border: 1px solid #333; padding: 4px 8px;">${rightDesc}</td>\n`;
+                md += `    </tr>\n`;
+            }
+
+            // 附注行
+            md += `    <tr style="border-top: 1.5px solid #333;">\n`;
+            md += `      <td style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 8px 10px; text-align: center; vertical-align: top;">附注</td>\n`;
+            md += `      <td colspan="3" style="border: 1px solid #333; padding: 8px 12px; line-height: 1.7;">\n`;
+            if (notes.length > 0) {
+                notes.forEach((note, nIdx) => {
+                    md += `        <div>${nIdx + 1}. ${note}</div>\n`;
                 });
-                md += `\n`;
+            } else {
+                md += `        <div>1. 无特殊附注说明</div>\n`;
             }
+            md += `      </td>\n`;
+            md += `    </tr>\n`;
 
+            md += `  </tbody>\n`;
+            md += `</table>\n\n`;
             md += `---\n\n`;
         });
 

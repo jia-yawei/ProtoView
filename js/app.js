@@ -984,15 +984,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // 统一协议级字段划分模式与全局周期
+        // 统一协议级字段划分模式与全局周期、SSM 字典
         if (!currentArincProtocol.mode) {
             currentArincProtocol.mode = (currentArincProtocol.words && currentArincProtocol.words[0] && currentArincProtocol.words[0].editMode) || 'classic';
         }
         if (!currentArincProtocol.period) {
             currentArincProtocol.period = (currentArincProtocol.words && currentArincProtocol.words[0] && currentArincProtocol.words[0].period) || 20;
         }
+        if (!currentArincProtocol.ssmDict) {
+            currentArincProtocol.ssmDict = (currentArincProtocol.words && currentArincProtocol.words[0] && currentArincProtocol.words[0].ssmDict) || {
+                "0": "正常运算 (Normal)",
+                "1": "无计算数据 (NCD)",
+                "2": "功能测试 (FT)",
+                "3": "故障告警 (Fail)"
+            };
+        }
         currentArincProtocol.words.forEach(w => {
             w.period = currentArincProtocol.period;
+            w.ssmDict = currentArincProtocol.ssmDict;
         });
 
         if (arincProtocolSelect) arincProtocolSelect.value = p.id;
@@ -1034,6 +1043,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const defaultPeriod = (templateData && templateData.period) || (templateData && templateData.words && templateData.words[0] && templateData.words[0].period) || 20;
         const defaultDevice = (templateData && templateData.device) || (currentArincProtocol && currentArincProtocol.device) || '机载航电系统';
         const defaultDirection = (templateData && templateData.direction) || (currentArincProtocol && currentArincProtocol.direction) || 'Tx';
+        const defaultSsmDict = (templateData && templateData.ssmDict) || (currentArincProtocol && currentArincProtocol.ssmDict) || {
+            "0": "正常运算 (Normal)",
+            "1": "无计算数据 (NCD)",
+            "2": "功能测试 (FT)",
+            "3": "故障告警 (Fail)"
+        };
 
         if (templateData && templateData.words && templateData.words.length > 0) {
             newProto = JSON.parse(JSON.stringify(templateData));
@@ -1045,8 +1060,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             newProto.speed = templateData.speed || '100kbps';
             newProto.parity = templateData.parity || 'odd';
             newProto.mode = templateData.mode || defaultMode;
+            newProto.ssmDict = defaultSsmDict;
             if (newProto.words) {
-                newProto.words.forEach(w => w.period = defaultPeriod);
+                newProto.words.forEach(w => {
+                    w.period = defaultPeriod;
+                    w.ssmDict = defaultSsmDict;
+                });
             }
         } else {
             newProto = {
@@ -1058,6 +1077,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 direction: defaultDirection,
                 speed: '100kbps',
                 parity: 'odd',
+                ssmDict: defaultSsmDict,
                 description: 'ARINC 429 机载航空通信总线协议',
                 words: [
                     {
@@ -1074,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         channel: 'CH1',
                         sdi: 0,
                         sdiDict: { "0": "全部系统 (All)", "1": "左侧系统 (Left)", "2": "右侧系统 (Right)", "3": "备用系统 (Aux)" },
-                        ssmDict: { "0": "正常运算 (Normal)", "1": "无计算数据 (NCD)", "2": "功能测试 (FT)", "3": "故障告警 (Fail)" },
+                        ssmDict: defaultSsmDict,
                         signals: [
                             {
                                 key: 'sig_main',
@@ -1134,12 +1154,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function saveCurrentArincProtocol() {
         if (!currentArincProtocol) return;
 
-        // 统一所有标号字的划分模式、周期与方向为协议全局配置
+        // 统一所有标号字的划分模式、周期、方向与全局 SSM 字典为协议全局配置
+        if (!currentArincProtocol.ssmDict && currentArincProtocol.words && currentArincProtocol.words[0]) {
+            currentArincProtocol.ssmDict = currentArincProtocol.words[0].ssmDict;
+        }
         if (currentArincProtocol.words) {
             currentArincProtocol.words.forEach(w => {
                 w.editMode = currentArincProtocol.mode;
                 w.period = currentArincProtocol.period || 20;
                 w.direction = currentArincProtocol.direction || 'Tx';
+                if (currentArincProtocol.ssmDict) {
+                    w.ssmDict = currentArincProtocol.ssmDict;
+                }
             });
         }
 
@@ -1401,17 +1427,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         wordSdi.value = word.sdi !== undefined ? word.sdi : 0;
     }
 
-    // 辅助：更新 SSM 选项列表 (两位: B30~B31)
+    // 辅助：更新 SSM 选项列表 (两位: B30~B31，继承自协议全局 SSM 字典)
     function updateSsmSelectOptions(word) {
-        if (!word.ssmDict) {
-            word.ssmDict = { "0": "正常运算 (Normal)", "1": "无计算数据 (NCD)", "2": "功能测试 (FT)", "3": "故障告警 (Fail)" };
-        }
+        const globalSsmDict = (currentArincProtocol && currentArincProtocol.ssmDict) || word.ssmDict || { "0": "正常运算 (Normal)", "1": "无计算数据 (NCD)", "2": "功能测试 (FT)", "3": "故障告警 (Fail)" };
+        word.ssmDict = globalSsmDict;
+        if (currentArincProtocol) currentArincProtocol.ssmDict = globalSsmDict;
+
         const curVal = word.ssm !== undefined ? word.ssm : 0;
         const selects = [wordSsm, bsWordSsm].filter(Boolean);
         selects.forEach(sel => {
             sel.innerHTML = '';
             const bitMap = { '0': '00', '1': '01', '2': '10', '3': '11' };
-            Object.entries(word.ssmDict).forEach(([k, v]) => {
+            Object.entries(globalSsmDict).forEach(([k, v]) => {
                 const opt = document.createElement('option');
                 opt.value = k;
                 opt.textContent = `${bitMap[k] || k}: ${v}`;
@@ -1545,11 +1572,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const dict = field.dict || {};
             const keys = Object.keys(dict);
             if (keys.length > 0) {
-                keys.slice(0, 3).forEach(k => {
+                keys.slice(0, 5).forEach(k => {
                     dictBadgesHTML += `<span class="dense-dict-tag" title="${k}: ${dict[k]}">${k}:${dict[k]}</span>`;
                 });
-                if (keys.length > 3) {
-                    dictBadgesHTML += `<span class="dense-dict-tag">+${keys.length - 3}</span>`;
+                if (keys.length > 5) {
+                    dictBadgesHTML += `<span class="dense-dict-tag" title="还有 ${keys.length - 5} 项">+${keys.length - 5}</span>`;
                 }
             } else {
                 dictBadgesHTML = '<span class="dense-dict-empty">未配置字典</span>';
@@ -1625,7 +1652,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     <div class="field-card-cell" style="width: 66px;">
                         <label class="field-card-label"><i class="fa-solid fa-bullseye"></i> 精度</label>
-                        <input type="number" class="field-in-offset field-card-input" step="any" value="${(field.precision !== undefined && field.precision !== null && field.precision !== '') ? field.precision : ((field.offset !== undefined && field.offset !== null && field.offset !== '' && field.offset !== 0) ? field.offset : '')}" placeholder="空" title="精度 (即物理偏移量，未填写则留空)">
+                        <input type="text" class="field-in-offset field-card-input" value="${(field.precision !== undefined && field.precision !== null && field.precision !== '') ? field.precision : ((field.offset !== undefined && field.offset !== null && field.offset !== '' && field.offset !== 0) ? field.offset : '')}" placeholder="空" title="精度 (支持输入小数、百分比如 %，未填写则留空)">
                     </div>
 
                     <div class="field-card-cell" style="width: 116px;">
@@ -1652,8 +1679,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                     </div>
 
-                    <!-- 备注列：放到最后，默认也是空的 -->
-                    <div class="field-card-cell field-card-cell-remark" style="flex: 1.2; min-width: 110px;">
+                    // 备注列：宽度适当收紧，不用占过宽
+                    <div class="field-card-cell field-card-cell-remark">
                         <label class="field-card-label"><i class="fa-solid fa-note-sticky"></i> 备注</label>
                         <input type="text" class="field-in-remark field-card-input" value="${field.remark || ''}" placeholder="空" title="字段备注说明 (默认空)">
                     </div>
@@ -1706,7 +1733,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // 分辨率、精度、范围、单位、备注默认情况下都是空的 (未填写则留空字符串)
                 field.resolution = inRes.value.trim() !== '' ? (parseFloat(inRes.value) || inRes.value.trim()) : '';
                 field.scale = field.resolution;
-                const precisionVal = inOffset.value.trim() !== '' ? (parseFloat(inOffset.value) || inOffset.value.trim()) : '';
+                const precisionRaw = inOffset.value.trim();
+                const precisionVal = precisionRaw !== '' ? (!isNaN(Number(precisionRaw)) ? parseFloat(precisionRaw) : precisionRaw) : '';
                 field.precision = precisionVal;
                 field.offset = precisionVal;
                 field.min = inMin.value.trim() !== '' ? (parseFloat(inMin.value) !== undefined && !isNaN(parseFloat(inMin.value)) ? parseFloat(inMin.value) : inMin.value.trim()) : '';
@@ -2056,15 +2084,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const onEditSsmDict = () => {
-        if (!currentArincProtocol || !currentArincProtocol.words) return;
-        const word = currentArincProtocol.words[currentWordIndex];
-        if (!word) return;
-        if (!word.ssmDict) {
-            word.ssmDict = { "0": "正常运算 (Normal)", "1": "无计算数据 (NCD)", "2": "功能测试 (FT)", "3": "故障告警 (Fail)" };
+        if (!currentArincProtocol) return;
+        if (!currentArincProtocol.ssmDict) {
+            currentArincProtocol.ssmDict = (currentArincProtocol.words && currentArincProtocol.words[0] && currentArincProtocol.words[0].ssmDict) || {
+                "0": "正常运算 (Normal)",
+                "1": "无计算数据 (NCD)",
+                "2": "功能测试 (FT)",
+                "3": "故障告警 (Fail)"
+            };
         }
-        openDictModal(word, `SSM 状态矩阵字典 (B30~B31) [${word.name || word.label}]`, () => {
-            updateSsmSelectOptions(word);
-            updateCompactSim(word);
+        openDictModal(currentArincProtocol, `SSM 状态矩阵字典 (B30~B31) [协议全局生效]`, () => {
+            // 同步到协议下的所有数据字
+            if (currentArincProtocol.words) {
+                currentArincProtocol.words.forEach(w => {
+                    w.ssmDict = currentArincProtocol.ssmDict;
+                });
+            }
+            const word = currentArincProtocol.words ? currentArincProtocol.words[currentWordIndex] : null;
+            if (word) {
+                updateSsmSelectOptions(word);
+                updateCompactSim(word);
+            }
         }, 'ssmDict');
     };
 
@@ -2218,14 +2258,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnAddWord.addEventListener('click', addWord);
     }
 
-    // 克隆字
+    // 克隆字 (标号自动加 1，按八进制自增并跳过冲突标号)
     if (btnDuplicateWord) {
         btnDuplicateWord.addEventListener('click', () => {
             if (!currentArincProtocol || !currentArincProtocol.words || currentArincProtocol.words.length === 0) return;
             const cur = currentArincProtocol.words[currentWordIndex];
             const dup = JSON.parse(JSON.stringify(cur));
-            dup.name = dup.name + '_副本';
-            dup.key = (dup.key || 'word') + '_copy';
+
+            // 计算所有已使用的八进制标号集合
+            const usedLabels = new Set(currentArincProtocol.words.map(w => (w.label || '').toString().padStart(3, '0')));
+            
+            // 当前标号转为十进制数值，然后尝试 +1 递增（逢 8 进位）
+            const curOctalStr = (cur.label || '001').toString().padStart(3, '0');
+            let curDecVal = parseInt(curOctalStr, 8);
+            if (isNaN(curDecVal)) curDecVal = 1;
+
+            let nextOctalStr = '';
+            // 从当前标号 + 1 开始寻找下一个合法的未被占用的八进制标号 (000 ~ 377)
+            for (let dec = curDecVal + 1; dec <= 255; dec++) {
+                const octStr = dec.toString(8).padStart(3, '0');
+                if (!usedLabels.has(octStr)) {
+                    nextOctalStr = octStr;
+                    break;
+                }
+            }
+            // 如果往后已达上限 377，则从 001 开始往前查找可用标号
+            if (!nextOctalStr) {
+                for (let dec = 1; dec <= 255; dec++) {
+                    const octStr = dec.toString(8).padStart(3, '0');
+                    if (!usedLabels.has(octStr)) {
+                        nextOctalStr = octStr;
+                        break;
+                    }
+                }
+            }
+            if (!nextOctalStr) {
+                nextOctalStr = (curDecVal + 1).toString(8).padStart(3, '0');
+            }
+
+            dup.label = nextOctalStr;
+            dup.name = (cur.name || '数据字') + '_副本';
+            dup.key = `word_${nextOctalStr}`;
             currentArincProtocol.words.splice(currentWordIndex + 1, 0, dup);
             currentWordIndex++;
             renderArincWordsList();
@@ -2700,7 +2773,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         reader.readAsText(file);
     }
 
-    // ----------------- 导出 Markdown 表格 (AI 上位机开发专用) -----------------
+    // ----------------- 导出 Markdown / HTML 航电 IC 接口卡片规范 -----------------
+    const tabBtnExportPreview = document.getElementById('tab-btn-export-view-preview');
+    const tabBtnExportCode = document.getElementById('tab-btn-export-view-code');
+    const exportPreviewContainer = document.getElementById('export-preview-container');
+    const exportCodeContainer = document.getElementById('export-code-container');
+    const exportRenderedPreview = document.getElementById('export-rendered-preview');
+    const btnPrintPreviewHtml = document.getElementById('btn-print-preview-html');
+    const btnDownloadHtmlSpec = document.getElementById('btn-download-html-spec');
+
     function openExportMdModal() {
         if (!currentArincProtocol) {
             alert('请先选择或创建一个 429 协议！');
@@ -2710,11 +2791,98 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (exportMdCodeBlock) {
             exportMdCodeBlock.textContent = mdText;
         }
+
+        // 渲染可视化预览
+        if (exportRenderedPreview) {
+            // 提取其中的 HTML 表格渲染
+            const tablesHtml = mdText
+                .replace(/^#\s+[^\n]+\n+/, '')
+                .replace(/###\s+[^\n]+/g, (m) => `<h3 style="margin: 1.5rem 0 0.8rem 0; font-size: 15px; color: #1e293b;">${m.replace(/###\s+/, '')}</h3>`)
+                .replace(/---/g, '<hr style="border:none; border-top:1px dashed #cbd5e1; margin: 2rem 0;">');
+            
+            exportRenderedPreview.innerHTML = `
+                <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 20px; display:flex; justify-content:space-between; align-items:flex-end;">
+                    <div>
+                        <h2 style="margin:0; font-size: 20px; font-weight:bold; color:#0f172a;">${currentArincProtocol.name || 'ARINC 429 通信协议'}</h2>
+                        <div style="font-size:12px; color:#64748b; margin-top:4px;">设备来源: ${currentArincProtocol.device || currentArincProtocol.source || '-'} | 速率: ${currentArincProtocol.speed || '100kbps'}</div>
+                    </div>
+                    <div style="text-align:right; font-size:12px; color:#64748b;">
+                        <div>符合标准: ARINC 429</div>
+                        <div>数位格式: 32位 航电双列对照</div>
+                    </div>
+                </div>
+                ${tablesHtml}
+            `;
+        }
+
+        // 默认激活可视化视图
+        if (tabBtnExportPreview && tabBtnExportCode && exportPreviewContainer && exportCodeContainer) {
+            tabBtnExportPreview.classList.add('dense-btn-active');
+            tabBtnExportCode.classList.remove('dense-btn-active');
+            exportPreviewContainer.style.display = 'block';
+            exportCodeContainer.style.display = 'none';
+        }
+
         if (arincExportMdModal) {
             arincExportMdModal.classList.add('active');
         }
     }
     window.openExportMdModal = openExportMdModal;
+
+    // 视图切换
+    if (tabBtnExportPreview) {
+        tabBtnExportPreview.addEventListener('click', () => {
+            tabBtnExportPreview.classList.add('dense-btn-active');
+            if (tabBtnExportCode) tabBtnExportCode.classList.remove('dense-btn-active');
+            if (exportPreviewContainer) exportPreviewContainer.style.display = 'block';
+            if (exportCodeContainer) exportCodeContainer.style.display = 'none';
+        });
+    }
+
+    if (tabBtnExportCode) {
+        tabBtnExportCode.addEventListener('click', () => {
+            tabBtnExportCode.classList.add('dense-btn-active');
+            if (tabBtnExportPreview) tabBtnExportPreview.classList.remove('dense-btn-active');
+            if (exportPreviewContainer) exportPreviewContainer.style.display = 'none';
+            if (exportCodeContainer) exportCodeContainer.style.display = 'block';
+        });
+    }
+
+    // 打印 / 另存为 PDF
+    if (btnPrintPreviewHtml) {
+        btnPrintPreviewHtml.addEventListener('click', () => {
+            if (!currentArincProtocol) return;
+            const fullHtml = Arinc429Helper.generateHtmlSpec(currentArincProtocol);
+            const printWin = window.open('', '_blank');
+            if (printWin) {
+                printWin.document.open();
+                printWin.document.write(fullHtml);
+                printWin.document.close();
+                printWin.focus();
+                setTimeout(() => {
+                    printWin.print();
+                }, 300);
+            } else {
+                alert("弹窗被浏览器拦截，请允许本页面的弹出窗口以进行打印预览。");
+            }
+        });
+    }
+
+    // 下载独立 HTML 卡片
+    if (btnDownloadHtmlSpec) {
+        btnDownloadHtmlSpec.addEventListener('click', () => {
+            if (!currentArincProtocol) return;
+            const fullHtml = Arinc429Helper.generateHtmlSpec(currentArincProtocol);
+            const safeName = (currentArincProtocol.name || 'arinc429_protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
+            const fileName = `${safeName}_接口卡片.html`;
+            const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+            const dl = document.createElement('a');
+            dl.href = URL.createObjectURL(blob);
+            dl.download = fileName;
+            dl.click();
+            URL.revokeObjectURL(dl.href);
+        });
+    }
 
     if (btnArincExportMd) {
         btnArincExportMd.addEventListener('click', openExportMdModal);

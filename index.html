@@ -229,7 +229,7 @@
                                     <option value="3">11: 故障告警</option>
                                 </select>
                                 <span class="ds-bits">(B30~B31)</span>
-                                <button type="button" class="dense-link-btn" id="btn-edit-ssm-dict" title="编辑 SSM 数据字典">[字典]</button>
+                                <button type="button" class="dense-link-btn" id="btn-edit-ssm-dict" title="编辑 SSM 协议全局数据字典 (对整个协议所有数据字生效)">[协议字典]</button>
                             </div>
                             <div class="dense-struct-item">
                                 <span class="ds-title">校验:</span>
@@ -259,7 +259,7 @@
                                     <option value="3">11: 故障告警</option>
                                 </select>
                                 <span class="ds-bits">(B30~B31)</span>
-                                <button type="button" class="dense-link-btn" id="btn-edit-bs-ssm-dict" title="编辑 SSM 数据字典">[字典]</button>
+                                <button type="button" class="dense-link-btn" id="btn-edit-bs-ssm-dict" title="编辑 SSM 协议全局数据字典 (对整个协议所有数据字生效)">[协议字典]</button>
                             </div>
                             <div class="dense-struct-item">
                                 <span class="ds-title">校验:</span>
@@ -559,32 +559,46 @@
         </div>
     </div>
 
-    <!-- 弹窗：导出 Markdown 协议表格 (AI 上位机开发专用) -->
+    <!-- 弹窗：导出航电 IC 接口卡片 / Markdown (支持一键打印/PDF/离线HTML) -->
     <div class="modal" id="arinc-export-md-modal">
-        <div class="modal-content" style="max-width: 960px; width: 92vw; height: 86vh; display: flex; flex-direction: column;">
+        <div class="modal-content" style="max-width: 1060px; width: 94vw; height: 90vh; display: flex; flex-direction: column;">
             <div class="modal-header" style="padding-bottom: 0.6rem;">
-                <h2><i class="fa-solid fa-file-lines" style="color:var(--accent-color);"></i> 导出 Markdown 协议表格 (AI 上位机开发专用)</h2>
-                <button type="button" class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+                <h2><i class="fa-solid fa-file-contract" style="color:var(--accent-color);"></i> 航电 IC 接口卡片导出 / 打印</h2>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <div class="btn-group" style="display: flex; background: var(--bg-hover); border-radius: 4px; padding: 2px;">
+                        <button type="button" class="dense-btn dense-btn-active" id="tab-btn-export-view-preview" style="font-size: 12px; padding: 3px 10px;"><i class="fa-solid fa-eye"></i> 视图预览</button>
+                        <button type="button" class="dense-btn" id="tab-btn-export-view-code" style="font-size: 12px; padding: 3px 10px;"><i class="fa-solid fa-code"></i> Markdown源码</button>
+                    </div>
+                    <button type="button" class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+                </div>
             </div>
             
             <div class="codegen-top-strip">
                 <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
                     <i class="fa-solid fa-circle-info" style="color: var(--accent-color);"></i>
-                    <span>每个数据字已单独按 Markdown 表格导出，包含 Bit 位段范围、数据类型、字节序与字典，可直接发给 AI 编写上位机。</span>
+                    <span>已根据航空航电标准生成 IC 控制卡片，包含 1~32 位分配表与完整状态字典，支持打印、存为 PDF 或导出为 .md / .html。</span>
                 </div>
                 <div class="codegen-actions">
-                    <button type="button" class="dense-btn dense-btn-primary" id="btn-copy-md" title="一键复制 Markdown 到剪贴板"><i class="fa-regular fa-copy"></i> 一键复制 Markdown</button>
+                    <button type="button" class="dense-btn dense-btn-primary" id="btn-print-preview-html" title="打开独立排版网页进行打印或另存为 PDF"><i class="fa-solid fa-print"></i> 打印 / 另存为 PDF</button>
+                    <button type="button" class="dense-btn" id="btn-download-html-spec" title="下载标准独立 HTML 规范卡片"><i class="fa-solid fa-file-code"></i> 下载 HTML 卡片</button>
                     <button type="button" class="dense-btn" id="btn-download-md" title="下载 .md 文件到本地"><i class="fa-solid fa-download"></i> 下载 .md 文件</button>
+                    <button type="button" class="dense-btn" id="btn-copy-md" title="一键复制 Markdown 到剪贴板"><i class="fa-regular fa-copy"></i> 复制 Markdown</button>
                     <button type="button" class="dense-btn" id="btn-download-json" title="导出 JSON 协议备份文件"><i class="fa-solid fa-file-export"></i> 备份 JSON</button>
                 </div>
             </div>
 
-            <div class="codegen-editor-container" style="flex: 1; min-height: 0; margin-top: 0.5rem; overflow: hidden;">
+            <!-- 可视化表格预览模式 -->
+            <div id="export-preview-container" style="flex: 1; min-height: 0; margin-top: 0.5rem; overflow-y: auto; background: #fff; padding: 24px; border-radius: 6px; border: 1px solid var(--border-color); color: #000;">
+                <div id="export-rendered-preview"></div>
+            </div>
+
+            <!-- 源码模式 -->
+            <div id="export-code-container" class="codegen-editor-container" style="flex: 1; min-height: 0; margin-top: 0.5rem; overflow: hidden; display: none;">
                 <pre class="codegen-pre" style="margin: 0; height: 100%;"><code id="export-md-code-block" class="codegen-code" style="font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;"></code></pre>
             </div>
 
             <div class="modal-actions" style="margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                <span class="dense-hint" id="export-md-hint"><i class="fa-solid fa-circle-check" style="color:var(--success);"></i> 格式已就绪，可直接粘贴进 ChatGPT / Claude / DeepSeek 等对话框</span>
+                <span class="dense-hint" id="export-md-hint"><i class="fa-solid fa-circle-check" style="color:var(--success);"></i> 格式与航电工程接口卡片对齐，可直接用于工程评审或交付</span>
                 <button type="button" class="btn btn-secondary close-modal-btn">关闭</button>
             </div>
         </div>
