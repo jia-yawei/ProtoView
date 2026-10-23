@@ -1590,6 +1590,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <i class="fa-solid fa-tag field-card-name-icon"></i>
                             <input type="text" class="field-in-name field-card-name-input" value="${field.name || ''}" placeholder="字段中文名称 (例如: 接触器通断状态)" title="输入字段名称">
                         </div>
+                        <div class="field-card-header-dict">
+                            <button type="button" class="dense-dict-btn btn-edit-field-dict" title="配置状态字典映射">
+                                <i class="fa-solid fa-book"></i> 状态字典
+                            </button>
+                            <div class="dense-dict-list">${dictBadgesHTML}</div>
+                        </div>
                     </div>
                     <div class="field-card-header-right">
                         <span class="dense-bit-span ${isOverflow ? 'dense-bit-span-overflow' : ''}" id="span-range-${fIdx}" title="${isOverflow ? '警告：有效数据位段超出 B29 (B30~B31 为 SSM, B32 为校验)' : '位段范围'}">
@@ -1667,16 +1673,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="field-card-cell" style="width: 52px;">
                         <label class="field-card-label"><i class="fa-solid fa-tag"></i> 单位</label>
                         <input type="text" class="field-in-unit field-card-input" value="${field.unit || ''}" placeholder="空" title="工程量单位 (默认空)">
-                    </div>
-
-                    <div class="field-card-cell field-card-cell-dict" style="width: 105px;">
-                        <label class="field-card-label"><i class="fa-solid fa-book"></i> 状态字典</label>
-                        <div class="field-card-dict-box">
-                            <button type="button" class="dense-dict-btn btn-edit-field-dict" title="配置状态字典映射">
-                                <i class="fa-solid fa-pen-to-square"></i> 配置
-                            </button>
-                            <div class="dense-dict-list">${dictBadgesHTML}</div>
-                        </div>
                     </div>
 
                     <div class="field-card-cell field-card-cell-remark">
