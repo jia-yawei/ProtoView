@@ -111,22 +111,92 @@ body {
 
 /* Sidebar */
 .sidebar {
-    width: 260px;
+    width: 240px;
     height: 100%;
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border-color);
     z-index: 10;
+    transition: width 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* 折叠状态 */
+.sidebar.collapsed {
+    width: 64px;
+}
+
+.sidebar.collapsed .sidebar-text {
+    display: none;
+}
+
+.sidebar.collapsed .logo {
+    padding: 1.2rem 0.5rem;
+    justify-content: center;
+}
+
+.sidebar.collapsed .logo-brand {
+    display: none;
+}
+
+.sidebar.collapsed .nav-menu {
+    padding: 0 0.5rem;
+}
+
+.sidebar.collapsed .nav-item {
+    padding: 0.8rem 0;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+.sidebar.collapsed .settings {
+    padding: 1rem 0;
+    display: flex;
+    justify-content: center;
 }
 
 .logo {
-    padding: 2rem 1.5rem;
-    font-size: 1.5rem;
+    padding: 1.5rem 1.2rem 1.2rem 1.2rem;
+    font-size: 1.4rem;
     font-weight: 700;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    justify-content: space-between;
     color: var(--accent-color);
+}
+
+.logo-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.sidebar-collapse-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.sidebar-collapse-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sidebar.collapsed .sidebar-collapse-btn i {
+    transform: rotate(180deg);
 }
 
 .nav-menu {
@@ -2192,14 +2262,14 @@ td {
 .field-card-minmax {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 3px;
     width: 100%;
 }
 
 .field-card-minmax input {
-    width: 54px;
+    width: 62px;
     text-align: center;
-    padding: 0 3px !important;
+    padding: 0 4px !important;
 }
 
 .field-card-minmax span {

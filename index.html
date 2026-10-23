@@ -17,15 +17,20 @@
 <body>
     <div class="app-container">
         <!-- 侧边导航栏 -->
-        <aside class="sidebar glass-effect">
+        <aside class="sidebar glass-effect" id="main-sidebar">
             <div class="logo">
-                <i class="fa-solid fa-microchip"></i>
-                <span>ProtoView</span>
+                <div class="logo-brand">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span class="sidebar-text">ProtoView</span>
+                </div>
+                <button type="button" class="sidebar-collapse-btn" id="btn-toggle-sidebar" title="折叠/展开侧边栏">
+                    <i class="fa-solid fa-angles-left"></i>
+                </button>
             </div>
             <nav class="nav-menu">
-                <button class="nav-item active" data-view="protocol-view">
+                <button class="nav-item active" data-view="protocol-view" title="协议管理">
                     <i class="fa-solid fa-book"></i>
-                    <span>协议管理</span>
+                    <span class="sidebar-text">协议管理</span>
                 </button>
             </nav>
             <div class="settings">
@@ -93,9 +98,6 @@
                 <header class="arinc-dense-toolbar">
                     <div class="dense-tb-left">
                         <button class="dense-btn" id="btn-arinc-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 协议列表</button>
-                        <select id="arinc-protocol-select" class="dense-select" title="快速切换429协议">
-                            <option value="">-- 选择429协议 --</option>
-                        </select>
                         <span class="dense-tb-title" id="toolbar-proto-title"><i class="fa-solid fa-plane-departure"></i> 429 协议</span>
                         <div class="dense-tb-badges" id="toolbar-proto-badges">
                             <span class="dense-prop-badge highlight" id="badge-proto-mode">经典模式</span>

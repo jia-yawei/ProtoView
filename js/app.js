@@ -39,6 +39,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // ---------------------- 侧边栏折叠与展开 ----------------------
+    const mainSidebar = document.getElementById('main-sidebar');
+    const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+
+    // 恢复历史折叠偏好
+    const savedSidebarCollapsed = localStorage.getItem('protoview_sidebar_collapsed');
+    if (savedSidebarCollapsed === 'true' && mainSidebar) {
+        mainSidebar.classList.add('collapsed');
+    }
+
+    if (btnToggleSidebar && mainSidebar) {
+        btnToggleSidebar.addEventListener('click', () => {
+            mainSidebar.classList.toggle('collapsed');
+            const isCollapsed = mainSidebar.classList.contains('collapsed');
+            localStorage.setItem('protoview_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+        });
+    }
+
     // ---------------------- 视图路由切换 ----------------------
     function switchToView(viewId) {
         navItems.forEach(nav => nav.classList.remove('active'));
@@ -931,27 +949,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ----------------- 加载 ARINC 429 协议列表 -----------------
     async function loadArincProtocolsForSelect() {
-        if (!arincProtocolSelect) return;
         const allProtocols = await dbHelper.getAllProtocols();
         const arincList = allProtocols.filter(p => p.type === 'ARINC429');
 
-        arincProtocolSelect.innerHTML = '<option value="">-- 选择429协议 --</option>';
-        arincList.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = `${p.name} (${p.words ? p.words.length : 0}个字)`;
-            arincProtocolSelect.appendChild(opt);
-        });
+        if (arincProtocolSelect) {
+            arincProtocolSelect.innerHTML = '<option value="">-- 选择429协议 --</option>';
+            arincList.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = `${p.name} (${p.words ? p.words.length : 0}个字)`;
+                arincProtocolSelect.appendChild(opt);
+            });
+            if (currentArincProtocol && currentArincProtocol.id) {
+                arincProtocolSelect.value = currentArincProtocol.id;
+            }
+        }
 
-        if (currentArincProtocol && currentArincProtocol.id) {
-            arincProtocolSelect.value = currentArincProtocol.id;
-        } else if (arincList.length > 0) {
-            await loadArincProtocolIntoEditor(arincList[0].id);
-        } else {
-            currentArincProtocol = null;
-            updateToolbarProtocolInfo();
-            renderArincWordsList();
-            renderSelectedWordInspector();
+        if (!currentArincProtocol || !currentArincProtocol.id) {
+            if (arincList.length > 0) {
+                await loadArincProtocolIntoEditor(arincList[0].id);
+            } else {
+                currentArincProtocol = null;
+                updateToolbarProtocolInfo();
+                renderArincWordsList();
+                renderSelectedWordInspector();
+            }
         }
     }
 
@@ -1551,12 +1573,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             field.dataType = dataType;
 
-            // 只有 u16 才有字节序 (大端/小端)，bool 和 u8 不设置字节序
+            // 只有 u16 才有字节序 (大端/小端)，默认小端(LSB)，bool 和 u8 不设置字节序
             let endianness = field.endianness;
             if (dataType !== 'u16') {
                 endianness = 'none';
-            } else if (endianness !== 'little') {
-                endianness = 'big';
+            } else if (endianness !== 'big') {
+                endianness = 'little';
             }
             field.endianness = endianness;
 
@@ -1641,8 +1663,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <label class="field-card-label"><i class="fa-solid fa-arrows-left-right"></i> 字节序</label>
                         ${dataType === 'u16' ? `
                         <select class="field-in-endian field-card-select" title="字节序定义 (仅 u16 支持大端/小端)">
-                            <option value="big" ${endianness === 'big' ? 'selected' : ''}>大端(MSB)</option>
                             <option value="little" ${endianness === 'little' ? 'selected' : ''}>小端(LSB)</option>
+                            <option value="big" ${endianness === 'big' ? 'selected' : ''}>大端(MSB)</option>
                         </select>
                         ` : `
                         <select class="field-in-endian field-card-select" disabled title="只有 u16 类型才支持配置字节序" style="opacity: 0.45; cursor: not-allowed;">
@@ -1661,12 +1683,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <input type="text" class="field-in-offset field-card-input" value="${(field.precision !== undefined && field.precision !== null && field.precision !== '') ? field.precision : ((field.offset !== undefined && field.offset !== null && field.offset !== '' && field.offset !== 0) ? field.offset : '')}" placeholder="空" title="精度 (支持输入小数、百分比如 %，未填写则留空)">
                     </div>
 
-                    <div class="field-card-cell" style="width: 116px;">
+                    <div class="field-card-cell" style="width: 135px;">
                         <label class="field-card-label"><i class="fa-solid fa-gauge-high"></i> 范围(Min~Max)</label>
                         <div class="field-card-minmax">
-                            <input type="number" class="field-in-min field-card-input" step="any" value="${(field.min !== undefined && field.min !== null) ? field.min : ''}" placeholder="Min">
+                            <input type="text" class="field-in-min field-card-input" value="${(field.min !== undefined && field.min !== null) ? field.min : ''}" placeholder="Min" title="最小值 (支持小数如 0.0)">
                             <span>~</span>
-                            <input type="number" class="field-in-max field-card-input" step="any" value="${(field.max !== undefined && field.max !== null) ? field.max : ''}" placeholder="Max">
+                            <input type="text" class="field-in-max field-card-input" value="${(field.max !== undefined && field.max !== null) ? field.max : ''}" placeholder="Max" title="最大值 (支持小数如 55.0)">
                         </div>
                     </div>
 
@@ -1732,8 +1754,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const precisionVal = precisionRaw !== '' ? (!isNaN(Number(precisionRaw)) ? parseFloat(precisionRaw) : precisionRaw) : '';
                 field.precision = precisionVal;
                 field.offset = precisionVal;
-                field.min = inMin.value.trim() !== '' ? (parseFloat(inMin.value) !== undefined && !isNaN(parseFloat(inMin.value)) ? parseFloat(inMin.value) : inMin.value.trim()) : '';
-                field.max = inMax.value.trim() !== '' ? (parseFloat(inMax.value) !== undefined && !isNaN(parseFloat(inMax.value)) ? parseFloat(inMax.value) : inMax.value.trim()) : '';
+                const minRaw = inMin.value.trim();
+                field.min = minRaw !== '' ? (!isNaN(Number(minRaw)) ? minRaw : minRaw) : '';
+                const maxRaw = inMax.value.trim();
+                field.max = maxRaw !== '' ? (!isNaN(Number(maxRaw)) ? maxRaw : maxRaw) : '';
                 field.unit = inUnit.value;
                 field.remark = inRemark ? inRemark.value : '';
 
@@ -1804,18 +1828,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     inEndian.value = 'none';
                     field.endianness = 'none';
                 } else { // u16
-                    const curC = parseInt(inBitCount.value) || 16;
                     inBitCount.max = '16';
                     inBitCount.disabled = false;
-                    if (curC <= 1 || curC > 16) inBitCount.value = '16';
+                    inBitCount.value = '16';
                     inEndian.disabled = false;
                     inEndian.style.opacity = '1';
                     inEndian.style.cursor = 'pointer';
+                    const targetEndian = (field.endianness === 'big') ? 'big' : 'little';
                     inEndian.innerHTML = `
-                        <option value="big" ${field.endianness === 'little' ? '' : 'selected'}>大端(MSB)</option>
-                        <option value="little" ${field.endianness === 'little' ? 'selected' : ''}>小端(LSB)</option>
+                        <option value="little" ${targetEndian === 'little' ? 'selected' : ''}>小端(LSB)</option>
+                        <option value="big" ${targetEndian === 'big' ? 'selected' : ''}>大端(MSB)</option>
                     `;
-                    field.endianness = inEndian.value;
+                    inEndian.value = targetEndian;
+                    field.endianness = targetEndian;
                 }
                 onCardChange();
             });
@@ -1945,17 +1970,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const maxAvail = Math.max(1, maxPayloadBit - nextStartBit + 1);
-        const defaultLen = Math.min(16, Math.max(1, maxAvail > 0 ? maxAvail : 1));
-        const defaultType = defaultLen > 8 ? 'u16' : (defaultLen === 1 ? 'bool' : 'u8');
+        const defaultLen = maxAvail >= 16 ? 16 : Math.max(1, maxAvail);
+        const defaultType = defaultLen >= 16 ? 'u16' : (defaultLen === 1 ? 'bool' : 'u8');
 
         const newField = {
             key: `sig_${word.signals.length + 1}`,
             name: `字段_${word.signals.length + 1}`,
             dataType: defaultType,
             startBit: nextStartBit,
-            bitCount: defaultLen,
-            length: defaultLen,
-            endianness: defaultType === 'u16' ? 'big' : 'none',
+            bitCount: defaultType === 'u16' ? 16 : defaultLen,
+            length: defaultType === 'u16' ? 16 : defaultLen,
+            endianness: defaultType === 'u16' ? 'little' : 'none',
             resolution: '',
             precision: '',
             offset: '',
@@ -2521,7 +2546,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 bitCount: 16,
                                 startBit: mode === 'bitstream' ? 9 : 11,
                                 length: 16,
-                                endianness: 'big',
+                                endianness: 'little',
                                 resolution: '',
                                 precision: '',
                                 offset: '',
