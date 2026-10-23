@@ -530,47 +530,92 @@ class Arinc429Helper {
                 mainPrec = '-';
             }
 
-            // 构建 1~32 位每个 bit 的归属说明
+            // 构建 1~32 位每个 bit 的归属说明与分组键 (用于跨行纵向合并)
             const bitMap = new Array(33).fill('');
+            const bitGroup = new Array(33).fill('');
 
             // Bit 1~8: 标号
             for (let b = 1; b <= 8; b++) {
                 bitMap[b] = `Label 标号位 (Label: ${oct}₈ / ${hex})`;
+                bitGroup[b] = `__LABEL__`;
             }
 
             // 经典模式 Bit 9~10: SDI
             if (!isBitstream) {
-                bitMap[9] = `SDI 识别码 (B9)`;
-                bitMap[10] = `SDI 识别码 (B10)`;
+                bitMap[9] = `SDI 识别码 (B9~B10)`;
+                bitMap[10] = `SDI 识别码 (B9~B10)`;
+                bitGroup[9] = `__SDI__`;
+                bitGroup[10] = `__SDI__`;
             }
 
             // 映射具体配置的字段
-            fields.forEach(f => {
+            fields.forEach((f, fIndex) => {
                 const s = Math.max(1, Math.min(32, Number(f.startBit || 1)));
                 const len = Math.max(1, Number(f.bitCount || f.length || 1));
                 const e = Math.min(32, s + len - 1);
                 const fname = f.name || '未命名数据';
+                const fieldDesc = len === 1 ? fname : `${fname} (B${s}~B${e})`;
+                const gKey = `FIELD_${fIndex}_${s}_${e}`;
                 for (let b = s; b <= e; b++) {
-                    if (len === 1) {
-                        bitMap[b] = fname;
-                    } else {
-                        bitMap[b] = `${fname} (B${s}~B${e})`;
-                    }
+                    bitMap[b] = fieldDesc;
+                    bitGroup[b] = gKey;
                 }
             });
 
             // Bit 30~31: SSM
             bitMap[30] = 'SSM (有效性/符号状态矩阵)';
             bitMap[31] = 'SSM (有效性/符号状态矩阵)';
+            bitGroup[30] = '__SSM__';
+            bitGroup[31] = '__SSM__';
 
             // Bit 32: Parity
             bitMap[32] = pParity;
+            bitGroup[32] = '__PARITY__';
 
-            // 未分配位默认标记为保留
+            // 未分配位标记为保留（连续的未分配位作为一个保留块合并）
+            let unassignedBlockIdx = 0;
             for (let b = 1; b <= 32; b++) {
                 if (!bitMap[b]) {
+                    if (b === 1 || bitGroup[b - 1] !== `__RESERVED_${unassignedBlockIdx}__`) {
+                        unassignedBlockIdx++;
+                    }
                     bitMap[b] = '保留 (Reserved)';
+                    bitGroup[b] = `__RESERVED_${unassignedBlockIdx}__`;
                 }
+            }
+
+            // 计算左列 (1~16) 与右列 (17~32) 的单元格合并跨度 (rowspan)
+            // leftSpanInfo[row]: { render: boolean, rowspan: number, text: string }
+            const leftSpanInfo = {};
+            let lRow = 1;
+            while (lRow <= 16) {
+                const gKey = bitGroup[lRow];
+                let span = 1;
+                while (lRow + span <= 16 && bitGroup[lRow + span] === gKey) {
+                    span++;
+                }
+                leftSpanInfo[lRow] = { render: true, rowspan: span, text: bitMap[lRow] };
+                for (let k = 1; k < span; k++) {
+                    leftSpanInfo[lRow + k] = { render: false };
+                }
+                lRow += span;
+            }
+
+            // rightSpanInfo[row]: 对应右列 17~32 位 (row 对应 1~16)
+            const rightSpanInfo = {};
+            let rRow = 1;
+            while (rRow <= 16) {
+                const bit = rRow + 16;
+                const gKey = bitGroup[bit];
+                let span = 1;
+                while (rRow + span <= 16 && bitGroup[bit + span] === gKey) {
+                    span++;
+                }
+                rightSpanInfo[rRow] = { render: true, rowspan: span, text: bitMap[bit] };
+                for (let k = 1; k < span; k++) {
+                    rightSpanInfo[rRow + k] = { render: false };
+                }
+                rRow += span;
             }
 
             // 附注说明整理
@@ -654,18 +699,32 @@ class Arinc429Helper {
             md += `      <td style="border: 1px solid #333; padding: 5px; width: 40%;">说明</td>\n`;
             md += `    </tr>\n`;
 
-            // 双列循环：左列 1~16 位，右列 17~32 位
+            // 双列循环：左列 1~16 位，右列 17~32 位（支持同一个字段/说明纵向合并为一个单元格）
             for (let row = 1; row <= 16; row++) {
                 const leftBit = row;
                 const rightBit = row + 16;
-                const leftDesc = bitMap[leftBit] || '保留';
-                const rightDesc = bitMap[rightBit] || '保留';
 
                 md += `    <tr style="border-bottom: 1px solid #e2e8f0;">\n`;
+                // 左列数位
                 md += `      <td style="border: 1px solid #333; padding: 4px; text-align: center; font-weight: 600;">${leftBit}</td>\n`;
-                md += `      <td style="border: 1px solid #333; padding: 4px 8px;">${leftDesc}</td>\n`;
+                
+                // 左列说明（纵向合并）
+                const lSpan = leftSpanInfo[row];
+                if (lSpan && lSpan.render) {
+                    const rSpanAttr = lSpan.rowspan > 1 ? ` rowspan="${lSpan.rowspan}"` : '';
+                    md += `      <td${rSpanAttr} style="border: 1px solid #333; padding: 5px 8px; vertical-align: middle;">${lSpan.text}</td>\n`;
+                }
+
+                // 右列数位
                 md += `      <td style="border: 1px solid #333; padding: 4px; text-align: center; font-weight: 600;">${rightBit}</td>\n`;
-                md += `      <td style="border: 1px solid #333; padding: 4px 8px;">${rightDesc}</td>\n`;
+
+                // 右列说明（纵向合并）
+                const rSpan = rightSpanInfo[row];
+                if (rSpan && rSpan.render) {
+                    const rSpanAttr = rSpan.rowspan > 1 ? ` rowspan="${rSpan.rowspan}"` : '';
+                    md += `      <td${rSpanAttr} style="border: 1px solid #333; padding: 5px 8px; vertical-align: middle;">${rSpan.text}</td>\n`;
+                }
+
                 md += `    </tr>\n`;
             }
 
