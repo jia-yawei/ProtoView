@@ -1679,7 +1679,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                     </div>
 
-                    // 备注列：宽度适当收紧，不用占过宽
                     <div class="field-card-cell field-card-cell-remark">
                         <label class="field-card-label"><i class="fa-solid fa-note-sticky"></i> 备注</label>
                         <input type="text" class="field-in-remark field-card-input" value="${field.remark || ''}" placeholder="空" title="字段备注说明 (默认空)">
