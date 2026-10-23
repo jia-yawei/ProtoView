@@ -1,6 +1,6 @@
-# ProtoView - 航空机载通信总线协议管理平台
+# ProtoView - 通信总线协议管理平台
 
-> 专业、纯净、高密度的机载 ARINC 429 与工业总线通信协议管理平台，支持浏览器桌面级「本地工作目录」双向读写与 AI 上位机协议规范自动导出。
+> 专业、纯净、高密度的工业总线通信协议管理平台，支持浏览器桌面级「本地工作目录」双向读写与 AI 上位机协议规范自动导出。
 
 🔗 **在线访问地址 (GitHub Pages)**: [https://jia-yawei.github.io/ProtoView/](https://jia-yawei.github.io/ProtoView/)  
 📦 **项目源码仓库**: [https://github.com/jia-yawei/ProtoView.git](https://github.com/jia-yawei/ProtoView.git)
