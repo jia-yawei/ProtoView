@@ -1870,16 +1870,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 btnClone.addEventListener('click', () => {
                     const cloned = JSON.parse(JSON.stringify(field));
 
-                    // 命名与唯一标识符处理
-                    let baseName = field.name || '字段';
-                    const match = baseName.match(/^(.*?)_?副本(?:_?(\d+))?$/);
-                    if (match) {
-                        const root = match[1];
-                        const num = match[2] ? parseInt(match[2]) + 1 : 2;
-                        cloned.name = `${root}_副本_${num}`;
-                    } else {
-                        cloned.name = `${baseName}_副本`;
-                    }
+                    // 保持原字段名称，不添加“副本”后缀
+                    cloned.name = field.name || '字段';
                     cloned.key = `sig_${Date.now().toString().slice(-6)}`;
 
                     // 插入到当前字段正后方
@@ -2216,15 +2208,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!currentArincProtocol) return;
         if (!currentArincProtocol.words) currentArincProtocol.words = [];
 
-        // 智能计算未使用的标号
-        const usedLabels = new Set(currentArincProtocol.words.map(w => w.label));
-        let nextLabel = '205';
-        for (let l = 200; l <= 377; l++) {
-            const oct = l.toString();
-            if (!usedLabels.has(oct) && !/[89]/.test(oct)) {
-                nextLabel = oct;
+        // 智能计算未使用的标号 (从当前选中的字或最后一个字标号 +1 开始自增)
+        const usedLabels = new Set(currentArincProtocol.words.map(w => (w.label || '').toString().padStart(3, '0')));
+        let startDec = 1;
+        if (currentArincProtocol.words.length > 0) {
+            const anchorWord = currentArincProtocol.words[currentWordIndex] || currentArincProtocol.words[currentArincProtocol.words.length - 1];
+            const octStr = (anchorWord.label || '001').toString().padStart(3, '0');
+            const d = parseInt(octStr, 8);
+            if (!isNaN(d)) startDec = d + 1;
+        }
+
+        let nextLabel = '';
+        for (let dec = startDec; dec <= 255; dec++) {
+            const octStr = dec.toString(8).padStart(3, '0');
+            if (!usedLabels.has(octStr)) {
+                nextLabel = octStr;
                 break;
             }
+        }
+        if (!nextLabel) {
+            for (let dec = 1; dec <= 255; dec++) {
+                const octStr = dec.toString(8).padStart(3, '0');
+                if (!usedLabels.has(octStr)) {
+                    nextLabel = octStr;
+                    break;
+                }
+            }
+        }
+        if (!nextLabel) {
+            nextLabel = (startDec).toString(8).padStart(3, '0');
         }
 
         const curMode = (currentArincProtocol && currentArincProtocol.mode) || 'classic';
@@ -2317,7 +2329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             dup.label = nextOctalStr;
-            dup.name = (cur.name || '数据字') + '_副本';
+            dup.name = cur.name || '数据字';
             dup.key = `word_${nextOctalStr}`;
             currentArincProtocol.words.splice(currentWordIndex + 1, 0, dup);
             currentWordIndex++;
@@ -2949,6 +2961,346 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 备份导出 JSON 文件
     if (btnDownloadJson) {
         btnDownloadJson.addEventListener('click', exportArincJson);
+    }
+
+    // ----------------- ARINC 429 协议工程健康度与逻辑一致性检查诊断器 -----------------
+    const btnArincCheck = document.getElementById('btn-arinc-check');
+    const arincCheckModal = document.getElementById('arinc-check-modal');
+    const checkResultsContainer = document.getElementById('check-results-container');
+    const btnRecheckProtocol = document.getElementById('btn-recheck-protocol');
+    const checkSummaryHint = document.getElementById('check-summary-hint');
+
+    function runProtocolHealthCheck() {
+        if (!currentArincProtocol) {
+            alert('请先选择或创建一个 429 协议！');
+            return;
+        }
+
+        const issues = []; // { level: 'error'|'warning'|'info', title: string, desc: string, wordLabel?: string }
+        const p = currentArincProtocol;
+        const words = p.words || [];
+
+        if (words.length === 0) {
+            issues.push({
+                level: 'warning',
+                title: '协议为空',
+                desc: '当前协议下暂无任何标号字，请在左侧点击「+ 添加字」开始划分协议。'
+            });
+        }
+
+        // 1. 检查标号字是否合法、八进制格式、以及是否有重复 Label
+        const labelMap = new Map(); // label -> [wordIndex]
+        words.forEach((w, wIdx) => {
+            const rawLabel = (w.label || '').toString().trim();
+            // 校验八进制
+            if (!rawLabel) {
+                issues.push({
+                    level: 'error',
+                    title: `标号字缺失 Label`,
+                    desc: `第 ${wIdx + 1} 个字「${w.name || '未命名'}」未填写八进制标号。`,
+                    wordIndex: wIdx
+                });
+            } else if (!/^[0-7]{1,3}$/.test(rawLabel)) {
+                issues.push({
+                    level: 'error',
+                    title: `标号非合法八进制数: [${rawLabel}]`,
+                    desc: `字「${w.name || ''}」的标号为「${rawLabel}」，ARINC 429 标号必须为 000~377 的八进制数字 (不能包含 8 或 9)。`,
+                    wordIndex: wIdx
+                });
+            } else {
+                const octPadded = rawLabel.padStart(3, '0');
+                if (!labelMap.has(octPadded)) {
+                    labelMap.set(octPadded, []);
+                }
+                labelMap.get(octPadded).push({ index: wIdx, word: w });
+            }
+        });
+
+        // 重复 Label 报错
+        labelMap.forEach((occurrences, oct) => {
+            if (occurrences.length > 1) {
+                const names = occurrences.map(o => `第${o.index + 1}个字「${o.word.name || '未命名'}」`).join('、');
+                issues.push({
+                    level: 'error',
+                    title: `重复的标号 Label [${oct}₈]`,
+                    desc: `检测到 ${occurrences.length} 个数据字共用了同一个 Label [${oct}₈] (${names})。在同一总线上会导致接收方数据冲撞。`,
+                    wordIndex: occurrences[0].index
+                });
+            }
+        });
+
+        // 2. 检查各字内部字段重名、全局重名、Bit 重叠与超出 32 位限制
+        const globalFieldNames = new Map(); // fieldName -> [{ wordOct, wordName, fieldIndex }]
+        const globalFieldRanges = []; // 收集所有数值字段的范围，用于后续离群/奇异值检测: { wordOct, wordName, fieldName, min, max, prec, res }
+
+        words.forEach((w, wIdx) => {
+            const oct = (w.label || '000').toString().padStart(3, '0');
+            const wName = w.name || `标号字_${oct}`;
+            const fields = w.signals || [];
+            const isBitstream = (p.mode === 'bitstream') || (w.editMode === 'bitstream');
+            const maxPayloadBit = 29; // B30~B31 为 SSM, B32 为校验
+            const minAllowedStart = isBitstream ? 9 : 11; // 经典模式 1~8:Label, 9~10:SDI
+
+            if (fields.length === 0) {
+                issues.push({
+                    level: 'warning',
+                    title: `字 [${oct}₈] 未划分任何字段`,
+                    desc: `数据字 [${oct}₈ ${wName}] 没有任何信号字段卡片。`,
+                    wordIndex: wIdx
+                });
+            }
+
+            // 字内部重名检查
+            const localNameSet = new Set();
+            // Bit 占用占用排查 (1~32)
+            const bitOwners = new Array(33).fill(null);
+
+            fields.forEach((f, fIdx) => {
+                const fName = (f.name || '').trim();
+                const fStart = Number(f.startBit || 1);
+                const fCount = Number(f.bitCount || f.length || 1);
+                const fEnd = fStart + fCount - 1;
+
+                if (!fName) {
+                    issues.push({
+                        level: 'warning',
+                        title: `[${oct}₈] 存在未命名字段`,
+                        desc: `数据字 [${oct}₈ ${wName}] 的第 ${fIdx + 1} 个字段名称为空。`,
+                        wordIndex: wIdx
+                    });
+                } else {
+                    // 字内重名
+                    if (localNameSet.has(fName)) {
+                        issues.push({
+                            level: 'error',
+                            title: `[${oct}₈] 字内字段名重复: "${fName}"`,
+                            desc: `数据字 [${oct}₈ ${wName}] 内部定义了多个同名为「${fName}」的字段，会导致上位机代码变量命名冲突。`,
+                            wordIndex: wIdx
+                        });
+                    }
+                    localNameSet.add(fName);
+
+                    // 全局记录
+                    if (!globalFieldNames.has(fName)) globalFieldNames.set(fName, []);
+                    globalFieldNames.get(fName).push({ oct, wName, fIdx });
+                }
+
+                // 位段越界与重叠检查
+                if (fStart < minAllowedStart) {
+                    issues.push({
+                        level: 'error',
+                        title: `[${oct}₈] 字段起始位冲突: "${fName}" (起始于 B${fStart})`,
+                        desc: isBitstream
+                            ? `自由 Bit 模式下 Bit 1~8 为 Label 标号位，数据字段必须从 Bit 9 或之后开始。`
+                            : `经典航电模式下 Bit 1~8 为 Label，Bit 9~10 为 SDI，数据字段必须从 Bit 11 或之后开始。`,
+                        wordIndex: wIdx
+                    });
+                }
+
+                if (fEnd > maxPayloadBit) {
+                    issues.push({
+                        level: 'error',
+                        title: `[${oct}₈] 字段越界覆盖控制位: "${fName}" (B${fStart}~B${fEnd})`,
+                        desc: `字段「${fName}」结束位达到 B${fEnd}。ARINC 429 协议规定 Bit 30~31 为 SSM 状态矩阵，Bit 32 为奇偶校验位，数据区最大只支持到 Bit 29。`,
+                        wordIndex: wIdx
+                    });
+                }
+
+                // 字段重叠检测
+                for (let b = fStart; b <= Math.min(32, fEnd); b++) {
+                    if (bitOwners[b] !== null) {
+                        issues.push({
+                            level: 'error',
+                            title: `[${oct}₈] 位段重叠冲突: Bit ${b}`,
+                            desc: `数据字 [${oct}₈ ${wName}] 中的字段「${fName}」与字段「${bitOwners[b]}」在 Bit ${b} 处发生重叠冲突！`,
+                            wordIndex: wIdx
+                        });
+                        break;
+                    }
+                    bitOwners[b] = fName || `字段#${fIdx + 1}`;
+                }
+
+                // 收集数值范围和精度
+                const minVal = (f.min !== undefined && f.min !== null && f.min !== '') ? Number(f.min) : null;
+                const maxVal = (f.max !== undefined && f.max !== null && f.max !== '') ? Number(f.max) : null;
+                const precVal = f.precision;
+                const resVal = f.resolution;
+
+                // 范围倒置检查 (min > max)
+                if (minVal !== null && maxVal !== null && !isNaN(minVal) && !isNaN(maxVal)) {
+                    if (minVal > maxVal) {
+                        issues.push({
+                            level: 'error',
+                            title: `[${oct}₈] 范围大小颠倒: "${fName}" (${minVal} ~ ${maxVal})`,
+                            desc: `数据字 [${oct}₈ ${wName}] 的字段「${fName}」最小值 (${minVal}) 大于最大值 (${maxVal})。`,
+                            wordIndex: wIdx
+                        });
+                    } else {
+                        globalFieldRanges.push({
+                            oct,
+                            wName,
+                            fName,
+                            min: minVal,
+                            max: maxVal,
+                            rawRange: `${f.min}~${f.max}`,
+                            precision: precVal,
+                            resolution: resVal
+                        });
+                    }
+                }
+            });
+        });
+
+        // 3. 全局同名字段提醒 (如果在不同字中出现同名且类型/单位/范围不同)
+        globalFieldNames.forEach((locations, fName) => {
+            if (locations.length > 1) {
+                const locStrs = locations.map(l => `[${l.oct}₈ ${l.wName}]`).join('、');
+                issues.push({
+                    level: 'info',
+                    title: `同名字段出现在多个标号字中: "${fName}"`,
+                    desc: `字段「${fName}」在 ${locStrs} 中均有定义。若代表同一物理量属正常复用；若代表不同传感器，建议命名区分 (如加 _L / _R 或序号)。`
+                });
+            }
+        });
+
+        // 4. 范围与逻辑奇异值 / 突变检测 (例如连续多个字或多个字段范围都是 0~10，突然冒出一个 0~15 或 0~100)
+        if (globalFieldRanges.length >= 3) {
+            // 统计范围出现的频率模式
+            const rangeFreq = new Map(); // "min~max" -> count
+            globalFieldRanges.forEach(r => {
+                const key = `${r.min}~${r.max}`;
+                rangeFreq.set(key, (rangeFreq.get(key) || 0) + 1);
+            });
+
+            // 寻找占主导地位的高频基准范围 (出现次数超过 3 次且占 40% 以上)
+            let dominantRangeKey = null;
+            let dominantCount = 0;
+            rangeFreq.forEach((cnt, key) => {
+                if (cnt >= 3 && cnt > dominantCount) {
+                    dominantCount = cnt;
+                    dominantRangeKey = key;
+                }
+            });
+
+            if (dominantRangeKey) {
+                const [domMin, domMax] = dominantRangeKey.split('~').map(Number);
+                // 找出与主导范围相近但略有差异的离群孤立范围 (如 0~10 vs 0~15，最小值相同但最大值突变，且只出现了 1~2 次)
+                globalFieldRanges.forEach(r => {
+                    const rKey = `${r.min}~${r.max}`;
+                    if (rKey !== dominantRangeKey && (rangeFreq.get(rKey) || 0) <= 2) {
+                        // 如果最小值一样但最大值轻微偏离（如 10 变成了 15 或 12），极可能是手滑输错
+                        const isMinSame = r.min === domMin;
+                        const isCloseVariance = Math.abs(r.max - domMax) > 0 && Math.abs(r.max - domMax) <= Math.max(domMax * 1.5, 10);
+                        if (isMinSame && isCloseVariance) {
+                            issues.push({
+                                level: 'warning',
+                                title: `[${r.oct}₈] 疑似范围输入突变/笔误: "${r.fName}" (${r.rawRange})`,
+                                desc: `协议中绝大部分类似字段的范围均为「${dominantRangeKey}」(已使用 ${dominantCount} 次)，而 [${r.oct}₈ ${r.wName}] 的字段「${r.fName}」范围却为「${r.rawRange}」，请确认是否为输入失误或笔误。`
+                            });
+                        }
+                    }
+                });
+            }
+        }
+
+        // 渲染检查结果卡片
+        renderCheckResults(issues);
+
+        if (arincCheckModal) {
+            arincCheckModal.classList.add('active');
+        }
+    }
+    window.runProtocolHealthCheck = runProtocolHealthCheck;
+
+    function renderCheckResults(issues) {
+        if (!checkResultsContainer) return;
+        checkResultsContainer.innerHTML = '';
+
+        const errorCount = issues.filter(i => i.level === 'error').length;
+        const warnCount = issues.filter(i => i.level === 'warning').length;
+        const infoCount = issues.filter(i => i.level === 'info').length;
+
+        // 顶部统计条
+        const summaryCard = document.createElement('div');
+        summaryCard.className = `check-card ${errorCount > 0 ? 'card-error' : (warnCount > 0 ? 'card-warning' : 'card-success')}`;
+        summaryCard.style.padding = '14px 18px';
+        summaryCard.style.marginBottom = '14px';
+
+        let summaryIcon = errorCount > 0 ? 'fa-circle-xmark' : (warnCount > 0 ? 'fa-triangle-exclamation' : 'fa-circle-check');
+        let summaryTitle = errorCount > 0 
+            ? `发现 ${errorCount} 处工程严重错误，${warnCount} 处逻辑异常提示` 
+            : (warnCount > 0 ? `未发现致命错误，但有 ${warnCount} 处逻辑警告提示` : '协议结构非常完美，未检测到任何冲突或逻辑异常！');
+
+        summaryCard.innerHTML = `
+            <div class="check-card-header">
+                <div class="check-card-title" style="font-size: 15px;">
+                    <i class="fa-solid ${summaryIcon}"></i> ${summaryTitle}
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <span class="check-tag check-tag-error"><i class="fa-solid fa-xmark"></i> 错误: ${errorCount}</span>
+                    <span class="check-tag check-tag-warning"><i class="fa-solid fa-triangle-exclamation"></i> 警告: ${warnCount}</span>
+                    <span class="check-tag check-tag-info"><i class="fa-solid fa-circle-info"></i> 提示: ${infoCount}</span>
+                </div>
+            </div>
+            <div class="check-card-desc" style="color: var(--text-secondary); margin-top: 4px;">
+                ${errorCount > 0 ? '建议优先修复下方的标号重复、位段越界或命名冲突，以免导致上位机通信或数据解码异常。' : '协议已满足 ARINC 429 总线规约与上位机代码生成标准要求。'}
+            </div>
+        `;
+        checkResultsContainer.appendChild(summaryCard);
+
+        if (issues.length === 0) {
+            const allGoodCard = document.createElement('div');
+            allGoodCard.className = 'check-card card-success';
+            allGoodCard.innerHTML = `
+                <div class="check-card-header">
+                    <div class="check-card-title"><i class="fa-solid fa-shield-halved"></i> 所有健康度规则校验通过</div>
+                </div>
+                <div class="check-card-desc">
+                    ✓ 所有标号字均为合法八进制格式且完全无重复 Label<br>
+                    ✓ 各数据字内部字段名称无重叠，位段 (Bits) 严格约束在有效数据载荷区 (B9~B29)<br>
+                    ✓ 信号范围数值逻辑正常，未出现倒置或离群突变
+                </div>
+            `;
+            checkResultsContainer.appendChild(allGoodCard);
+            return;
+        }
+
+        // 按照 error -> warning -> info 顺序排序输出
+        const sorted = [...issues].sort((a, b) => {
+            const order = { error: 0, warning: 1, info: 2 };
+            return order[a.level] - order[b.level];
+        });
+
+        sorted.forEach((item, idx) => {
+            const card = document.createElement('div');
+            card.className = `check-card card-${item.level}`;
+
+            let icon = item.level === 'error' ? 'fa-circle-xmark' : (item.level === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-info');
+            let levelLabel = item.level === 'error' ? '严重错误' : (item.level === 'warning' ? '逻辑警告' : '工程提示');
+
+            card.innerHTML = `
+                <div class="check-card-header">
+                    <div class="check-card-title">
+                        <i class="fa-solid ${icon}"></i> #${idx + 1}. ${item.title}
+                    </div>
+                    <div>
+                        <span class="check-tag check-tag-${item.level}">${levelLabel}</span>
+                    </div>
+                </div>
+                <div class="check-card-desc">
+                    ${item.desc}
+                </div>
+            `;
+            checkResultsContainer.appendChild(card);
+        });
+    }
+
+    if (btnArincCheck) {
+        btnArincCheck.addEventListener('click', runProtocolHealthCheck);
+    }
+
+    if (btnRecheckProtocol) {
+        btnRecheckProtocol.addEventListener('click', runProtocolHealthCheck);
     }
 
     // ----------------- 系统启动加载序列 -----------------

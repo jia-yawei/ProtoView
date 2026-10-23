@@ -2774,6 +2774,89 @@ td {
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
+/* 协议检查报告样式 */
+.check-card {
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    transition: all 0.15s ease;
+}
+
+.check-card.card-error {
+    border-left: 4px solid #ef4444;
+    background: rgba(239, 68, 68, 0.04);
+}
+
+.check-card.card-warning {
+    border-left: 4px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.04);
+}
+
+.check-card.card-info {
+    border-left: 4px solid #3b82f6;
+    background: rgba(59, 130, 246, 0.04);
+}
+
+.check-card.card-success {
+    border-left: 4px solid #10b981;
+    background: rgba(16, 185, 129, 0.04);
+}
+
+.check-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.check-card-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.check-card.card-error .check-card-title { color: #dc2626; }
+.check-card.card-warning .check-card-title { color: #d97706; }
+.check-card.card-info .check-card-title { color: #2563eb; }
+.check-card.card-success .check-card-title { color: #059669; }
+
+[data-theme="dark"] .check-card.card-error .check-card-title { color: #f87171; }
+[data-theme="dark"] .check-card.card-warning .check-card-title { color: #fbbf24; }
+[data-theme="dark"] .check-card.card-info .check-card-title { color: #60a5fa; }
+[data-theme="dark"] .check-card.card-success .check-card-title { color: #34d399; }
+
+.check-card-desc {
+    font-size: 12.5px;
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.check-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.check-tag-error { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
+.check-tag-warning { background: rgba(245, 158, 11, 0.15); color: #d97706; }
+.check-tag-info { background: rgba(59, 130, 246, 0.15); color: #2563eb; }
+
+.check-location {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 11px;
+    background: var(--bg-hover);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--text-secondary);
+    margin-right: 6px;
+}
+
 .codegen-pre {
     margin: 0;
     padding: 14px 16px;
