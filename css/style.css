@@ -2479,41 +2479,54 @@ td {
 }
 
 .dense-clone-btn {
-    background: rgba(59, 130, 246, 0.08);
-    border: 1px solid rgba(59, 130, 246, 0.25);
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.4);
     color: var(--accent-color);
     cursor: pointer;
-    padding: 0 7px;
-    height: 22px;
-    line-height: 20px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 600;
+    padding: 0 11px;
+    height: 26px;
+    line-height: 24px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     transition: all 0.15s ease;
     user-select: none;
     white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.15);
 }
 
 .dense-clone-btn:hover {
     background: var(--accent-color);
     color: #ffffff;
     border-color: var(--accent-color);
-    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    transform: translateY(-1px);
 }
 
 [data-theme="dark"] .dense-clone-btn {
-    background: rgba(56, 189, 248, 0.12);
-    border-color: rgba(56, 189, 248, 0.3);
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.45);
     color: #38bdf8;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 [data-theme="dark"] .dense-clone-btn:hover {
     background: #0284c7;
     color: #ffffff;
     border-color: #0284c7;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.5);
+    transform: translateY(-1px);
+}
+
+/* 标号字顶栏的克隆字专属强化样式 */
+.dense-clone-word-btn {
+    height: 28px;
+    line-height: 26px;
+    padding: 0 13px;
+    font-size: 12.5px;
 }
 
 .dense-del-btn {

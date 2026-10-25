@@ -350,7 +350,7 @@ class Arinc429Helper {
   <style>
     @page {
       size: A4 portrait;
-      margin: 15mm 12mm 15mm 12mm;
+      margin: 10mm 12mm 10mm 12mm;
     }
     * {
       box-sizing: border-box;
@@ -358,7 +358,7 @@ class Arinc429Helper {
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", sans-serif;
       margin: 0;
-      padding: 24px;
+      padding: 20px;
       background: #f1f5f9;
       color: #0f172a;
     }
@@ -366,27 +366,27 @@ class Arinc429Helper {
       max-width: 960px;
       margin: 0 auto;
       background: #fff;
-      padding: 32px 40px;
+      padding: 24px 32px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.08);
       border-radius: 8px;
     }
     .doc-header {
       border-bottom: 2px solid #0f172a;
-      padding-bottom: 12px;
-      margin-bottom: 24px;
+      padding-bottom: 10px;
+      margin-bottom: 18px;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
     }
     .doc-title {
       margin: 0;
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
       letter-spacing: 0.5px;
       color: #0f172a;
     }
     .doc-meta {
-      font-size: 13px;
+      font-size: 12px;
       color: #475569;
     }
     .no-print-bar {
@@ -411,22 +411,33 @@ class Arinc429Helper {
     .btn-action:hover {
       background: #1d4ed8;
     }
-    .card-wrap {
-      margin-bottom: 32px;
-      page-break-inside: avoid;
+    
+    /* 核心分页控制：每个字卡片必须独立成一页，绝不跨页 */
+    .arinc-card-page-block {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      margin-bottom: 1.5rem;
     }
+    .arinc-card-page-block:not(:first-child) {
+      page-break-before: always !important;
+      break-before: page !important;
+    }
+    
     table.arinc-spec-card-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 20px;
-      font-size: 12.5px;
+      margin-bottom: 10px;
+      font-size: 12px;
       border: 1.5px solid #000;
       color: #000;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     table.arinc-spec-card-table td {
       border: 1px solid #000;
-      padding: 5px 8px;
+      padding: 4px 6px;
       vertical-align: middle;
+      line-height: 1.35;
     }
     @media print {
       body {
@@ -437,13 +448,18 @@ class Arinc429Helper {
         box-shadow: none;
         padding: 0;
         max-width: 100%;
+        border-radius: 0;
       }
       .no-print-bar {
         display: none !important;
       }
-      .card-wrap {
-        page-break-after: auto;
-        page-break-inside: avoid;
+      .doc-header {
+        margin-bottom: 12px;
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+      .arinc-card-page-block {
+        margin-bottom: 0 !important;
       }
     }
   </style>
@@ -461,7 +477,7 @@ class Arinc429Helper {
       </div>
       <div class="doc-meta" style="text-align: right;">
         <div>符合标准: ARINC 429</div>
-        <div>文档密级: 内部工程使用</div>
+        <div>数位格式: 32位 双列对照</div>
       </div>
     </div>
     <div class="doc-body">
@@ -647,9 +663,10 @@ class Arinc429Helper {
                 notes.push(`技术备注: ${w.remark || protocol.description}`);
             }
 
-            // 输出符合用户航空接口卡片标准的大表 (使用 HTML 格式在 Markdown 中渲染，支持完美的行列合并与精确布局)
+            // 输出符合用户航空接口卡片标准的大表 (使用 HTML 格式在 Markdown 中渲染，支持完美的行列合并与精确布局，每个字卡片独立成页防跨页)
+            md += `<div class="arinc-card-page-block" style="page-break-before: ${idx === 0 ? 'auto' : 'always'}; page-break-after: ${idx === words.length - 1 ? 'auto' : 'always'}; page-break-inside: avoid; break-before: ${idx === 0 ? 'auto' : 'page'}; break-after: ${idx === words.length - 1 ? 'auto' : 'page'}; break-inside: avoid; margin-bottom: 2rem;">\n\n`;
             md += `### ${idx + 1}. 接口控制卡片: ${signalName} (标号 ${oct}₈)\n\n`;
-            md += `<table class="arinc-spec-card-table" style="width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 13px; border: 1.5px solid #333;">\n`;
+            md += `<table class="arinc-spec-card-table" style="width: 100%; border-collapse: collapse; margin-bottom: 0.8rem; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 13px; border: 1.5px solid #333; page-break-inside: avoid; break-inside: avoid;">\n`;
             md += `  <tbody>\n`;
             md += `    <tr style="border-bottom: 1px solid #333;">\n`;
             md += `      <td style="width: 12%; font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 6px 10px; text-align: center;">信号名称</td>\n`;
@@ -744,6 +761,7 @@ class Arinc429Helper {
 
             md += `  </tbody>\n`;
             md += `</table>\n\n`;
+            md += `</div>\n\n`;
             md += `---\n\n`;
         });
 

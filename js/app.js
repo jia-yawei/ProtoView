@@ -3030,6 +3030,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // 2. 检查各字内部字段重名、全局重名、Bit 重叠与超出 32 位限制
+        const isReservedFieldName = (name) => {
+            if (!name) return false;
+            const clean = name.trim().toLowerCase();
+            return clean === '预留' || clean === '保留' || clean === 'reserved' || clean.startsWith('预留') || clean.startsWith('保留') || clean.startsWith('reserved');
+        };
+
         const globalFieldNames = new Map(); // fieldName -> [{ wordOct, wordName, fieldIndex }]
         const globalFieldRanges = []; // 收集所有数值字段的范围，用于后续离群/奇异值检测: { wordOct, wordName, fieldName, min, max, prec, res }
 
@@ -3069,8 +3075,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         wordIndex: wIdx
                     });
                 } else {
-                    // 字内重名
-                    if (localNameSet.has(fName)) {
+                    // 字内重名 (保留/预留字段允许字内重复划分)
+                    if (localNameSet.has(fName) && !isReservedFieldName(fName)) {
                         issues.push({
                             level: 'error',
                             title: `[${oct}₈] 字内字段名重复: "${fName}"`,
@@ -3151,9 +3157,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        // 3. 全局同名字段提醒 (如果在不同字中出现同名且类型/单位/范围不同)
+        // 3. 全局同名字段提醒 (如果在不同字中出现同名且非保留/预留字段)
         globalFieldNames.forEach((locations, fName) => {
-            if (locations.length > 1) {
+            if (locations.length > 1 && !isReservedFieldName(fName)) {
                 const locStrs = locations.map(l => `[${l.oct}₈ ${l.wName}]`).join('、');
                 issues.push({
                     level: 'info',
@@ -3302,6 +3308,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnRecheckProtocol) {
         btnRecheckProtocol.addEventListener('click', runProtocolHealthCheck);
     }
+
+    // ----------------- 全局快捷键绑定 (Ctrl + S / Cmd + S 拦截与保存) -----------------
+    window.addEventListener('keydown', (e) => {
+        // 判断是否按下了 Ctrl+S 或 Cmd+S (Mac)
+        if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault(); // 阻止浏览器弹出原生的“另存为网页”窗口
+
+            // 如果当前在 429 协议属性弹窗中，触发表单提交保存属性
+            if (arincPropsModal && arincPropsModal.classList.contains('active')) {
+                const savePropsBtn = document.getElementById('btn-save-props-submit');
+                if (savePropsBtn) savePropsBtn.click();
+                return;
+            }
+
+            // 如果当前在新建协议弹窗中，触发表单提交创建
+            if (arincCreateModal && arincCreateModal.classList.contains('active')) {
+                const saveCreateBtn = document.getElementById('btn-confirm-create-429');
+                if (saveCreateBtn) saveCreateBtn.click();
+                return;
+            }
+
+            // 如果在通用协议弹窗中
+            if (protocolModal && protocolModal.classList.contains('active')) {
+                const saveGenBtn = protocolModal.querySelector('button[type="submit"]');
+                if (saveGenBtn) saveGenBtn.click();
+                return;
+            }
+
+            // 如果在 ARINC 429 编辑工作台中，执行保存协议操作
+            const arincView = document.getElementById('arinc429-view');
+            if (arincView && arincView.classList.contains('active')) {
+                if (currentArincProtocol) {
+                    saveCurrentArincProtocol();
+                }
+                return;
+            }
+
+            // 如果在其他页面，有保存按钮则优先触发
+            if (btnArincSave && currentArincProtocol) {
+                saveCurrentArincProtocol();
+            }
+        }
+    });
 
     // ----------------- 系统启动加载序列 -----------------
     async function initSystem() {
