@@ -552,14 +552,14 @@ class Arinc429Helper {
 
             // Bit 1~8: 标号
             for (let b = 1; b <= 8; b++) {
-                bitMap[b] = `Label 标号位 (Label: ${oct}₈ / ${hex})`;
+                bitMap[b] = `Label 标号位 (${oct}₈ / ${hex})`;
                 bitGroup[b] = `__LABEL__`;
             }
 
             // 经典模式 Bit 9~10: SDI
             if (!isBitstream) {
-                bitMap[9] = `SDI 识别码 (B9~B10)`;
-                bitMap[10] = `SDI 识别码 (B9~B10)`;
+                bitMap[9] = `SDI 识别码`;
+                bitMap[10] = `SDI 识别码`;
                 bitGroup[9] = `__SDI__`;
                 bitGroup[10] = `__SDI__`;
             }
@@ -570,7 +570,7 @@ class Arinc429Helper {
                 const len = Math.max(1, Number(f.bitCount || f.length || 1));
                 const e = Math.min(32, s + len - 1);
                 const fname = f.name || '未命名数据';
-                const fieldDesc = len === 1 ? fname : `${fname} (B${s}~B${e})`;
+                const fieldDesc = fname; // 表格中已有左/右列明确数位信息，字段说明只显示字段名本身
                 const gKey = `FIELD_${fIndex}_${s}_${e}`;
                 for (let b = s; b <= e; b++) {
                     bitMap[b] = fieldDesc;
@@ -634,33 +634,60 @@ class Arinc429Helper {
                 rRow += span;
             }
 
-            // 附注说明整理
-            const notes = [];
-            // 附注 1: 字段状态字典与通断状态说明
+            // 备注说明整理 (包含字段备注、状态字典、SDI与SSM说明、字与协议备注)
+            const remarks = [];
+
+            // 1. 各字段填写的备注 (优先输出具体的工程备注)
             fields.forEach(f => {
-                const dict = f.dict || {};
-                const entries = Object.entries(dict);
-                if (entries.length > 0) {
-                    const dictDesc = entries.map(([k, v]) => `${k}-${v}`).join(', ');
-                    notes.push(`${f.name} (B${f.startBit}${f.bitCount > 1 ? `~B${Number(f.startBit) + Number(f.bitCount) - 1}` : ''}): ${dictDesc}`);
+                if (f.remark && f.remark.trim()) {
+                    remarks.push(`${f.name}备注: ${f.remark.trim()}`);
                 }
             });
 
-            // 附注 2: SDI 字典 (经典模式)
+            // 2. 字段状态字典说明 (智能合并：如果一个字中所有字段的状态字典都相同，则只显示一条统一的状态字典说明)
+            const fieldsWithDict = fields.filter(f => f.dict && Object.keys(f.dict).length > 0);
+            if (fieldsWithDict.length > 0) {
+                // 检查是否所有带字典的字段字典内容完全相同，且是否所有字段均配置了该字典
+                const firstDictEntries = Object.entries(fieldsWithDict[0].dict).sort(([a], [b]) => a.localeCompare(b));
+                const firstDictStr = JSON.stringify(firstDictEntries);
+                const allDictsIdentical = fieldsWithDict.every(f => {
+                    const fEntries = Object.entries(f.dict).sort(([a], [b]) => a.localeCompare(b));
+                    return JSON.stringify(fEntries) === firstDictStr;
+                });
+
+                // 如果字段都有字典且完全一致，或者字段多于1个且全部一致，直接输出统一定义
+                if (allDictsIdentical && fieldsWithDict.length === fields.length) {
+                    const dictDesc = firstDictEntries.map(([k, v]) => `${k}-${v}`).join(', ');
+                    remarks.push(`状态定义: ${dictDesc}`);
+                } else {
+                    // 若存在不一致，或仅部分字段有字典，则按各自字段名称列出
+                    fieldsWithDict.forEach(f => {
+                        const entries = Object.entries(f.dict);
+                        const dictDesc = entries.map(([k, v]) => `${k}-${v}`).join(', ');
+                        remarks.push(`${f.name}状态定义: ${dictDesc}`);
+                    });
+                }
+            }
+
+            // 3. SDI 字典 (经典模式)
             if (!isBitstream && w.sdiDict && Object.keys(w.sdiDict).length > 0) {
                 const sdiMap = { '0': '00', '1': '01', '2': '10', '3': '11' };
                 const sdiStr = Object.entries(w.sdiDict).map(([k, v]) => `${sdiMap[k] || k}:${v}`).join(', ');
-                notes.push(`SDI 系统源标识 (bit9-bit10): ${sdiStr}`);
+                remarks.push(`SDI 系统源标识: ${sdiStr}`);
             }
 
-            // 附注 3: SSM 有效性说明
+            // 4. SSM 有效性说明
             const globalSsmDict = (protocol && protocol.ssmDict) || w.ssmDict || { "0": "正常运算 (00)", "1": "无计算数据 (01)", "2": "功能测试 (10)", "3": "故障告警 (11)" };
             const ssmBitMap = { '0': '00', '1': '01', '2': '10', '3': '11' };
             const ssmDesc = Object.entries(globalSsmDict).map(([k, v]) => `${ssmBitMap[k] || k} ${v}`).join('; ');
-            notes.push(`SSM 有效性标识 (bit30-bit31): ${ssmDesc}`);
+            remarks.push(`SSM 有效性标识: ${ssmDesc}`);
 
-            if (w.remark || protocol.description) {
-                notes.push(`技术备注: ${w.remark || protocol.description}`);
+            // 5. 数据字与协议整体备注
+            if (w.remark && w.remark.trim() && !remarks.includes(`字备注: ${w.remark.trim()}`)) {
+                remarks.push(`字备注: ${w.remark.trim()}`);
+            }
+            if (protocol.description && protocol.description.trim()) {
+                remarks.push(`协议说明: ${protocol.description.trim()}`);
             }
 
             // 输出符合用户航空接口卡片标准的大表 (使用 HTML 格式在 Markdown 中渲染，支持完美的行列合并与精确布局，每个字卡片独立成页防跨页)
@@ -745,16 +772,16 @@ class Arinc429Helper {
                 md += `    </tr>\n`;
             }
 
-            // 附注行
+            // 备注行 (原“附注”修改为“备注”，包含字段备注、字典与有效性定义)
             md += `    <tr style="border-top: 1.5px solid #333;">\n`;
-            md += `      <td style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 8px 10px; text-align: center; vertical-align: top;">附注</td>\n`;
+            md += `      <td style="font-weight: bold; background: #f8fafc; border: 1px solid #333; padding: 8px 10px; text-align: center; vertical-align: top;">备注</td>\n`;
             md += `      <td colspan="3" style="border: 1px solid #333; padding: 8px 12px; line-height: 1.7;">\n`;
-            if (notes.length > 0) {
-                notes.forEach((note, nIdx) => {
-                    md += `        <div>${nIdx + 1}. ${note}</div>\n`;
+            if (remarks.length > 0) {
+                remarks.forEach((rem, rIdx) => {
+                    md += `        <div>${rIdx + 1}. ${rem}</div>\n`;
                 });
             } else {
-                md += `        <div>1. 无特殊附注说明</div>\n`;
+                md += `        <div>1. 无特殊备注说明</div>\n`;
             }
             md += `      </td>\n`;
             md += `    </tr>\n`;
