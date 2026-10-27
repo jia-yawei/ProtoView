@@ -1241,6 +1241,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     window.saveCurrentArincProtocol = saveCurrentArincProtocol;
 
+    // 聚焦并红色高亮闪烁特定字段卡片
+    function highlightAndScrollToField(fieldIndex) {
+        setTimeout(() => {
+            const card = document.getElementById(`field-card-${fieldIndex}`);
+            if (card) {
+                // 滚动至视野居中
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // 添加红色闪烁动画类
+                card.classList.remove('field-highlight-flash');
+                void card.offsetWidth; // 触发 reflow 重新激活 CSS 关键帧动画
+                card.classList.add('field-highlight-flash');
+                setTimeout(() => {
+                    card.classList.remove('field-highlight-flash');
+                }, 1600);
+            }
+        }, 50);
+    }
+    window.highlightAndScrollToField = highlightAndScrollToField;
+
     // ----------------- 渲染左侧标号字列表 (主要内容核心区) -----------------
     function renderArincWordsList() {
         if (!currentArincProtocol || !currentArincProtocol.words || currentArincProtocol.words.length === 0) {
@@ -1264,11 +1283,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (wordSearchQuery) {
             const q = wordSearchQuery.toLowerCase();
-            filtered = filtered.filter(w => 
-                (w.label && w.label.includes(q)) || 
-                (w.name && w.name.toLowerCase().includes(q)) ||
-                (w.source && w.source.toLowerCase().includes(q))
-            );
+            filtered = filtered.filter(w => {
+                // 1. 匹配标号 (八进制数字)
+                const matchLabel = w.label && w.label.toLowerCase().includes(q);
+                // 2. 匹配标号字名称
+                const matchName = w.name && w.name.toLowerCase().includes(q);
+                // 3. 匹配来源系统设备
+                const matchSource = w.source && w.source.toLowerCase().includes(q);
+                // 4. 匹配具体字段名称 (signals 内任意字段匹配)
+                const matchField = w.signals && w.signals.some(s => s && s.name && s.name.toLowerCase().includes(q));
+
+                return matchLabel || matchName || matchSource || matchField;
+            });
         }
 
         arincWordsList.innerHTML = '';
@@ -1285,8 +1311,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             const sigCount = (item.signals ? item.signals.length : 0);
             const dirClass = item.direction === 'Rx' ? 'dir-rx' : 'dir-tx';
 
-            if (item.name) {
-                tr.title = `${octalStr}₈: ${item.name}`;
+            let matchedFieldHint = '';
+            let firstMatchedFieldIndex = -1;
+            if (wordSearchQuery && item.signals) {
+                const q = wordSearchQuery.toLowerCase();
+                const matchedFields = [];
+                item.signals.forEach((s, sIdx) => {
+                    if (s && s.name && s.name.toLowerCase().includes(q)) {
+                        matchedFields.push(s);
+                        if (firstMatchedFieldIndex === -1) firstMatchedFieldIndex = sIdx;
+                    }
+                });
+                if (matchedFields.length > 0) {
+                    matchedFieldHint = ` (匹配字段: ${matchedFields.map(s => s.name).join(', ')})`;
+                }
+            }
+
+            if (item.name || matchedFieldHint) {
+                tr.title = `${octalStr}₈: ${item.name || '未命名'}${matchedFieldHint}`;
             }
 
             tr.innerHTML = `
@@ -1294,6 +1336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="col-label">
                     <span class="octal-num">${octalStr}₈</span>
                     ${item.name ? `<span class="word-mini-name" title="${item.name}">${item.name}</span>` : ''}
+                    ${firstMatchedFieldIndex !== -1 ? `<button type="button" class="word-search-match-btn btn-locate-matched-field" data-word-index="${item.originalIndex}" data-field-index="${firstMatchedFieldIndex}" title="点击直接定位并高亮闪烁该字段"><i class="fa-solid fa-magnifying-glass"></i></button>` : ''}
                 </td>
                 <td class="col-dir" style="text-align:center;">
                     <span class="dense-dir-tag ${dirClass}">${item.direction || 'Tx'}</span>
@@ -1307,6 +1350,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </button>
                 </td>
             `;
+
+            // 点击放大镜按钮直接定位并红色闪烁字段
+            const locateBtn = tr.querySelector('.btn-locate-matched-field');
+            if (locateBtn) {
+                locateBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // 阻止多余的行点击触发
+                    currentWordIndex = item.originalIndex;
+                    renderArincWordsList();
+                    renderSelectedWordInspector();
+                    highlightAndScrollToField(firstMatchedFieldIndex);
+                });
+            }
 
             // 每个字后方单独的删除按钮
             const delBtn = tr.querySelector('.word-row-del-btn');
@@ -1536,6 +1591,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         fields.forEach((field, fIdx) => {
             const card = document.createElement('div');
             card.className = 'dense-field-card';
+            card.id = `field-card-${fIdx}`;
+            card.setAttribute('data-field-index', fIdx);
+            card.setAttribute('data-field-name', field.name || '');
 
             const bitCount = Number(field.bitCount || field.length || 1);
             let startBit;
@@ -3029,15 +3087,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // 2. 检查各字内部字段重名、全局重名、Bit 重叠与超出 32 位限制
+        // 2. 检查各字内部字段重名、Bit 重叠与超出 32 位限制
         const isReservedFieldName = (name) => {
             if (!name) return false;
             const clean = name.trim().toLowerCase();
             return clean === '预留' || clean === '保留' || clean === 'reserved' || clean.startsWith('预留') || clean.startsWith('保留') || clean.startsWith('reserved');
         };
-
-        const globalFieldNames = new Map(); // fieldName -> [{ wordOct, wordName, fieldIndex }]
-        const globalFieldRanges = []; // 收集所有数值字段的范围，用于后续离群/奇异值检测: { wordOct, wordName, fieldName, min, max, prec, res }
 
         words.forEach((w, wIdx) => {
             const oct = (w.label || '000').toString().padStart(3, '0');
@@ -3056,9 +3111,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            // 字内部重名检查
+            // 字内部重名检查 (仅排查同一个字内同名字段，避免生成代码变量名冲突；不同字复用同名字段属于标准航电设计，不报警)
             const localNameSet = new Set();
-            // Bit 占用占用排查 (1~32)
+            // Bit 占用排查 (1~32)
             const bitOwners = new Array(33).fill(null);
 
             fields.forEach((f, fIdx) => {
@@ -3075,7 +3130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         wordIndex: wIdx
                     });
                 } else {
-                    // 字内重名 (保留/预留字段允许字内重复划分)
+                    // 同一个字内部重名检查 (保留/预留字段允许字内重复划分)
                     if (localNameSet.has(fName) && !isReservedFieldName(fName)) {
                         issues.push({
                             level: 'error',
@@ -3085,10 +3140,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         });
                     }
                     localNameSet.add(fName);
-
-                    // 全局记录
-                    if (!globalFieldNames.has(fName)) globalFieldNames.set(fName, []);
-                    globalFieldNames.get(fName).push({ oct, wName, fIdx });
                 }
 
                 // 位段越界与重叠检查
@@ -3126,13 +3177,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     bitOwners[b] = fName || `字段#${fIdx + 1}`;
                 }
 
-                // 收集数值范围和精度
+                // 范围倒置检查 (min > max)
                 const minVal = (f.min !== undefined && f.min !== null && f.min !== '') ? Number(f.min) : null;
                 const maxVal = (f.max !== undefined && f.max !== null && f.max !== '') ? Number(f.max) : null;
-                const precVal = f.precision;
-                const resVal = f.resolution;
-
-                // 范围倒置检查 (min > max)
                 if (minVal !== null && maxVal !== null && !isNaN(minVal) && !isNaN(maxVal)) {
                     if (minVal > maxVal) {
                         issues.push({
@@ -3141,73 +3188,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                             desc: `数据字 [${oct}₈ ${wName}] 的字段「${fName}」最小值 (${minVal}) 大于最大值 (${maxVal})。`,
                             wordIndex: wIdx
                         });
-                    } else {
-                        globalFieldRanges.push({
-                            oct,
-                            wName,
-                            fName,
-                            min: minVal,
-                            max: maxVal,
-                            rawRange: `${f.min}~${f.max}`,
-                            precision: precVal,
-                            resolution: resVal
-                        });
                     }
                 }
             });
         });
-
-        // 3. 全局同名字段提醒 (如果在不同字中出现同名且非保留/预留字段)
-        globalFieldNames.forEach((locations, fName) => {
-            if (locations.length > 1 && !isReservedFieldName(fName)) {
-                const locStrs = locations.map(l => `[${l.oct}₈ ${l.wName}]`).join('、');
-                issues.push({
-                    level: 'info',
-                    title: `同名字段出现在多个标号字中: "${fName}"`,
-                    desc: `字段「${fName}」在 ${locStrs} 中均有定义。若代表同一物理量属正常复用；若代表不同传感器，建议命名区分 (如加 _L / _R 或序号)。`
-                });
-            }
-        });
-
-        // 4. 范围与逻辑奇异值 / 突变检测 (例如连续多个字或多个字段范围都是 0~10，突然冒出一个 0~15 或 0~100)
-        if (globalFieldRanges.length >= 3) {
-            // 统计范围出现的频率模式
-            const rangeFreq = new Map(); // "min~max" -> count
-            globalFieldRanges.forEach(r => {
-                const key = `${r.min}~${r.max}`;
-                rangeFreq.set(key, (rangeFreq.get(key) || 0) + 1);
-            });
-
-            // 寻找占主导地位的高频基准范围 (出现次数超过 3 次且占 40% 以上)
-            let dominantRangeKey = null;
-            let dominantCount = 0;
-            rangeFreq.forEach((cnt, key) => {
-                if (cnt >= 3 && cnt > dominantCount) {
-                    dominantCount = cnt;
-                    dominantRangeKey = key;
-                }
-            });
-
-            if (dominantRangeKey) {
-                const [domMin, domMax] = dominantRangeKey.split('~').map(Number);
-                // 找出与主导范围相近但略有差异的离群孤立范围 (如 0~10 vs 0~15，最小值相同但最大值突变，且只出现了 1~2 次)
-                globalFieldRanges.forEach(r => {
-                    const rKey = `${r.min}~${r.max}`;
-                    if (rKey !== dominantRangeKey && (rangeFreq.get(rKey) || 0) <= 2) {
-                        // 如果最小值一样但最大值轻微偏离（如 10 变成了 15 或 12），极可能是手滑输错
-                        const isMinSame = r.min === domMin;
-                        const isCloseVariance = Math.abs(r.max - domMax) > 0 && Math.abs(r.max - domMax) <= Math.max(domMax * 1.5, 10);
-                        if (isMinSame && isCloseVariance) {
-                            issues.push({
-                                level: 'warning',
-                                title: `[${r.oct}₈] 疑似范围输入突变/笔误: "${r.fName}" (${r.rawRange})`,
-                                desc: `协议中绝大部分类似字段的范围均为「${dominantRangeKey}」(已使用 ${dominantCount} 次)，而 [${r.oct}₈ ${r.wName}] 的字段「${r.fName}」范围却为「${r.rawRange}」，请确认是否为输入失误或笔误。`
-                            });
-                        }
-                    }
-                });
-            }
-        }
 
         // 渲染检查结果卡片
         renderCheckResults(issues);
