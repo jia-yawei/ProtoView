@@ -79,26 +79,77 @@ export async function onRequestGet(context) {
         }
     }
 
-    // 2. 列出当前工作空间的所有协议清单
+    // 2. 列出当前工作空间的所有协议清单 (智能匹配工作空间，并自适应兜底容错)
     try {
-        const prefix = `ws:${workspace}:proto:`;
-        const listRes = await kv.list({ prefix });
+        const listRes = await kv.list();
+        const allKeys = listRes.keys || [];
         const protocols = [];
+        const targetWs = (workspace || 'default').toLowerCase();
+        const prefix = `ws:${targetWs}:proto:`;
 
-        for (const k of listRes.keys) {
+        for (const k of allKeys) {
+            const keyName = k.name;
             const meta = k.metadata || {};
-            protocols.push({
-                _cloudKey: k.name,
-                name: meta.name || k.name.replace(prefix, ''),
-                type: meta.type || 'ARINC429',
-                mode: meta.mode || 'classic',
-                device: meta.device || '',
-                direction: meta.direction || 'Tx',
-                period: meta.period || 20,
-                speed: meta.speed || '100kbps',
-                wordCount: meta.wordCount || 0,
-                updateTime: meta.updateTime || Date.now()
-            });
+            const keyLower = keyName.toLowerCase();
+            
+            let isMatch = false;
+            let cleanName = meta.name;
+
+            // 规则 1: 精确匹配工作空间前缀 ws:${targetWs}:proto:
+            if (keyLower.startsWith(prefix)) {
+                isMatch = true;
+                if (!cleanName) cleanName = keyName.slice(prefix.length);
+            }
+            // 规则 2: 当空间名是 protoview_kv 或 default 时，自动双向兼容 ws:default:proto: 与 ws:protoview_kv:proto:
+            else if ((targetWs === 'protoview_kv' || targetWs === 'default') && 
+                     (keyLower.startsWith('ws:default:proto:') || keyLower.startsWith('ws:protoview_kv:proto:'))) {
+                isMatch = true;
+                if (!cleanName) cleanName = keyName.replace(/^ws:[^:]+:proto:/i, '');
+            }
+            // 规则 3: 匹配以 proto: 开头的旧格式或简短 Key
+            else if (keyLower.startsWith('proto:')) {
+                isMatch = true;
+                if (!cleanName) cleanName = keyName.replace(/^proto:/i, '');
+            }
+            // 规则 4: 如果是在 Cloudflare 后台手动添加的无前缀 key (如 "RPDU1"、"xxx.json")
+            else if (!keyLower.startsWith('ws:')) {
+                isMatch = true;
+                if (!cleanName) cleanName = keyName;
+            }
+
+            if (isMatch) {
+                protocols.push({
+                    _cloudKey: keyName,
+                    name: cleanName || keyName,
+                    type: meta.type || 'ARINC429',
+                    mode: meta.mode || 'classic',
+                    device: meta.device || '',
+                    direction: meta.direction || 'Tx',
+                    period: meta.period || 20,
+                    speed: meta.speed || '100kbps',
+                    wordCount: meta.wordCount || 0,
+                    updateTime: meta.updateTime || Date.now()
+                });
+            }
+        }
+
+        // 终极兜底：如果按空间名称过滤后为 0，但 KV 数据库里实际存有 Key，则直接将 KV 里的全部 Key 全部返回！
+        if (protocols.length === 0 && allKeys.length > 0) {
+            for (const k of allKeys) {
+                const meta = k.metadata || {};
+                protocols.push({
+                    _cloudKey: k.name,
+                    name: meta.name || k.name.replace(/^ws:[^:]+:proto:/i, '').replace(/^proto:/i, ''),
+                    type: meta.type || 'ARINC429',
+                    mode: meta.mode || 'classic',
+                    device: meta.device || '',
+                    direction: meta.direction || 'Tx',
+                    period: meta.period || 20,
+                    speed: meta.speed || '100kbps',
+                    wordCount: meta.wordCount || 0,
+                    updateTime: meta.updateTime || Date.now()
+                });
+            }
         }
 
         // 按更新时间降序排列
@@ -108,6 +159,7 @@ export async function onRequestGet(context) {
             success: true,
             workspace: workspace,
             count: protocols.length,
+            totalKeysInKv: allKeys.length,
             protocols: protocols
         }), {
             status: 200,

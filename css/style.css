@@ -363,6 +363,7 @@ body {
 
 input[type="text"],
 input[type="number"],
+input[type="password"],
 select,
 textarea {
     width: 100%;
@@ -968,10 +969,12 @@ td {
 
 .modal-content input[type="text"],
 .modal-content input[type="number"],
+.modal-content input[type="password"],
 .modal-content select,
 .modal-content textarea,
 .modal-form-grid input[type="text"],
 .modal-form-grid input[type="number"],
+.modal-form-grid input[type="password"],
 .modal-form-grid select,
 .modal-form-grid textarea {
     height: 36px;
@@ -991,10 +994,12 @@ td {
 
 .modal-content input[type="text"]:hover,
 .modal-content input[type="number"]:hover,
+.modal-content input[type="password"]:hover,
 .modal-content select:hover,
 .modal-content textarea:hover,
 .modal-form-grid input[type="text"]:hover,
 .modal-form-grid input[type="number"]:hover,
+.modal-form-grid input[type="password"]:hover,
 .modal-form-grid select:hover,
 .modal-form-grid textarea:hover {
     border-color: rgba(59, 130, 246, 0.45);
@@ -1081,6 +1086,46 @@ td {
     border-top: 1px solid var(--border-color);
     background: var(--bg-primary);
     margin-top: 0 !important;
+}
+
+.cloud-settings-body {
+    padding: 22px 26px;
+    overflow-y: auto;
+}
+
+.cloud-info-box {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 20px;
+    background: rgba(59, 130, 246, 0.08);
+    padding: 14px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(59, 130, 246, 0.22);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.cloud-info-box strong {
+    color: var(--text-primary);
+    font-size: 13.5px;
+    display: block;
+    margin-bottom: 2px;
+}
+
+#cloud-connection-status {
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin: 14px 0 4px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] #cloud-connection-status {
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .modal-actions .btn {
@@ -3146,6 +3191,805 @@ body.resizing-active .workbench-resizer {
 [data-theme="dark"] .meta-item-key .key-input {
     color: #38bdf8 !important;
 }
+
+/* 桌面端隐藏移动端专属控件 */
+.arinc-mobile-tab-bar {
+    display: none;
+}
+
+.mobile-back-words-btn {
+    display: none;
+}
+
+/* ========================================================
+   移动端浏览器专属深度自适应优化 (@media (max-width: 768px))
+   ======================================================== */
+@media (max-width: 768px) {
+    /* 1. 全局容器与导航 */
+    .app-container {
+        flex-direction: column !important;
+        height: 100dvh !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+    }
+
+    /* 原桌面侧边栏自动转为顶部 44px 紧凑工控顶栏 */
+    .sidebar {
+        width: 100% !important;
+        height: 44px !important;
+        min-height: 44px !important;
+        max-height: 44px !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0 10px !important;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        flex-shrink: 0 !important;
+        z-index: 100 !important;
+    }
+
+    .sidebar .logo {
+        padding: 0 !important;
+        font-size: 1.1rem !important;
+    }
+
+    .sidebar-collapse-btn {
+        display: none !important;
+    }
+
+    .sidebar .nav-menu {
+        flex-direction: row !important;
+        padding: 0 !important;
+        gap: 6px !important;
+        flex: 0 0 auto !important;
+    }
+
+    .sidebar .nav-item {
+        padding: 4px 10px !important;
+        font-size: 12px !important;
+        border-radius: 6px !important;
+        gap: 4px !important;
+        height: 30px !important;
+    }
+
+    .sidebar .settings {
+        padding: 0 !important;
+        border-top: none !important;
+    }
+
+    .sidebar .theme-toggle {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 12px !important;
+    }
+
+    /* 2. 主内容区 */
+    .main-content {
+        padding: 8px 10px !important;
+        flex: 1 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .main-content.dense-workbench-active,
+    .main-content:has(#arinc429-view.active) {
+        padding: 4px 6px !important;
+        height: calc(100dvh - 44px) !important;
+        height: calc(100vh - 44px) !important;
+        overflow: hidden !important;
+    }
+
+    /* 3. 协议列表视图头部 */
+    .view-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        margin-bottom: 10px !important;
+    }
+
+    .view-header h1 {
+        font-size: 1.3rem !important;
+    }
+
+    .view-header p {
+        font-size: 0.8rem !important;
+    }
+
+    .view-header > div:last-child {
+        width: 100% !important;
+        display: flex !important;
+        gap: 8px !important;
+    }
+
+    .view-header > div:last-child .btn {
+        flex: 1 !important;
+        justify-content: center !important;
+        font-size: 13px !important;
+        padding: 8px 10px !important;
+    }
+
+    /* 4. 工作台模式选择与目录同步条 */
+    .workspace-mode-nav {
+        width: 100% !important;
+    }
+
+    .ws-mode-btn {
+        flex: 1 !important;
+        justify-content: center !important;
+        padding: 7px 4px !important;
+        font-size: 11.5px !important;
+    }
+
+    .workspace-dir-strip {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 10px 10px !important;
+        gap: 8px !important;
+    }
+
+    .ws-left {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .ws-info {
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+
+    .ws-name {
+        max-width: 100% !important;
+        font-size: 12px !important;
+        white-space: normal !important;
+        word-break: break-all !important;
+    }
+
+    .ws-right {
+        width: 100% !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+    }
+
+    .ws-right .btn {
+        flex: 1 1 calc(50% - 6px) !important;
+        min-width: 75px !important;
+        justify-content: center !important;
+        height: 32px !important;
+        padding: 0 4px !important;
+        font-size: 11px !important;
+    }
+
+    /* 5. 协议卡片列表 */
+    .protocol-list-container {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    .protocol-card {
+        padding: 12px 12px !important;
+    }
+
+    .protocol-stats {
+        gap: 4px !important;
+    }
+
+    .pstat-item {
+        font-size: 10.5px !important;
+        padding: 2px 5px !important;
+    }
+
+    .protocol-actions {
+        margin-top: 8px !important;
+        padding-top: 8px !important;
+        gap: 6px !important;
+    }
+
+    .protocol-actions .btn {
+        height: 32px !important;
+        font-size: 11.5px !important;
+    }
+
+    /* 6. ARINC 429 工作台工具栏 (横向滚动支持，保存按钮高亮最易点击) */
+    .arinc-dense-toolbar {
+        height: auto !important;
+        min-height: 40px !important;
+        flex-wrap: wrap !important;
+        padding: 4px 6px !important;
+        gap: 5px !important;
+    }
+
+    .dense-tb-left {
+        width: 100% !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 2px !important;
+    }
+
+    .dense-tb-actions {
+        width: 100% !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        justify-content: flex-start !important;
+        padding-bottom: 2px !important;
+        gap: 4px !important;
+    }
+
+    .dense-tb-actions .dense-btn {
+        flex-shrink: 0 !important;
+        height: 28px !important;
+        padding: 0 7px !important;
+        font-size: 11px !important;
+    }
+
+    #btn-arinc-save {
+        order: -1 !important; /* 保存按钮排在最前面，便于右手大拇指触达 */
+        font-weight: 700 !important;
+        background: var(--accent-color) !important;
+        color: #fff !important;
+    }
+
+    /* 7. 移动端专属：双栏 Tab 切换条 */
+    .arinc-mobile-tab-bar {
+        display: flex !important;
+        gap: 6px !important;
+        margin-bottom: 5px !important;
+        padding: 0 2px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .arinc-mobile-tab-btn {
+        flex: 1 !important;
+        height: 32px !important;
+        line-height: 30px !important;
+        border-radius: 6px !important;
+        border: 1px solid var(--border-color) !important;
+        background: var(--bg-secondary) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 5px !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+    }
+
+    .arinc-mobile-tab-btn.active {
+        background: var(--accent-color) !important;
+        border-color: var(--accent-color) !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 5px rgba(59, 130, 246, 0.3) !important;
+    }
+
+    /* 移动端工作区主布局：单栏全宽切换 */
+    .arinc-dense-workbench {
+        flex-direction: column !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .workbench-resizer {
+        display: none !important;
+    }
+
+    /* tab-words 激活时展示左栏字列表，隐藏右栏 */
+    .arinc-dense-workbench.mobile-view-words .arinc-dense-words-panel {
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+    }
+
+    .arinc-dense-workbench.mobile-view-words .arinc-dense-detail-panel {
+        display: none !important;
+    }
+
+    /* tab-detail 激活时展示右栏字段详情，隐藏左栏 */
+    .arinc-dense-workbench.mobile-view-detail .arinc-dense-words-panel {
+        display: none !important;
+    }
+
+    .arinc-dense-workbench.mobile-view-detail .arinc-dense-detail-panel {
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+    }
+
+    /* 移动端专属返回字列表按钮 */
+    .mobile-back-words-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 3px !important;
+        margin-right: 4px !important;
+        flex-shrink: 0 !important;
+        height: 28px !important;
+        padding: 0 6px !important;
+        font-size: 11px !important;
+        background: rgba(59, 130, 246, 0.12) !important;
+        color: var(--accent-color) !important;
+        border: 1px solid rgba(59, 130, 246, 0.25) !important;
+    }
+
+    /* 8. 标号字核心控制栏 (移动端两行自适应) */
+    .dense-word-primary-bar {
+        height: auto !important;
+        min-height: 40px !important;
+        flex-wrap: wrap !important;
+        padding: 6px 8px !important;
+        gap: 6px !important;
+    }
+
+    .prominent-label-card {
+        padding: 0 4px 0 6px !important;
+        height: 28px !important;
+    }
+
+    .prominent-octal-input {
+        width: 38px !important;
+        font-size: 13.5px !important;
+    }
+
+    .prominent-word-name-box {
+        flex: 1 1 120px !important;
+        min-width: 100px !important;
+    }
+
+    .prominent-word-name-input {
+        height: 28px !important;
+        font-size: 13px !important;
+        padding: 0 6px !important;
+    }
+
+    .dense-row-actions {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+        margin-left: 0 !important;
+        margin-top: 2px !important;
+    }
+
+    .dense-row-actions .dense-btn {
+        flex: 1 !important;
+        height: 28px !important;
+        justify-content: center !important;
+        font-size: 11px !important;
+    }
+
+    /* 9. 字段卡片在手机上的紧凑流式展示 */
+    .dense-field-card {
+        padding: 6px 8px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .field-card-header {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        padding: 4px 6px !important;
+    }
+
+    .field-card-header-left {
+        width: 100% !important;
+        gap: 6px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .field-card-name-wrap {
+        flex: 1 1 130px !important;
+        min-width: 110px !important;
+    }
+
+    .field-card-name-input {
+        height: 28px !important;
+        font-size: 12.5px !important;
+    }
+
+    .field-card-header-dict {
+        flex: 1 1 90px !important;
+        min-width: 80px !important;
+        max-width: 100% !important;
+    }
+
+    .field-card-header-right {
+        width: 100% !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+    }
+
+    .field-card-props-flow {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 5px !important;
+    }
+
+    .field-card-cell {
+        min-width: 0 !important;
+        flex: none !important;
+    }
+
+    .field-card-cell-remark {
+        grid-column: 1 / -1 !important;
+        width: 100% !important;
+    }
+
+    .field-card-input, .field-card-select {
+        height: 28px !important;
+        line-height: 26px !important;
+        font-size: 12px !important;
+    }
+
+    /* 10. 弹窗在手机上的全屏自适应 */
+    .modal-content {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        max-height: 90vh !important;
+        padding: 14px 14px !important;
+        margin: 10px !important;
+        border-radius: 12px !important;
+    }
+
+    .modal-actions {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .modal-actions .btn {
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+
+    /* 11. 同步中心手机自适应 */
+    .sync-status-grid {
+        grid-template-columns: 1fr !important;
+        gap: 6px !important;
+    }
+
+    .sync-flow-indicator {
+        transform: rotate(90deg) !important;
+        margin: 2px 0 !important;
+    }
+
+    .sync-dir-card {
+        padding: 8px 10px !important;
+    }
+
+    .sync-dir-desc {
+        font-size: 11px !important;
+    }
+
+    .sync-metrics-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+}
+
+/* ---------------------------------------------------- */
+/* 硬盘与云端协议同步中心 (Sync Hub Modal) 样式           */
+/* ---------------------------------------------------- */
+.btn-primary-soft {
+    background: rgba(59, 130, 246, 0.12) !important;
+    color: #2563eb !important;
+    border: 1px solid rgba(59, 130, 246, 0.35) !important;
+    font-weight: 600 !important;
+}
+
+.btn-primary-soft:hover {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+}
+
+[data-theme="dark"] .btn-primary-soft {
+    background: rgba(56, 189, 248, 0.15) !important;
+    color: #38bdf8 !important;
+    border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+[data-theme="dark"] .btn-primary-soft:hover {
+    background: #0284c7 !important;
+    color: #ffffff !important;
+    border-color: #0284c7 !important;
+}
+
+.btn-xs {
+    padding: 2px 8px !important;
+    font-size: 11px !important;
+    height: 22px !important;
+    line-height: 20px !important;
+    border-radius: 4px !important;
+}
+
+.sync-status-grid {
+    display: grid;
+    grid-template-columns: 1fr 40px 1fr;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.sync-endpoint-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.sync-ep-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-ep-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background: rgba(16, 185, 129, 0.14);
+    color: #10b981;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.sync-ep-icon-cloud {
+    background: rgba(59, 130, 246, 0.14) !important;
+    color: #3b82f6 !important;
+}
+
+.sync-ep-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sync-ep-title {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.sync-ep-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sync-ep-stat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11.5px;
+    gap: 6px;
+}
+
+.sync-count-badge {
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.sync-count-badge.badge-cloud {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+}
+
+.sync-flow-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-color);
+    font-size: 18px;
+    font-weight: bold;
+    transition: transform 0.2s ease;
+}
+
+.sync-section-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sync-direction-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.sync-dir-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    user-select: none;
+}
+
+.sync-dir-card:hover {
+    border-color: rgba(59, 130, 246, 0.45);
+    background: rgba(59, 130, 246, 0.03);
+}
+
+.sync-dir-card.active {
+    border-color: var(--accent-color);
+    background: rgba(59, 130, 246, 0.08);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+
+.sync-dir-radio {
+    font-size: 16px;
+    color: var(--accent-color);
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sync-dir-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.sync-dir-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3px;
+    gap: 8px;
+}
+
+.sync-dir-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sync-dir-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.tag-upload {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.tag-download {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.tag-both {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.sync-dir-desc {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.sync-options-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.sync-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.sync-progress-area {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 8px;
+    animation: fadeIn 0.2s ease;
+}
+
+.sync-progress-bar-wrap {
+    height: 7px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+[data-theme="dark"] .sync-progress-bar-wrap {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sync-progress-bar-inner {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+    border-radius: 4px;
+    transition: width 0.2s ease;
+}
+
+.sync-progress-status {
+    font-size: 12px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.sync-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    text-align: center;
+    border-top: 1px dashed var(--border-color);
+    padding-top: 10px;
+}
+
+.sync-metric-item {
+    padding: 4px 2px;
+}
+
+.sync-metric-val {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.sync-metric-lbl {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
 
 
 

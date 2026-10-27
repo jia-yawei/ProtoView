@@ -87,6 +87,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadProtocols();
         } else if (viewId === 'arinc429-view') {
             loadArincProtocolsForSelect();
+            if (typeof setMobileArincView === 'function' && window.innerWidth <= 768) {
+                setMobileArincView('words');
+            }
         }
     }
 
@@ -209,19 +212,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (item._cloudKey) {
                     const detailRes = await cloudApiCall(`/api/protocols?key=${encodeURIComponent(item._cloudKey)}`, 'GET');
                     if (detailRes.ok && detailRes.data) {
-                        const proto = detailRes.data;
-                        proto._fromCloud = true;
-                        proto._cloudKey = item._cloudKey;
-                        proto._cloudWorkspace = wsId;
-                        const localAll = await dbHelper.getAllProtocols();
-                        const existing = localAll.find(p => p._cloudKey === item._cloudKey || (p.name === proto.name && p.type === proto.type));
-                        if (existing) {
-                            proto.id = existing.id;
-                        } else {
-                            delete proto.id;
+                        let proto = detailRes.data;
+                        if (typeof proto === 'string') {
+                            try { proto = JSON.parse(proto); } catch(e) {}
                         }
-                        await dbHelper.saveProtocol(proto);
-                        loadedCount++;
+                        if (proto && typeof proto === 'object') {
+                            proto._fromCloud = true;
+                            proto._cloudKey = item._cloudKey;
+                            proto._cloudWorkspace = wsId;
+                            if (!proto.name) proto.name = item.name || '未命名协议';
+                            if (!proto.type) proto.type = item.type || 'ARINC429';
+
+                            const localAll = await dbHelper.getAllProtocols();
+                            const existing = localAll.find(p => p._cloudKey === item._cloudKey || (p.name === proto.name && p.type === proto.type));
+                            if (existing) {
+                                proto.id = existing.id;
+                            } else {
+                                delete proto.id;
+                            }
+                            await dbHelper.saveProtocol(proto);
+                            loadedCount++;
+                        }
                     }
                 }
             }
@@ -297,7 +308,468 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnCloudRefresh.addEventListener('click', () => syncCloudProtocols(true));
     }
     if (btnCloudUploadAll) {
-        btnCloudUploadAll.addEventListener('click', uploadAllLocalProtocolsToCloud);
+        btnCloudUploadAll.addEventListener('click', () => {
+            if (typeof openSyncHubModal === 'function') {
+                openSyncHubModal();
+            } else {
+                uploadAllLocalProtocolsToCloud();
+            }
+        });
+    }
+
+    // ========================================================
+    // 硬盘与云端协议同步中心 (Sync Hub Controller)
+    // ========================================================
+    const syncHubModal = document.getElementById('sync-hub-modal');
+    const btnOpenSyncHubs = document.querySelectorAll('.btn-open-sync-hub');
+    const syncDirCards = document.querySelectorAll('.sync-dir-card');
+    const syncFlowArrow = document.getElementById('sync-flow-arrow');
+    const syncLocalName = document.getElementById('sync-local-name');
+    const syncLocalCountBadge = document.getElementById('sync-local-count-badge');
+    const syncBtnPickDir = document.getElementById('sync-btn-pick-dir');
+    const syncCloudName = document.getElementById('sync-cloud-name');
+    const syncCloudCountBadge = document.getElementById('sync-cloud-count-badge');
+    const syncBtnRefreshCloud = document.getElementById('sync-btn-refresh-cloud');
+    const btnStartSyncExecute = document.getElementById('btn-start-sync-execute');
+    const syncProgressArea = document.getElementById('sync-progress-area');
+    const syncProgressBar = document.getElementById('sync-progress-bar');
+    const syncProgressStatus = document.getElementById('sync-progress-status');
+    const syncMetricsGrid = document.getElementById('sync-metrics-grid');
+    const metricUpload = document.getElementById('metric-upload');
+    const metricDownload = document.getElementById('metric-download');
+    const metricSkip = document.getElementById('metric-skip');
+    const metricFail = document.getElementById('metric-fail');
+    const syncOptNewer = document.getElementById('sync-opt-newer');
+
+    let currentSyncDirection = 'disk-to-cloud';
+    let isSyncRunning = false;
+
+    // 刷新两端状态（本地目录文件数与云端协议数）
+    async function refreshSyncHubStatus() {
+        // 1. 本地硬盘目录状态
+        if (currentWorkspaceHandle) {
+            try {
+                let perm = await currentWorkspaceHandle.queryPermission({ mode: 'readwrite' });
+                if (perm === 'granted') {
+                    let localCount = 0;
+                    for await (const entry of currentWorkspaceHandle.values()) {
+                        if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.json')) {
+                            localCount++;
+                        }
+                    }
+                    if (syncLocalName) syncLocalName.textContent = currentWorkspaceHandle.name;
+                    if (syncLocalCountBadge) syncLocalCountBadge.textContent = `${localCount} 个协议文件`;
+                    if (syncBtnPickDir) {
+                        syncBtnPickDir.style.display = 'inline-flex';
+                        syncBtnPickDir.innerHTML = '<i class="fa-solid fa-folder-open"></i> 更换目录';
+                    }
+                } else {
+                    if (syncLocalName) syncLocalName.textContent = currentWorkspaceHandle.name + ' (待授权)';
+                    if (syncLocalCountBadge) syncLocalCountBadge.textContent = '权限受限';
+                    if (syncBtnPickDir) {
+                        syncBtnPickDir.style.display = 'inline-flex';
+                        syncBtnPickDir.innerHTML = '<i class="fa-solid fa-key"></i> 点击授权';
+                    }
+                }
+            } catch (e) {
+                if (syncLocalName) syncLocalName.textContent = currentWorkspaceHandle.name;
+            }
+        } else {
+            if (syncLocalName) syncLocalName.textContent = '未关联电脑目录';
+            if (syncLocalCountBadge) syncLocalCountBadge.textContent = '0 个文件';
+            if (syncBtnPickDir) {
+                syncBtnPickDir.style.display = 'inline-flex';
+                syncBtnPickDir.innerHTML = '<i class="fa-solid fa-folder-open"></i> 选择目录';
+            }
+        }
+
+        // 2. Cloudflare 云端状态
+        const wsId = localStorage.getItem('protoview_cloud_ws') || 'default';
+        if (syncCloudName) syncCloudName.textContent = `工作空间: [${wsId}]`;
+        if (syncCloudCountBadge) syncCloudCountBadge.textContent = '正在获取...';
+
+        try {
+            const res = await cloudApiCall('/api/protocols', 'GET');
+            if (res.ok && res.data && res.data.success) {
+                const count = (res.data.protocols || []).length;
+                if (syncCloudCountBadge) syncCloudCountBadge.textContent = `${count} 个云端协议`;
+            } else if (res.status === 503) {
+                if (syncCloudCountBadge) syncCloudCountBadge.textContent = '⚠️ KV待绑定';
+            } else if (res.status === 401) {
+                if (syncCloudCountBadge) syncCloudCountBadge.textContent = '🔒 口令错误';
+            } else {
+                if (syncCloudCountBadge) syncCloudCountBadge.textContent = '离线 / 本地模式';
+            }
+        } catch (e) {
+            if (syncCloudCountBadge) syncCloudCountBadge.textContent = '连接异常';
+        }
+    }
+
+    // 打开同步中心模态框
+    function openSyncHubModal() {
+        if (!syncHubModal) return;
+        if (syncProgressArea) syncProgressArea.style.display = 'none';
+        if (syncMetricsGrid) syncMetricsGrid.style.display = 'none';
+        refreshSyncHubStatus();
+        syncHubModal.classList.add('active');
+    }
+
+    // 绑定所有触发按钮
+    btnOpenSyncHubs.forEach(btn => {
+        btn.addEventListener('click', openSyncHubModal);
+    });
+
+    // 弹窗内快捷选择本地目录
+    if (syncBtnPickDir) {
+        syncBtnPickDir.addEventListener('click', async () => {
+            await chooseWorkspaceDirectory();
+            await refreshSyncHubStatus();
+        });
+    }
+
+    // 弹窗内刷新云端状态
+    if (syncBtnRefreshCloud) {
+        syncBtnRefreshCloud.addEventListener('click', async () => {
+            syncBtnRefreshCloud.disabled = true;
+            syncBtnRefreshCloud.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            await refreshSyncHubStatus();
+            setTimeout(() => {
+                syncBtnRefreshCloud.disabled = false;
+                syncBtnRefreshCloud.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> 刷新';
+            }, 500);
+        });
+    }
+
+    // 切换同步方向卡片
+    function setSyncDirection(dir) {
+        currentSyncDirection = dir;
+        syncDirCards.forEach(card => {
+            const isMatch = (card.getAttribute('data-dir') === dir);
+            card.classList.toggle('active', isMatch);
+            const radioIcon = card.querySelector('.sync-dir-radio i');
+            if (radioIcon) {
+                radioIcon.className = isMatch ? 'fa-solid fa-circle-dot' : 'fa-regular fa-circle';
+            }
+            const input = card.querySelector('input[type="radio"]');
+            if (input) input.checked = isMatch;
+        });
+
+        if (syncFlowArrow) {
+            if (dir === 'disk-to-cloud') {
+                syncFlowArrow.className = 'fa-solid fa-arrow-right';
+                syncFlowArrow.style.color = '#10b981';
+            } else if (dir === 'cloud-to-disk') {
+                syncFlowArrow.className = 'fa-solid fa-arrow-left';
+                syncFlowArrow.style.color = '#3b82f6';
+            } else {
+                syncFlowArrow.className = 'fa-solid fa-arrows-rotate';
+                syncFlowArrow.style.color = '#a855f7';
+            }
+        }
+    }
+
+    syncDirCards.forEach(card => {
+        card.addEventListener('click', () => {
+            const dir = card.getAttribute('data-dir');
+            if (dir) setSyncDirection(dir);
+        });
+    });
+
+    // 执行同步主函数
+    async function executeSyncDirection() {
+        if (isSyncRunning) return;
+
+        // 检查本地目录连接
+        if (!currentWorkspaceHandle) {
+            if (window.showDirectoryPicker) {
+                const wantConnect = confirm("尚未关联电脑本地硬盘目录！\n\n是否立即选择您电脑上的协议文件夹作为工作目录？");
+                if (wantConnect) {
+                    await chooseWorkspaceDirectory();
+                    await refreshSyncHubStatus();
+                    if (!currentWorkspaceHandle) return;
+                } else {
+                    return;
+                }
+            } else {
+                alert("当前环境不支持直接访问本地硬盘文件夹。\n\n在手机等设备上，您的协议已保存在云端。回到电脑浏览器打开网页，即可一键将云端协议同步到电脑本地硬盘！");
+                return;
+            }
+        }
+
+        // 校验权限
+        try {
+            let perm = await currentWorkspaceHandle.queryPermission({ mode: 'readwrite' });
+            if (perm !== 'granted') {
+                perm = await currentWorkspaceHandle.requestPermission({ mode: 'readwrite' });
+                if (perm !== 'granted') {
+                    alert("未获得本地硬盘目录的写入授权，无法执行同步！");
+                    return;
+                }
+            }
+        } catch(e) {
+            alert("本地目录访问权限检查异常: " + e.message);
+            return;
+        }
+
+        isSyncRunning = true;
+        btnStartSyncExecute.disabled = true;
+        btnStartSyncExecute.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 同步执行中...';
+        syncProgressArea.style.display = 'block';
+        syncProgressBar.style.width = '5%';
+        syncProgressStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在读取本地与云端两端协议索引...';
+        syncMetricsGrid.style.display = 'grid';
+
+        let uploadCount = 0;
+        let downloadCount = 0;
+        let skipCount = 0;
+        let failCount = 0;
+
+        const updateMetricsUI = () => {
+            if (metricUpload) metricUpload.textContent = uploadCount;
+            if (metricDownload) metricDownload.textContent = downloadCount;
+            if (metricSkip) metricSkip.textContent = skipCount;
+            if (metricFail) metricFail.textContent = failCount;
+        };
+        updateMetricsUI();
+
+        const onlyNewer = syncOptNewer ? syncOptNewer.checked : true;
+
+        try {
+            // 1. 扫描读取本地硬盘目录中的所有 .json 文件
+            syncProgressStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在扫描本地硬盘目录中的 .json 协议文件...';
+            const localProtocolsMap = new Map(); // key -> { fileName, proto, mtime }
+            for await (const entry of currentWorkspaceHandle.values()) {
+                if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.json')) {
+                    try {
+                        const file = await entry.getFile();
+                        const text = await file.text();
+                        const parsed = JSON.parse(text);
+                        if (parsed && (parsed.words || parsed.frames || parsed.type || parsed.name)) {
+                            parsed._fileName = entry.name;
+                            const mtime = file.lastModified || parsed.updateTime || 0;
+                            const matchKey = (parsed.name || entry.name.replace(/\.json$/i, '')).trim();
+                            localProtocolsMap.set(matchKey, {
+                                fileName: entry.name,
+                                proto: parsed,
+                                mtime: mtime
+                            });
+                        }
+                    } catch(e) {
+                        console.warn("读取本地文件失败:", entry.name, e);
+                    }
+                }
+            }
+
+            syncProgressBar.style.width = '25%';
+
+            // 2. 读取 Cloudflare 云端工作空间协议清单与详情
+            syncProgressStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在从 Cloudflare 云端获取协议清单...';
+            const cloudProtocolsMap = new Map(); // key -> { itemMeta, proto, mtime }
+            const cloudListRes = await cloudApiCall('/api/protocols', 'GET');
+            if (cloudListRes.ok && cloudListRes.data && cloudListRes.data.success) {
+                const cloudList = cloudListRes.data.protocols || [];
+                let cIndex = 0;
+                for (const item of cloudList) {
+                    cIndex++;
+                    syncProgressStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在读取云端协议详情 (${cIndex}/${cloudList.length}): ${item.name}...`;
+                    if (item._cloudKey) {
+                        const detailRes = await cloudApiCall(`/api/protocols?key=${encodeURIComponent(item._cloudKey)}`, 'GET');
+                        if (detailRes.ok && detailRes.data) {
+                            let proto = detailRes.data;
+                            if (typeof proto === 'string') {
+                                try { proto = JSON.parse(proto); } catch(e){}
+                            }
+                            if (proto && typeof proto === 'object') {
+                                const mtime = proto.updateTime || proto._cloudUpdated || item.updateTime || 0;
+                                const matchKey = (proto.name || item.name || '').trim();
+                                cloudProtocolsMap.set(matchKey, {
+                                    cloudKey: item._cloudKey,
+                                    proto: proto,
+                                    mtime: mtime
+                                });
+                            }
+                        }
+                    }
+                }
+            } else if (currentSyncDirection !== 'disk-to-cloud') {
+                throw new Error(cloudListRes.data?.error || `无法连接云端工作空间 (状态: ${cloudListRes.status})`);
+            }
+
+            syncProgressBar.style.width = '50%';
+
+            // 3. 按选定方向执行传输与写入
+            if (currentSyncDirection === 'disk-to-cloud') {
+                // 硬盘 ➔ 云端
+                const total = localProtocolsMap.size;
+                let current = 0;
+                if (total === 0) {
+                    syncProgressStatus.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color:#f59e0b;"></i> 本地硬盘目录中未找到任何 .json 协议文件！';
+                } else {
+                    for (const [key, localItem] of localProtocolsMap.entries()) {
+                        current++;
+                        const pct = 50 + Math.round((current / total) * 45);
+                        syncProgressBar.style.width = `${pct}%`;
+                        syncProgressStatus.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> 正在上传 (${current}/${total}): ${localItem.fileName}...`;
+
+                        const cloudItem = cloudProtocolsMap.get(key);
+                        if (onlyNewer && cloudItem && cloudItem.mtime > localItem.mtime) {
+                            skipCount++;
+                        } else {
+                            const toUpload = JSON.parse(JSON.stringify(localItem.proto));
+                            toUpload.updateTime = localItem.mtime || Date.now();
+                            const res = await cloudApiCall('/api/protocols', 'POST', toUpload);
+                            if (res.ok && res.data && res.data.success) {
+                                uploadCount++;
+                            } else {
+                                failCount++;
+                            }
+                        }
+                        updateMetricsUI();
+                    }
+                }
+            } else if (currentSyncDirection === 'cloud-to-disk') {
+                // 云端 ➔ 硬盘
+                const total = cloudProtocolsMap.size;
+                let current = 0;
+                if (total === 0) {
+                    syncProgressStatus.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color:#f59e0b;"></i> 云端工作台中暂无协议数据！';
+                } else {
+                    for (const [key, cloudItem] of cloudProtocolsMap.entries()) {
+                        current++;
+                        const pct = 50 + Math.round((current / total) * 45);
+                        syncProgressBar.style.width = `${pct}%`;
+                        syncProgressStatus.innerHTML = `<i class="fa-solid fa-hard-drive"></i> 正在落盘 (${current}/${total}): ${cloudItem.proto.name || key}...`;
+
+                        const localItem = localProtocolsMap.get(key);
+                        if (onlyNewer && localItem && localItem.mtime > cloudItem.mtime) {
+                            skipCount++;
+                        } else {
+                            try {
+                                const protoToWrite = JSON.parse(JSON.stringify(cloudItem.proto));
+                                delete protoToWrite.id;
+                                const safeName = (protoToWrite.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
+                                const fileName = localItem ? localItem.fileName : `${safeName}.json`;
+                                protoToWrite._fileName = fileName;
+                                protoToWrite._fromWorkspace = true;
+
+                                const fileHandle = await currentWorkspaceHandle.getFileHandle(fileName, { create: true });
+                                const writable = await fileHandle.createWritable();
+                                await writable.write(JSON.stringify(protoToWrite, null, 2));
+                                await writable.close();
+                                downloadCount++;
+                            } catch (writeErr) {
+                                console.error("落盘文件失败:", key, writeErr);
+                                failCount++;
+                            }
+                        }
+                        updateMetricsUI();
+                    }
+                }
+            } else {
+                // 双向智能合并同步
+                const allKeys = new Set([...localProtocolsMap.keys(), ...cloudProtocolsMap.keys()]);
+                const total = allKeys.size;
+                let current = 0;
+
+                for (const key of allKeys) {
+                    current++;
+                    const pct = 50 + Math.round((current / total) * 45);
+                    syncProgressBar.style.width = `${pct}%`;
+
+                    const localItem = localProtocolsMap.get(key);
+                    const cloudItem = cloudProtocolsMap.get(key);
+
+                    if (localItem && !cloudItem) {
+                        // 本地有，云端无 ➔ 上传
+                        syncProgressStatus.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> 本地独有，上传至云端: ${localItem.fileName}...`;
+                        const toUpload = JSON.parse(JSON.stringify(localItem.proto));
+                        toUpload.updateTime = localItem.mtime || Date.now();
+                        const res = await cloudApiCall('/api/protocols', 'POST', toUpload);
+                        if (res.ok && res.data && res.data.success) {
+                            uploadCount++;
+                        } else {
+                            failCount++;
+                        }
+                    } else if (!localItem && cloudItem) {
+                        // 云端有，本地无 ➔ 下载落盘
+                        syncProgressStatus.innerHTML = `<i class="fa-solid fa-hard-drive"></i> 云端独有，下载落盘: ${cloudItem.proto.name || key}...`;
+                        try {
+                            const protoToWrite = JSON.parse(JSON.stringify(cloudItem.proto));
+                            delete protoToWrite.id;
+                            const safeName = (protoToWrite.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
+                            const fileName = `${safeName}.json`;
+                            protoToWrite._fileName = fileName;
+                            protoToWrite._fromWorkspace = true;
+
+                            const fileHandle = await currentWorkspaceHandle.getFileHandle(fileName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(JSON.stringify(protoToWrite, null, 2));
+                            await writable.close();
+                            downloadCount++;
+                        } catch(e) {
+                            failCount++;
+                        }
+                    } else if (localItem && cloudItem) {
+                        // 两端均存在 ➔ 比较时间戳
+                        const diffMs = Math.abs(localItem.mtime - cloudItem.mtime);
+                        if (diffMs < 2000) {
+                            skipCount++;
+                        } else if (localItem.mtime > cloudItem.mtime) {
+                            syncProgressStatus.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> 本地版本更新，同步到云端: ${localItem.fileName}...`;
+                            const toUpload = JSON.parse(JSON.stringify(localItem.proto));
+                            toUpload.updateTime = localItem.mtime;
+                            const res = await cloudApiCall('/api/protocols', 'POST', toUpload);
+                            if (res.ok && res.data && res.data.success) {
+                                uploadCount++;
+                            } else {
+                                failCount++;
+                            }
+                        } else {
+                            syncProgressStatus.innerHTML = `<i class="fa-solid fa-hard-drive"></i> 云端版本更新，落盘覆盖本地: ${cloudItem.proto.name}...`;
+                            try {
+                                const protoToWrite = JSON.parse(JSON.stringify(cloudItem.proto));
+                                delete protoToWrite.id;
+                                const fileName = localItem.fileName;
+                                protoToWrite._fileName = fileName;
+                                protoToWrite._fromWorkspace = true;
+
+                                const fileHandle = await currentWorkspaceHandle.getFileHandle(fileName, { create: true });
+                                const writable = await fileHandle.createWritable();
+                                await writable.write(JSON.stringify(protoToWrite, null, 2));
+                                await writable.close();
+                                downloadCount++;
+                            } catch(e) {
+                                failCount++;
+                            }
+                        }
+                    }
+                    updateMetricsUI();
+                }
+            }
+
+            syncProgressBar.style.width = '100%';
+            syncProgressStatus.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> 同步完成！共上传 ${uploadCount} 个，落盘 ${downloadCount} 个，保持最新 ${skipCount} 个。`;
+
+            // 4. 全局自动刷新
+            await scanAndSyncWorkspaceFiles(currentWorkspaceHandle, false);
+            await syncCloudProtocols(false);
+            await loadProtocols();
+            await loadArincProtocolsForSelect();
+            await refreshSyncHubStatus();
+
+        } catch (err) {
+            console.error("同步执行异常:", err);
+            syncProgressStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;"></i> 同步中断: ${err.message}`;
+            alert("同步执行发生异常: " + err.message);
+        } finally {
+            isSyncRunning = false;
+            btnStartSyncExecute.disabled = false;
+            btnStartSyncExecute.innerHTML = '<i class="fa-solid fa-play"></i> 重新同步';
+        }
+    }
+
+    if (btnStartSyncExecute) {
+        btnStartSyncExecute.addEventListener('click', executeSyncDirection);
     }
     if (btnCloudSettings) {
         btnCloudSettings.addEventListener('click', () => {
@@ -312,22 +784,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnTestCloudConn.addEventListener('click', async () => {
             if (cloudConnStatus) {
                 cloudConnStatus.style.display = 'block';
+                cloudConnStatus.style.padding = '10px 14px';
+                cloudConnStatus.style.borderRadius = '6px';
+                cloudConnStatus.style.fontSize = '12.5px';
+                cloudConnStatus.style.border = '1px solid var(--border-color)';
+                cloudConnStatus.style.background = 'rgba(0,0,0,0.03)';
                 cloudConnStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在连接 Cloudflare 云端接口...';
                 cloudConnStatus.style.color = 'var(--text-secondary)';
             }
             const res = await cloudApiCall('/api/protocols', 'GET');
             if (res.ok) {
-                cloudConnStatus.innerHTML = `<i class="fa-solid fa-check" style="color:#10b981;"></i> 连接成功！云端 KV 数据库状态正常，当前空间协议数: ${res.data?.count || 0}`;
+                cloudConnStatus.innerHTML = `<i class="fa-solid fa-check" style="color:#10b981;"></i> 连接成功！云端 KV 数据库状态正常，当前空间协议数: <strong>${res.data?.count || 0}</strong>`;
                 cloudConnStatus.style.color = '#10b981';
+                cloudConnStatus.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                cloudConnStatus.style.background = 'rgba(16, 185, 129, 0.08)';
             } else if (res.status === 503) {
                 cloudConnStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;"></i> 接口可连通，但 Cloudflare KV 尚未绑定 (请在 Pages 设置中绑定 PROTOVIEW_KV)`;
                 cloudConnStatus.style.color = '#f59e0b';
+                cloudConnStatus.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+                cloudConnStatus.style.background = 'rgba(245, 158, 11, 0.08)';
             } else if (res.status === 401) {
                 cloudConnStatus.innerHTML = `<i class="fa-solid fa-lock" style="color:#ef4444;"></i> 口令验证失败，请检查访问私密口令`;
                 cloudConnStatus.style.color = '#ef4444';
+                cloudConnStatus.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                cloudConnStatus.style.background = 'rgba(239, 68, 68, 0.08)';
             } else {
                 cloudConnStatus.innerHTML = `<i class="fa-solid fa-info-circle" style="color:var(--text-secondary);"></i> 当前处于本地开发环境 (状态: ${res.status || '离线'})，推送到 Cloudflare 后将自动连通。`;
                 cloudConnStatus.style.color = 'var(--text-secondary)';
+                cloudConnStatus.style.borderColor = 'var(--border-color)';
+                cloudConnStatus.style.background = 'rgba(0,0,0,0.03)';
             }
         });
     }
@@ -1033,6 +1518,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const arincSourceFilter = document.getElementById('arinc-source-filter');
     const wordFilterButtons = document.querySelectorAll('#word-filter-buttons button');
 
+    // 移动端视窗 Tab 切换 (标号字列表 vs 字段详情)
+    const arincDenseWorkbench = document.getElementById('arinc-dense-workbench');
+    const btnMobileTabWords = document.getElementById('btn-mobile-tab-words');
+    const btnMobileTabDetail = document.getElementById('btn-mobile-tab-detail');
+    const btnMobileBackWords = document.getElementById('btn-mobile-back-words');
+    const mobileWordsCount = document.getElementById('mobile-words-count');
+    const mobileActiveWordLabel = document.getElementById('mobile-active-word-label');
+
+    function setMobileArincView(tab) {
+        if (!arincDenseWorkbench) return;
+        if (tab === 'detail') {
+            arincDenseWorkbench.classList.remove('mobile-view-words');
+            arincDenseWorkbench.classList.add('mobile-view-detail');
+            if (btnMobileTabWords) btnMobileTabWords.classList.remove('active');
+            if (btnMobileTabDetail) btnMobileTabDetail.classList.add('active');
+        } else {
+            arincDenseWorkbench.classList.remove('mobile-view-detail');
+            arincDenseWorkbench.classList.add('mobile-view-words');
+            if (btnMobileTabDetail) btnMobileTabDetail.classList.remove('active');
+            if (btnMobileTabWords) btnMobileTabWords.classList.add('active');
+        }
+    }
+
+    if (btnMobileTabWords) btnMobileTabWords.addEventListener('click', () => setMobileArincView('words'));
+    if (btnMobileTabDetail) btnMobileTabDetail.addEventListener('click', () => setMobileArincView('detail'));
+    if (btnMobileBackWords) btnMobileBackWords.addEventListener('click', () => setMobileArincView('words'));
+
     // 字详情与模式状态指示
     const detailLabelBadge = document.getElementById('detail-label-badge');
     const detailWordTitle = document.getElementById('detail-word-title');
@@ -1533,10 +2045,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!currentArincProtocol || !currentArincProtocol.words || currentArincProtocol.words.length === 0) {
             arincWordsList.innerHTML = '<tr><td colspan="5" class="empty-state">暂无标号字，请点击右上角「+ 添加字」。</td></tr>';
             wordsCountBadge.textContent = '0';
+            if (mobileWordsCount) mobileWordsCount.textContent = '0';
             return;
         }
 
         wordsCountBadge.textContent = currentArincProtocol.words.length;
+        if (mobileWordsCount) mobileWordsCount.textContent = currentArincProtocol.words.length;
 
         // 过滤
         let filtered = currentArincProtocol.words.map((w, idx) => ({ ...w, originalIndex: idx }));
@@ -1627,6 +2141,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     currentWordIndex = item.originalIndex;
                     renderArincWordsList();
                     renderSelectedWordInspector();
+                    if (window.innerWidth <= 768) {
+                        setMobileArincView('detail');
+                    }
                     highlightAndScrollToField(firstMatchedFieldIndex);
                 });
             }
@@ -1656,6 +2173,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 currentWordIndex = item.originalIndex;
                 renderArincWordsList();
                 renderSelectedWordInspector();
+                if (window.innerWidth <= 768) {
+                    setMobileArincView('detail');
+                }
             });
 
             arincWordsList.appendChild(tr);
@@ -1692,6 +2212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const hexVal = '0x' + byteVal.toString(16).toUpperCase().padStart(2, '0');
         if (detailLabelBadge) detailLabelBadge.textContent = `${octalClean}₈`;
         if (detailWordTitle) detailWordTitle.textContent = word.name || '未命名数据字';
+        if (mobileActiveWordLabel) mobileActiveWordLabel.textContent = `${octalClean}₈`;
         if (detailSourceBadge) detailSourceBadge.style.display = 'none';
 
         if (detailModeBadge) {
@@ -2609,6 +3130,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateSourceFilterOptions();
         renderArincWordsList();
         renderSelectedWordInspector();
+        if (window.innerWidth <= 768) {
+            setMobileArincView('detail');
+        }
     }
     window.addWord = addWord;
 
@@ -2661,6 +3185,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentWordIndex++;
             renderArincWordsList();
             renderSelectedWordInspector();
+            if (window.innerWidth <= 768) {
+                setMobileArincView('detail');
+            }
         });
     }
 

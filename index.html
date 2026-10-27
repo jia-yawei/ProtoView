@@ -91,6 +91,9 @@
                             <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-workspace" style="display:none;" title="重新扫描工作目录下的协议文件">
                                 <i class="fa-solid fa-arrows-rotate"></i> 刷新目录
                             </button>
+                            <button type="button" class="btn btn-primary-soft btn-sm btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i> 硬盘与云端同步
+                            </button>
                             <button type="button" class="btn btn-danger-outline btn-sm" id="btn-disconnect-workspace" style="display:none;" title="断开本地目录关联">
                                 <i class="fa-solid fa-link-slash"></i> 断开
                             </button>
@@ -113,8 +116,8 @@
                             <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-refresh" title="从 Cloudflare 云端重新加载并同步所有协议">
                                 <i class="fa-solid fa-arrows-rotate"></i> 同步刷新
                             </button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-upload-all" title="将本地的所有协议一键上传到 Cloudflare 云端工作台">
-                                <i class="fa-solid fa-cloud-arrow-up"></i> 本地传云端
+                            <button type="button" class="btn btn-primary-soft btn-sm btn-open-sync-hub" id="btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i> 硬盘与云端同步
                             </button>
                             <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-settings" title="配置云端空间名称与访问私密口令">
                                 <i class="fa-solid fa-gear"></i> 空间与口令
@@ -156,8 +159,18 @@
                     </div>
                 </header>
 
+                <!-- 移动端专属：标号字 / 字段详情 视窗切换标签条 (仅在手机等窄屏显示) -->
+                <div class="arinc-mobile-tab-bar" id="arinc-mobile-tab-bar">
+                    <button type="button" class="arinc-mobile-tab-btn active" id="btn-mobile-tab-words">
+                        <i class="fa-solid fa-list"></i> 标号字列表 (<span id="mobile-words-count">0</span>)
+                    </button>
+                    <button type="button" class="arinc-mobile-tab-btn" id="btn-mobile-tab-detail">
+                        <i class="fa-solid fa-cube"></i> 数据字详情 (<span id="mobile-active-word-label">000₈</span>)
+                    </button>
+                </div>
+
                 <!-- 高数据密度主工作区 (双栏布局) -->
-                <div class="arinc-dense-workbench">
+                <div class="arinc-dense-workbench mobile-view-words" id="arinc-dense-workbench">
                     <!-- 左栏：标号字列表 (高密度表格/紧凑列表) -->
                     <div class="arinc-dense-words-panel" id="arinc-words-panel">
                         <div class="dense-panel-header">
@@ -205,6 +218,9 @@
                     <div class="arinc-dense-detail-panel" id="arinc-inspector-panel">
                         <!-- 标号字核心控制栏 (合并去重：突出醒目标号、字名称与模式状态) -->
                         <div class="dense-word-primary-bar">
+                            <button type="button" class="dense-btn dense-btn-xs mobile-back-words-btn" id="btn-mobile-back-words" title="返回标号字列表">
+                                <i class="fa-solid fa-arrow-left"></i> 字列表
+                            </button>
                             <span id="detail-label-badge" style="display:none;"></span>
                             <span id="detail-word-title" style="display:none;"></span>
 
@@ -679,36 +695,45 @@
 
     <!-- 弹窗：Cloudflare 云端工作台设置 -->
     <div class="modal" id="cloud-settings-modal">
-        <div class="modal-content" style="max-width: 560px; width: 90vw;">
+        <div class="modal-content" style="max-width: 580px; width: 92vw;">
             <div class="modal-header">
                 <h2><i class="fa-solid fa-cloud" style="color:var(--accent-color);"></i> Cloudflare 云端工作台配置</h2>
                 <button type="button" class="close-modal"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form id="cloud-settings-form">
-                <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px; background: rgba(59, 130, 246, 0.08); padding: 12px 14px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.2);">
-                    <i class="fa-solid fa-circle-info" style="color: var(--accent-color);"></i> 
-                    云端工作台基于 Cloudflare 全球分布式 KV 存储，电脑与手机共享相同空间，数据实时跨设备同步。
+                <div class="cloud-settings-body">
+                    <div class="cloud-info-box">
+                        <i class="fa-solid fa-circle-info" style="color: var(--accent-color); font-size: 16px; margin-top: 2px; flex-shrink: 0;"></i> 
+                        <div>
+                            <strong>全球分布式多端实时同步</strong>
+                            云端工作台基于 Cloudflare 全球分布式 KV 存储，电脑与手机共享相同空间，数据实时跨设备同步。
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 18px;">
+                        <label for="cloud-ws-id" style="font-weight: 600; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-folder" style="color:var(--accent-color);"></i> 云端工作空间名称 (Workspace ID):
+                        </label>
+                        <input type="text" id="cloud-ws-id" placeholder="例如: default 或 my_project" value="default" required>
+                        <small style="color: var(--text-secondary); font-size: 12px; margin-top: 6px; display: block; line-height: 1.45;">
+                            💡 不同设备（电脑和手机）填写相同的空间名称，即可查看和同步相同的协议工程。
+                        </small>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 18px;">
+                        <label for="cloud-ws-token" style="font-weight: 600; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-key" style="color:var(--accent-color);"></i> 访问私密口令 (可选，为空则公开访问):
+                        </label>
+                        <input type="password" id="cloud-ws-token" placeholder="若在 Cloudflare 设置了 WORKSPACE_TOKEN 请在此输入">
+                        <small style="color: var(--text-secondary); font-size: 12px; margin-top: 6px; display: block; line-height: 1.45;">
+                            🔒 如果在 Cloudflare 后台设置了访问密钥，请在此填入口令以验证权限。
+                        </small>
+                    </div>
+
+                    <div id="cloud-connection-status" style="display: none;"></div>
                 </div>
 
-                <div class="form-group">
-                    <label for="cloud-ws-id"><i class="fa-solid fa-folder"></i> 云端工作空间名称 (Workspace ID):</label>
-                    <input type="text" id="cloud-ws-id" placeholder="例如: default 或 my_project" value="default" required>
-                    <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px; display: block;">
-                        不同设备（电脑和手机）填写相同的空间名称，即可查看和同步相同的协议工程。
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label for="cloud-ws-token"><i class="fa-solid fa-key"></i> 访问私密口令 (可选，为空则公开访问):</label>
-                    <input type="password" id="cloud-ws-token" placeholder="若在 Cloudflare 设置了 WORKSPACE_TOKEN 请在此输入">
-                    <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px; display: block;">
-                        如果在 Cloudflare 后台设置了访问密钥，请在此填入口令以验证权限。
-                    </small>
-                </div>
-
-                <div id="cloud-connection-status" style="margin: 12px 0; font-size: 12.5px; display: none;"></div>
-
-                <div class="modal-actions" style="margin-top: 1.2rem; display: flex; justify-content: space-between; align-items: center;">
+                <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center;">
                     <button type="button" class="btn btn-secondary" id="btn-test-cloud-conn">
                         <i class="fa-solid fa-bolt"></i> 测试连接
                     </button>
@@ -718,6 +743,163 @@
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- 弹窗：本地硬盘与云端协议同步中心 (支持单向与双向方向选择) -->
+    <div class="modal" id="sync-hub-modal">
+        <div class="modal-content" style="max-width: 680px; width: 92vw; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="padding-bottom: 0.6rem;">
+                <h2><i class="fa-solid fa-arrow-right-arrow-left" style="color:var(--accent-color);"></i> 硬盘与云端协议同步中心</h2>
+                <button type="button" class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 18px 24px;">
+                <!-- 两端状态总览卡片 -->
+                <div class="sync-status-grid">
+                    <div class="sync-endpoint-card" id="sync-card-local">
+                        <div class="sync-ep-header">
+                            <span class="sync-ep-icon"><i class="fa-solid fa-hard-drive"></i></span>
+                            <div class="sync-ep-info">
+                                <div class="sync-ep-title">本地硬盘目录</div>
+                                <div class="sync-ep-name" id="sync-local-name">正在检测...</div>
+                            </div>
+                        </div>
+                        <div class="sync-ep-stat">
+                            <span class="sync-count-badge" id="sync-local-count-badge">0 个协议文件</span>
+                            <button type="button" class="btn btn-secondary btn-xs" id="sync-btn-pick-dir" style="display:none;">
+                                <i class="fa-solid fa-folder-open"></i> 选择目录
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="sync-flow-indicator" id="sync-flow-indicator" title="当前同步流向">
+                        <i class="fa-solid fa-arrow-right" id="sync-flow-arrow"></i>
+                    </div>
+
+                    <div class="sync-endpoint-card" id="sync-card-cloud">
+                        <div class="sync-ep-header">
+                            <span class="sync-ep-icon sync-ep-icon-cloud"><i class="fa-solid fa-cloud"></i></span>
+                            <div class="sync-ep-info">
+                                <div class="sync-ep-title">Cloudflare 云端工作台</div>
+                                <div class="sync-ep-name" id="sync-cloud-name">工作空间: [default]</div>
+                            </div>
+                        </div>
+                        <div class="sync-ep-stat">
+                            <span class="sync-count-badge badge-cloud" id="sync-cloud-count-badge">0 个云端协议</span>
+                            <button type="button" class="btn btn-secondary btn-xs" id="sync-btn-refresh-cloud" title="重新获取云端协议数">
+                                <i class="fa-solid fa-arrows-rotate"></i> 刷新
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 同步方向选择区 -->
+                <div class="sync-section-title">
+                    <i class="fa-solid fa-compass"></i> 选择同步方向与策略
+                </div>
+
+                <div class="sync-direction-list" id="sync-direction-list">
+                    <!-- 方向 1: 硬盘 ➔ 云端 -->
+                    <label class="sync-dir-card active" data-dir="disk-to-cloud">
+                        <input type="radio" name="sync-direction" value="disk-to-cloud" checked style="display:none;">
+                        <div class="sync-dir-radio">
+                            <i class="fa-solid fa-circle-dot"></i>
+                        </div>
+                        <div class="sync-dir-body">
+                            <div class="sync-dir-top">
+                                <span class="sync-dir-name"><i class="fa-solid fa-hard-drive"></i> 本地硬盘 ➔ <i class="fa-solid fa-cloud"></i> 云端工作台</span>
+                                <span class="sync-dir-tag tag-upload">电脑传云端</span>
+                            </div>
+                            <div class="sync-dir-desc">
+                                读取电脑本地硬盘目录中的全部协议文件（.json），全量上传推送到 Cloudflare 云端工作空间中。手机端刷新即可同步看到全部最新协议。
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- 方向 2: 云端 ➔ 硬盘 -->
+                    <label class="sync-dir-card" data-dir="cloud-to-disk">
+                        <input type="radio" name="sync-direction" value="cloud-to-disk" style="display:none;">
+                        <div class="sync-dir-radio">
+                            <i class="fa-regular fa-circle"></i>
+                        </div>
+                        <div class="sync-dir-body">
+                            <div class="sync-dir-top">
+                                <span class="sync-dir-name"><i class="fa-solid fa-cloud"></i> 云端工作台 ➔ <i class="fa-solid fa-hard-drive"></i> 本地硬盘</span>
+                                <span class="sync-dir-tag tag-download">云端落盘本地</span>
+                            </div>
+                            <div class="sync-dir-desc">
+                                从 Cloudflare 云端拉取当前工作空间的所有协议，在电脑本地硬盘目录中直接写入/保存为 .json 协议文件。手机端现场修改后拉回电脑磁盘归档保存。
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- 方向 3: 双向智能合并 -->
+                    <label class="sync-dir-card" data-dir="bidirectional">
+                        <input type="radio" name="sync-direction" value="bidirectional" style="display:none;">
+                        <div class="sync-dir-radio">
+                            <i class="fa-regular fa-circle"></i>
+                        </div>
+                        <div class="sync-dir-body">
+                            <div class="sync-dir-top">
+                                <span class="sync-dir-name"><i class="fa-solid fa-arrows-rotate"></i> 双向智能合并同步</span>
+                                <span class="sync-dir-tag tag-both">两端自动合并 (推荐)</span>
+                            </div>
+                            <div class="sync-dir-desc">
+                                双向智能比对：本地有而云端无 ➔ 上传到云端；云端有而本地无 ➔ 下载保存到硬盘；两端均存在 ➔ 自动比对最后修改时间，较新版本覆盖较旧版本。
+                            </div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- 冲突与覆盖选项 -->
+                <div class="sync-options-card">
+                    <label class="sync-checkbox-label">
+                        <input type="checkbox" id="sync-opt-newer" checked>
+                        <span>遇到两端同名协议时自动保留较新版本（基于更新时间戳）</span>
+                    </label>
+                </div>
+
+                <!-- 同步执行进度与反馈展示区 -->
+                <div class="sync-progress-area" id="sync-progress-area" style="display:none;">
+                    <div class="sync-progress-bar-wrap">
+                        <div class="sync-progress-bar-inner" id="sync-progress-bar" style="width: 0%;"></div>
+                    </div>
+                    <div class="sync-progress-status" id="sync-progress-status">
+                        <i class="fa-solid fa-spinner fa-spin"></i> <span>正在准备同步...</span>
+                    </div>
+                    <div class="sync-metrics-grid" id="sync-metrics-grid" style="display:none;">
+                        <div class="sync-metric-item">
+                            <div class="sync-metric-val" id="metric-upload" style="color: #10b981;">0</div>
+                            <div class="sync-metric-lbl">已上传云端</div>
+                        </div>
+                        <div class="sync-metric-item">
+                            <div class="sync-metric-val" id="metric-download" style="color: #3b82f6;">0</div>
+                            <div class="sync-metric-lbl">已落盘本地</div>
+                        </div>
+                        <div class="sync-metric-item">
+                            <div class="sync-metric-val" id="metric-skip" style="color: var(--text-secondary);">0</div>
+                            <div class="sync-metric-lbl">已是最新(跳过)</div>
+                        </div>
+                        <div class="sync-metric-item">
+                            <div class="sync-metric-val" id="metric-fail" style="color: #ef4444;">0</div>
+                            <div class="sync-metric-lbl">失败</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <span class="dense-hint" id="sync-bottom-hint">
+                    <i class="fa-solid fa-shield-halved" style="color:var(--accent-color);"></i> 数据在传输前将在本地自动备份，安全无损
+                </span>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-secondary close-modal-btn">关闭</button>
+                    <button type="button" class="btn btn-primary" id="btn-start-sync-execute">
+                        <i class="fa-solid fa-play"></i> 立即开始同步
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
