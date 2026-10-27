@@ -1338,20 +1338,91 @@ td {
     border-radius: 3px;
 }
 
-/* 主工作区：双栏网格，铺满垂直空间 */
+/* 主工作区：双栏弹性布局 (支持鼠标自由拖拽调整宽度) */
 .arinc-dense-workbench {
     flex: 1;
     min-height: 0;
-    display: grid;
-    grid-template-columns: 340px 1fr;
-    gap: 6px;
+    display: flex;
+    flex-direction: row;
+    gap: 0;
     overflow: hidden;
+    position: relative;
 }
 
 /* ========================================================
-   左栏：标号字列表 (高密度表格)
+   左栏：标号字列表 (高密度表格，支持动态宽度拖拽)
    ======================================================== */
 .arinc-dense-words-panel {
+    width: var(--words-panel-width, 340px);
+    min-width: 200px;
+    max-width: 700px;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+}
+
+/* 左右分栏可拖拽调整尺寸手柄 */
+.workbench-resizer {
+    width: 8px;
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.workbench-resizer::after {
+    content: '';
+    width: 2px;
+    height: 36px;
+    border-radius: 1px;
+    background: var(--border-color);
+    transition: all 0.15s ease;
+}
+
+.workbench-resizer:hover,
+.workbench-resizer.resizing {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.workbench-resizer:hover::after,
+.workbench-resizer.resizing::after {
+    background: var(--accent-color);
+    width: 3px;
+    height: 100%;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+}
+
+body.resizing-active {
+    cursor: col-resize !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+body.resizing-active * {
+    user-select: none !important;
+    pointer-events: none !important;
+}
+
+body.resizing-active .workbench-resizer {
+    pointer-events: auto !important;
+}
+
+/* 右栏：自动填满剩余宽度 */
+.arinc-dense-detail-panel {
+    flex: 1;
+    min-width: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 4px;
@@ -1567,7 +1638,7 @@ td {
     color: var(--text-secondary);
     font-weight: normal;
     display: inline-block;
-    max-width: 95px;
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1614,15 +1685,6 @@ td {
 /* ========================================================
    右栏：标号字与字段配置详情 (高密度工控视窗)
    ======================================================== */
-.arinc-dense-detail-panel {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    height: 100%;
-}
 
 /* ========================================================
    标号字核心控制栏 (合并去重：突出醒目标号、字名称与模式状态)

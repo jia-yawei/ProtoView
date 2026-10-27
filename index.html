@@ -121,7 +121,7 @@
                 <!-- 高数据密度主工作区 (双栏布局) -->
                 <div class="arinc-dense-workbench">
                     <!-- 左栏：标号字列表 (高密度表格/紧凑列表) -->
-                    <div class="arinc-dense-words-panel">
+                    <div class="arinc-dense-words-panel" id="arinc-words-panel">
                         <div class="dense-panel-header">
                             <span class="dense-panel-title">
                                 <i class="fa-solid fa-list"></i> 标号字列表 (<span id="words-count-badge">0</span>)
@@ -159,6 +159,9 @@
                             </table>
                         </div>
                     </div>
+
+                    <!-- 左右分栏可拖拽调整尺寸手柄 -->
+                    <div class="workbench-resizer" id="workbench-resizer" title="左右拖动调整标号字列表宽度"></div>
 
                     <!-- 右栏：选中的数据字与具体字段编辑面板 -->
                     <div class="arinc-dense-detail-panel" id="arinc-inspector-panel">

@@ -3352,6 +3352,59 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // ----------------- 标号字列表侧边栏宽度鼠标拖拽调整 -----------------
+    const workbenchResizer = document.getElementById('workbench-resizer');
+    const arincWordsPanel = document.getElementById('arinc-words-panel');
+
+    // 恢复历史记忆的面板宽度
+    const savedWordsPanelWidth = localStorage.getItem('protoview_words_panel_width');
+    if (savedWordsPanelWidth && arincWordsPanel) {
+        const parsedW = parseInt(savedWordsPanelWidth, 10);
+        if (parsedW >= 200 && parsedW <= 700) {
+            arincWordsPanel.style.width = `${parsedW}px`;
+        }
+    }
+
+    if (workbenchResizer && arincWordsPanel) {
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 340;
+
+        workbenchResizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = arincWordsPanel.getBoundingClientRect().width;
+
+            workbenchResizer.classList.add('resizing');
+            document.body.classList.add('resizing-active');
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const deltaX = e.clientX - startX;
+            let newWidth = startWidth + deltaX;
+
+            // 限制拖拽最小 200px，最大 700px
+            if (newWidth < 200) newWidth = 200;
+            if (newWidth > 700) newWidth = 700;
+
+            arincWordsPanel.style.width = `${newWidth}px`;
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (!isResizing) return;
+            isResizing = false;
+            workbenchResizer.classList.remove('resizing');
+            document.body.classList.remove('resizing-active');
+
+            const finalWidth = parseInt(arincWordsPanel.style.width, 10);
+            if (!isNaN(finalWidth)) {
+                localStorage.setItem('protoview_words_panel_width', finalWidth.toString());
+            }
+        });
+    }
+
     // ----------------- 系统启动加载序列 -----------------
     async function initSystem() {
         try {
