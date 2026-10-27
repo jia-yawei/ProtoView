@@ -60,28 +60,66 @@
                     </div>
                 </header>
 
-                <!-- 本地工作目录关联条 (桌面客户端级本地目录同步) -->
-                <div class="workspace-dir-strip" id="workspace-dir-strip">
-                    <div class="ws-left">
-                        <div class="ws-icon-box">
-                            <i class="fa-solid fa-folder-tree"></i>
-                        </div>
-                        <div class="ws-info">
-                            <div class="ws-label">本地工作目录 (本地硬盘协议库):</div>
-                            <div class="ws-name" id="ws-folder-name" title="未关联本地工作目录">未关联本地目录 (当前仅保存在浏览器缓存中)</div>
-                        </div>
-                        <span class="ws-status-badge" id="ws-status-badge">浏览器内部</span>
+                <!-- 工作台模式选择与目录同步条 (支持「本地硬盘目录」与「Cloudflare 云端工作台」双引擎) -->
+                <div class="workspace-container">
+                    <div class="workspace-mode-nav">
+                        <button type="button" class="ws-mode-btn active" id="btn-mode-local" title="直接关联电脑硬盘物理文件夹，编辑自动写回磁盘 .json 文件">
+                            <i class="fa-solid fa-hard-drive"></i> 本地硬盘目录
+                        </button>
+                        <button type="button" class="ws-mode-btn" id="btn-mode-cloud" title="连接 Cloudflare 全球分布式云端数据库，手机和电脑实时多端同步">
+                            <i class="fa-solid fa-cloud"></i> Cloudflare 云端工作台
+                            <span class="ws-mode-badge">手机/电脑云同步</span>
+                        </button>
                     </div>
-                    <div class="ws-right">
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-set-workspace" title="选择电脑上的文件夹作为工作目录，自动读取该文件夹下的所有协议文件">
-                            <i class="fa-solid fa-folder-open"></i> <span id="btn-set-workspace-text">设置工作目录</span>
-                        </button>
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-workspace" style="display:none;" title="重新扫描工作目录下的协议文件">
-                            <i class="fa-solid fa-arrows-rotate"></i> 刷新目录
-                        </button>
-                        <button type="button" class="btn btn-danger-outline btn-sm" id="btn-disconnect-workspace" style="display:none;" title="断开本地目录关联">
-                            <i class="fa-solid fa-link-slash"></i> 断开
-                        </button>
+
+                    <!-- 1. 本地工作目录模式视图 -->
+                    <div class="workspace-dir-strip" id="workspace-local-strip">
+                        <div class="ws-left">
+                            <div class="ws-icon-box" id="ws-local-icon">
+                                <i class="fa-solid fa-folder-tree"></i>
+                            </div>
+                            <div class="ws-info">
+                                <div class="ws-label">本地工作目录 (电脑磁盘文件同步):</div>
+                                <div class="ws-name" id="ws-folder-name" title="未关联本地工作目录">未关联本地目录 (当前保存在浏览器内部)</div>
+                            </div>
+                            <span class="ws-status-badge" id="ws-status-badge">浏览器内部</span>
+                        </div>
+                        <div class="ws-right">
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-set-workspace" title="选择电脑上的文件夹作为工作目录，自动读取该文件夹下的所有协议文件">
+                                <i class="fa-solid fa-folder-open"></i> <span id="btn-set-workspace-text">设置本地目录</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-workspace" style="display:none;" title="重新扫描工作目录下的协议文件">
+                                <i class="fa-solid fa-arrows-rotate"></i> 刷新目录
+                            </button>
+                            <button type="button" class="btn btn-danger-outline btn-sm" id="btn-disconnect-workspace" style="display:none;" title="断开本地目录关联">
+                                <i class="fa-solid fa-link-slash"></i> 断开
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 2. Cloudflare 云端工作台模式视图 -->
+                    <div class="workspace-dir-strip workspace-cloud-strip" id="workspace-cloud-strip" style="display:none;">
+                        <div class="ws-left">
+                            <div class="ws-icon-box ws-cloud-icon">
+                                <i class="fa-solid fa-cloud"></i>
+                            </div>
+                            <div class="ws-info">
+                                <div class="ws-label">Cloudflare 云端工作台 (手机/电脑实时跨端同步):</div>
+                                <div class="ws-name" id="ws-cloud-name" title="云端工作空间">工作空间: [default] (正在连接云端...)</div>
+                            </div>
+                            <span class="ws-status-badge ws-cloud-status" id="ws-cloud-status-badge">☁️ 正在连接</span>
+                        </div>
+                        <div class="ws-right">
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-refresh" title="从 Cloudflare 云端重新加载并同步所有协议">
+                                <i class="fa-solid fa-arrows-rotate"></i> 同步刷新
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-upload-all" title="将本地的所有协议一键上传到 Cloudflare 云端工作台">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> 本地传云端
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-settings" title="配置云端空间名称与访问私密口令">
+                                <i class="fa-solid fa-gear"></i> 空间与口令
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <input type="file" id="workspace-folder-input" webkitdirectory directory multiple style="display:none">
@@ -636,6 +674,50 @@
                 <span class="dense-hint" id="check-summary-hint"><i class="fa-solid fa-shield-halved"></i> 静态检查已完成</span>
                 <button type="button" class="btn btn-secondary close-modal-btn">关闭</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：Cloudflare 云端工作台设置 -->
+    <div class="modal" id="cloud-settings-modal">
+        <div class="modal-content" style="max-width: 560px; width: 90vw;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-cloud" style="color:var(--accent-color);"></i> Cloudflare 云端工作台配置</h2>
+                <button type="button" class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="cloud-settings-form">
+                <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px; background: rgba(59, 130, 246, 0.08); padding: 12px 14px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                    <i class="fa-solid fa-circle-info" style="color: var(--accent-color);"></i> 
+                    云端工作台基于 Cloudflare 全球分布式 KV 存储，电脑与手机共享相同空间，数据实时跨设备同步。
+                </div>
+
+                <div class="form-group">
+                    <label for="cloud-ws-id"><i class="fa-solid fa-folder"></i> 云端工作空间名称 (Workspace ID):</label>
+                    <input type="text" id="cloud-ws-id" placeholder="例如: default 或 my_project" value="default" required>
+                    <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px; display: block;">
+                        不同设备（电脑和手机）填写相同的空间名称，即可查看和同步相同的协议工程。
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="cloud-ws-token"><i class="fa-solid fa-key"></i> 访问私密口令 (可选，为空则公开访问):</label>
+                    <input type="password" id="cloud-ws-token" placeholder="若在 Cloudflare 设置了 WORKSPACE_TOKEN 请在此输入">
+                    <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px; display: block;">
+                        如果在 Cloudflare 后台设置了访问密钥，请在此填入口令以验证权限。
+                    </small>
+                </div>
+
+                <div id="cloud-connection-status" style="margin: 12px 0; font-size: 12.5px; display: none;"></div>
+
+                <div class="modal-actions" style="margin-top: 1.2rem; display: flex; justify-content: space-between; align-items: center;">
+                    <button type="button" class="btn btn-secondary" id="btn-test-cloud-conn">
+                        <i class="fa-solid fa-bolt"></i> 测试连接
+                    </button>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> 保存并应用</button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 

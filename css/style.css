@@ -414,6 +414,61 @@ td {
     font-style: italic;
 }
 
+/* 工作台模式切换栏 (本地硬盘目录 vs Cloudflare 云端工作台) */
+.workspace-container {
+    margin-bottom: 1.2rem;
+}
+
+.workspace-mode-nav {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.ws-mode-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ws-mode-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(59, 130, 246, 0.4);
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.ws-mode-btn.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+}
+
+.ws-mode-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    font-weight: 700;
+    margin-left: 2px;
+}
+
+.ws-mode-btn:not(.active) .ws-mode-badge {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-color);
+}
+
 /* 本地工作目录控制栏 (桌面软件级体验) */
 .workspace-dir-strip {
     display: flex;
@@ -423,7 +478,7 @@ td {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 10px 16px;
-    margin-bottom: 1.2rem;
+    margin-bottom: 0;
     gap: 12px;
     flex-wrap: wrap;
     transition: all 0.2s ease;
@@ -437,6 +492,27 @@ td {
 [data-theme="dark"] .workspace-dir-strip.connected {
     border-color: rgba(16, 185, 129, 0.35);
     background: rgba(16, 185, 129, 0.08);
+}
+
+.workspace-cloud-strip {
+    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.04);
+}
+
+[data-theme="dark"] .workspace-cloud-strip {
+    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.ws-cloud-icon {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: var(--accent-color) !important;
+}
+
+.ws-cloud-status {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: var(--accent-color) !important;
+    border: 1px solid rgba(59, 130, 246, 0.3) !important;
 }
 
 .ws-left {
@@ -530,6 +606,13 @@ td {
     background: rgba(59, 130, 246, 0.08) !important;
     color: var(--accent-color) !important;
     font-family: 'JetBrains Mono', Consolas, monospace !important;
+    font-weight: 600;
+}
+
+.pstat-cloud {
+    background: rgba(16, 185, 129, 0.12) !important;
+    color: #10b981 !important;
+    border: 1px solid rgba(16, 185, 129, 0.3) !important;
     font-weight: 600;
 }
 

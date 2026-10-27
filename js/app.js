@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ---------------------- 本地工作目录关联与状态管理 ----------------------
     let currentWorkspaceHandle = null;
 
-    const wsDirStrip = document.getElementById('workspace-dir-strip');
+    const wsLocalStrip = document.getElementById('workspace-local-strip');
     const wsFolderName = document.getElementById('ws-folder-name');
     const wsStatusBadge = document.getElementById('ws-status-badge');
     const btnSetWorkspace = document.getElementById('btn-set-workspace');
@@ -108,6 +108,243 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnRefreshWorkspace = document.getElementById('btn-refresh-workspace');
     const btnDisconnectWorkspace = document.getElementById('btn-disconnect-workspace');
     const workspaceFolderInput = document.getElementById('workspace-folder-input');
+
+    // ---------------------- Cloudflare 云端工作台与模式切换 ----------------------
+    const btnModeLocal = document.getElementById('btn-mode-local');
+    const btnModeCloud = document.getElementById('btn-mode-cloud');
+    const wsCloudStrip = document.getElementById('workspace-cloud-strip');
+    const wsCloudName = document.getElementById('ws-cloud-name');
+    const wsCloudStatusBadge = document.getElementById('ws-cloud-status-badge');
+    const btnCloudRefresh = document.getElementById('btn-cloud-refresh');
+    const btnCloudUploadAll = document.getElementById('btn-cloud-upload-all');
+    const btnCloudSettings = document.getElementById('btn-cloud-settings');
+    const cloudSettingsModal = document.getElementById('cloud-settings-modal');
+    const cloudSettingsForm = document.getElementById('cloud-settings-form');
+    const cloudWsIdInput = document.getElementById('cloud-ws-id');
+    const cloudWsTokenInput = document.getElementById('cloud-ws-token');
+    const btnTestCloudConn = document.getElementById('btn-test-cloud-conn');
+    const cloudConnStatus = document.getElementById('cloud-connection-status');
+
+    // 默认工作模式 (在不支持本地文件夹API的移动设备如手机上自动优先启用云端工作台)
+    const supportsLocalDir = ('showDirectoryPicker' in window);
+    let activeWorkspaceMode = localStorage.getItem('protoview_ws_mode') || (supportsLocalDir ? 'local' : 'cloud');
+
+    function setWorkspaceMode(mode, autoSync = true) {
+        activeWorkspaceMode = mode;
+        localStorage.setItem('protoview_ws_mode', mode);
+
+        if (mode === 'cloud') {
+            if (btnModeLocal) btnModeLocal.classList.remove('active');
+            if (btnModeCloud) btnModeCloud.classList.add('active');
+            if (wsLocalStrip) wsLocalStrip.style.display = 'none';
+            if (wsCloudStrip) wsCloudStrip.style.display = 'flex';
+            if (autoSync) syncCloudProtocols(false);
+        } else {
+            if (btnModeCloud) btnModeCloud.classList.remove('active');
+            if (btnModeLocal) btnModeLocal.classList.add('active');
+            if (wsCloudStrip) wsCloudStrip.style.display = 'none';
+            if (wsLocalStrip) wsLocalStrip.style.display = 'flex';
+        }
+    }
+
+    if (btnModeLocal) {
+        btnModeLocal.addEventListener('click', () => setWorkspaceMode('local'));
+    }
+    if (btnModeCloud) {
+        btnModeCloud.addEventListener('click', () => setWorkspaceMode('cloud', true));
+    }
+
+    // Cloudflare API 调用封装
+    async function cloudApiCall(endpoint, method = 'GET', body = null) {
+        const wsId = (localStorage.getItem('protoview_cloud_ws') || 'default').trim().toLowerCase();
+        const token = (localStorage.getItem('protoview_cloud_token') || '').trim();
+
+        const url = new URL(endpoint, window.location.origin);
+        url.searchParams.set('workspace', wsId);
+        if (token) url.searchParams.set('token', token);
+
+        const headers = {
+            'x-workspace-id': wsId
+        };
+        if (token) headers['x-workspace-token'] = token;
+        if (body) headers['Content-Type'] = 'application/json;charset=utf-8';
+
+        const options = { method, headers };
+        if (body) options.body = JSON.stringify(body);
+
+        try {
+            const res = await fetch(url.toString(), options);
+            const data = await res.json().catch(() => null);
+            return { ok: res.ok, status: res.status, data };
+        } catch (err) {
+            return { ok: false, status: 0, error: err.message };
+        }
+    }
+
+    // 同步从 Cloudflare 云端拉取协议
+    async function syncCloudProtocols(notifyUser = false) {
+        const wsId = localStorage.getItem('protoview_cloud_ws') || 'default';
+        if (wsCloudName) wsCloudName.textContent = `工作空间: [${wsId}] (正在同步云端...)`;
+        if (wsCloudStatusBadge) {
+            wsCloudStatusBadge.textContent = '☁️ 正在同步...';
+            wsCloudStatusBadge.className = 'ws-status-badge ws-cloud-status';
+        }
+
+        const res = await cloudApiCall('/api/protocols', 'GET');
+
+        if (res.ok && res.data && res.data.success) {
+            const list = res.data.protocols || [];
+            if (wsCloudName) {
+                wsCloudName.textContent = `工作空间: [${wsId}] (云端共有 ${list.length} 个协议)`;
+            }
+            if (wsCloudStatusBadge) {
+                wsCloudStatusBadge.textContent = `☁️ 已同步 (${list.length})`;
+                wsCloudStatusBadge.style.color = '#10b981';
+                wsCloudStatusBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            }
+
+            // 将云端协议逐个拉取完整内容并存入本地 IndexedDB (支持离线极速秒开)
+            let loadedCount = 0;
+            for (const item of list) {
+                if (item._cloudKey) {
+                    const detailRes = await cloudApiCall(`/api/protocols?key=${encodeURIComponent(item._cloudKey)}`, 'GET');
+                    if (detailRes.ok && detailRes.data) {
+                        const proto = detailRes.data;
+                        proto._fromCloud = true;
+                        proto._cloudKey = item._cloudKey;
+                        proto._cloudWorkspace = wsId;
+                        const localAll = await dbHelper.getAllProtocols();
+                        const existing = localAll.find(p => p._cloudKey === item._cloudKey || (p.name === proto.name && p.type === proto.type));
+                        if (existing) {
+                            proto.id = existing.id;
+                        } else {
+                            delete proto.id;
+                        }
+                        await dbHelper.saveProtocol(proto);
+                        loadedCount++;
+                    }
+                }
+            }
+
+            await loadProtocols();
+            await loadArincProtocolsForSelect();
+
+            if (notifyUser) {
+                alert(`已成功同步 Cloudflare 云端工作台 [${wsId}]！\n\n共拉取并同步 ${loadedCount} 个通信协议。在手机或电脑任意一端修改并保存，另一端点击刷新即可立即看到最新数据！`);
+            }
+        } else {
+            // 异常或本地离线模式处理
+            if (res.status === 503) {
+                if (wsCloudStatusBadge) wsCloudStatusBadge.textContent = '⚠️ KV 待绑定';
+                if (wsCloudName) wsCloudName.textContent = `工作空间: [${wsId}] (Cloudflare KV 命名空间尚未绑定)`;
+                if (notifyUser) {
+                    alert(`云端接口连接成功，但 Cloudflare KV 数据库尚未绑定！\n\n请前往 Cloudflare 仪表盘 -> 您的 Pages 项目 -> 设置 -> 函数 (Functions) -> 绑定 KV 命名空间（变量名填 PROTOVIEW_KV）。`);
+                }
+            } else if (res.status === 401) {
+                if (wsCloudStatusBadge) wsCloudStatusBadge.textContent = '🔒 口令错误';
+                if (wsCloudName) wsCloudName.textContent = `工作空间: [${wsId}] (访问口令未授权)`;
+                if (notifyUser) {
+                    alert(`访问口令错误！请点击右侧「空间与口令」输入正确的访问口令。`);
+                }
+            } else {
+                if (wsCloudStatusBadge) wsCloudStatusBadge.textContent = '💻 本地开发环境';
+                if (wsCloudName) wsCloudName.textContent = `工作空间: [${wsId}] (本地预览模式，部署到 Cloudflare Pages 后将自动激活云端存储)`;
+                if (notifyUser) {
+                    alert(`检测到当前处于本地运行环境，/api/protocols 后端网关尚未运行。\n\n当您将代码部署到 Cloudflare Pages 后，该功能将自动激活为全球分布式云端数据库！当前数据已安全保存在本地浏览器中。`);
+                }
+            }
+        }
+    }
+
+    // 本地全部协议一键上传至云端工作台
+    async function uploadAllLocalProtocolsToCloud() {
+        const localAll = await dbHelper.getAllProtocols();
+        if (!localAll || localAll.length === 0) {
+            alert("本地暂无任何协议可上传！");
+            return;
+        }
+
+        const wsId = localStorage.getItem('protoview_cloud_ws') || 'default';
+        if (!confirm(`确定要将本地所有 ${localAll.length} 个协议一键上传到 Cloudflare 云端工作空间 [${wsId}] 吗？\n\n上传后，手机打开该网页将立刻看到这些协议！`)) {
+            return;
+        }
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const p of localAll) {
+            const res = await cloudApiCall('/api/protocols', 'POST', p);
+            if (res.ok && res.data && res.data.success) {
+                p._fromCloud = true;
+                p._cloudKey = res.data.key;
+                p._cloudWorkspace = wsId;
+                await dbHelper.saveProtocol(p);
+                successCount++;
+            } else {
+                failCount++;
+            }
+        }
+
+        if (successCount > 0) {
+            alert(`上传成功！已将 ${successCount} 个协议同步到 Cloudflare 云端工作台！\n现在使用手机打开您的网址，即可查看这些协议。`);
+            await syncCloudProtocols(false);
+        } else {
+            alert(`上传失败！请检查 Cloudflare KV 是否已正确绑定，或点击「空间与口令」测试网络连接。`);
+        }
+    }
+
+    if (btnCloudRefresh) {
+        btnCloudRefresh.addEventListener('click', () => syncCloudProtocols(true));
+    }
+    if (btnCloudUploadAll) {
+        btnCloudUploadAll.addEventListener('click', uploadAllLocalProtocolsToCloud);
+    }
+    if (btnCloudSettings) {
+        btnCloudSettings.addEventListener('click', () => {
+            if (cloudWsIdInput) cloudWsIdInput.value = localStorage.getItem('protoview_cloud_ws') || 'default';
+            if (cloudWsTokenInput) cloudWsTokenInput.value = localStorage.getItem('protoview_cloud_token') || '';
+            if (cloudConnStatus) cloudConnStatus.style.display = 'none';
+            if (cloudSettingsModal) cloudSettingsModal.classList.add('active');
+        });
+    }
+
+    if (btnTestCloudConn) {
+        btnTestCloudConn.addEventListener('click', async () => {
+            if (cloudConnStatus) {
+                cloudConnStatus.style.display = 'block';
+                cloudConnStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在连接 Cloudflare 云端接口...';
+                cloudConnStatus.style.color = 'var(--text-secondary)';
+            }
+            const res = await cloudApiCall('/api/protocols', 'GET');
+            if (res.ok) {
+                cloudConnStatus.innerHTML = `<i class="fa-solid fa-check" style="color:#10b981;"></i> 连接成功！云端 KV 数据库状态正常，当前空间协议数: ${res.data?.count || 0}`;
+                cloudConnStatus.style.color = '#10b981';
+            } else if (res.status === 503) {
+                cloudConnStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;"></i> 接口可连通，但 Cloudflare KV 尚未绑定 (请在 Pages 设置中绑定 PROTOVIEW_KV)`;
+                cloudConnStatus.style.color = '#f59e0b';
+            } else if (res.status === 401) {
+                cloudConnStatus.innerHTML = `<i class="fa-solid fa-lock" style="color:#ef4444;"></i> 口令验证失败，请检查访问私密口令`;
+                cloudConnStatus.style.color = '#ef4444';
+            } else {
+                cloudConnStatus.innerHTML = `<i class="fa-solid fa-info-circle" style="color:var(--text-secondary);"></i> 当前处于本地开发环境 (状态: ${res.status || '离线'})，推送到 Cloudflare 后将自动连通。`;
+                cloudConnStatus.style.color = 'var(--text-secondary)';
+            }
+        });
+    }
+
+    if (cloudSettingsForm) {
+        cloudSettingsForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newWs = (cloudWsIdInput ? cloudWsIdInput.value.trim() : '') || 'default';
+            const newToken = cloudWsTokenInput ? cloudWsTokenInput.value.trim() : '';
+
+            localStorage.setItem('protoview_cloud_ws', newWs);
+            localStorage.setItem('protoview_cloud_token', newToken);
+
+            if (cloudSettingsModal) cloudSettingsModal.classList.remove('active');
+            syncCloudProtocols(true);
+        });
+    }
 
     // IndexedDB 用于持久化存储 DirectoryHandle (浏览器原生跨刷新与重启保持句柄)
     function getWorkspaceHandleDB() {
@@ -158,9 +395,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateWorkspaceUI(connected, folderName = '', badgeText = '') {
-        if (!wsDirStrip) return;
+        if (!wsLocalStrip) return;
         if (connected) {
-            wsDirStrip.classList.add('connected');
+            wsLocalStrip.classList.add('connected');
             if (wsFolderName) {
                 wsFolderName.textContent = folderName || '本地工作目录';
                 wsFolderName.title = `已关联本地硬盘目录: ${folderName}`;
@@ -174,7 +411,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (btnRefreshWorkspace) btnRefreshWorkspace.style.display = 'inline-flex';
             if (btnDisconnectWorkspace) btnDisconnectWorkspace.style.display = 'inline-flex';
         } else {
-            wsDirStrip.classList.remove('connected');
+            wsLocalStrip.classList.remove('connected');
             if (wsFolderName) {
                 wsFolderName.textContent = '未关联本地目录 (当前仅保存在浏览器内部)';
                 wsFolderName.title = '未关联本地工作目录';
@@ -183,7 +420,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 wsStatusBadge.textContent = '浏览器内部';
             }
             if (btnSetWorkspaceText) {
-                btnSetWorkspaceText.textContent = '设置工作目录';
+                btnSetWorkspaceText.textContent = '设置本地目录';
             }
             if (btnRefreshWorkspace) btnRefreshWorkspace.style.display = 'none';
             if (btnDisconnectWorkspace) btnDisconnectWorkspace.style.display = 'none';
@@ -447,6 +684,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <span class="protocol-type-badge">${modeName}</span>
                     </div>
                     <div class="protocol-stats">
+                        ${p._cloudKey ? `<span class="pstat-item pstat-cloud" title="Cloudflare 云端存储: ${p._cloudKey}"><i class="fa-solid fa-cloud"></i> 云端同步</span>` : ''}
                         ${p._fileName ? `<span class="pstat-item pstat-file" title="本地硬盘文件: ${p._fileName}"><i class="fa-solid fa-file-code"></i> ${p._fileName}</span>` : ''}
                         <span class="pstat-item"><i class="fa-solid fa-layer-group"></i> ${wordCount} 个字</span>
                         <span class="pstat-item"><i class="fa-solid fa-desktop"></i> ${deviceName}</span>
@@ -633,9 +871,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const proto = await dbHelper.getProtocol(id);
         const name = proto ? proto.name : '该协议';
         const isFromDisk = proto && proto._fileName && currentWorkspaceHandle;
-        const confirmMsg = isFromDisk 
-            ? `确定要删除协议「${name}」吗？\n\n【提示】由于已连接本地工作目录，此操作将同步永久删除您电脑硬盘上的物理文件「${proto._fileName}」！` 
-            : `确定要删除协议「${name}」吗？`;
+        const isFromCloud = proto && (proto._cloudKey || activeWorkspaceMode === 'cloud');
+
+        let confirmMsg = `确定要删除协议「${name}」吗？`;
+        if (isFromDisk) {
+            confirmMsg = `确定要删除协议「${name}」吗？\n\n【提示】由于已连接本地工作目录，此操作将同步永久删除您电脑硬盘上的物理文件「${proto._fileName}」！`;
+        } else if (isFromCloud) {
+            confirmMsg = `确定要删除协议「${name}」吗？\n\n【提示】由于当前处于云端工作台模式，此操作将同步从 Cloudflare 云端数据库中彻底删除！`;
+        }
 
         if (confirm(confirmMsg)) {
             if (isFromDisk) {
@@ -643,6 +886,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await currentWorkspaceHandle.removeEntry(proto._fileName);
                 } catch(e) {
                     console.warn("从本地工作目录删除物理文件失败:", e);
+                }
+            }
+            if (isFromCloud && proto._cloudKey) {
+                try {
+                    await cloudApiCall(`/api/protocols?key=${encodeURIComponent(proto._cloudKey)}`, 'DELETE');
+                } catch(e) {
+                    console.warn("从云端删除协议失败:", e);
                 }
             }
             await dbHelper.deleteProtocol(id);
@@ -1213,13 +1463,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        // 若处于云端工作台模式，同步推送到 Cloudflare KV 云端
+        let syncedToCloud = false;
+        if (activeWorkspaceMode === 'cloud') {
+            try {
+                const cloudRes = await cloudApiCall('/api/protocols', 'POST', currentArincProtocol);
+                if (cloudRes.ok && cloudRes.data && cloudRes.data.success) {
+                    currentArincProtocol._cloudKey = cloudRes.data.key;
+                    currentArincProtocol._fromCloud = true;
+                    syncedToCloud = true;
+                }
+            } catch (cloudErr) {
+                console.warn("同步保存到云端失败:", cloudErr);
+            }
+        }
+
         const id = await dbHelper.saveProtocol(currentArincProtocol);
         currentArincProtocol.id = id;
 
         // 保存反馈
         if (btnArincSave) {
             const originalHTML = btnArincSave.innerHTML;
-            if (syncedToDisk) {
+            if (syncedToCloud) {
+                btnArincSave.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> 已同步云端!`;
+                btnArincSave.title = `已同步保存到 Cloudflare 云端工作空间: ${currentArincProtocol._cloudKey || ''}`;
+            } else if (syncedToDisk) {
                 btnArincSave.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> 已同步本地文件!`;
                 btnArincSave.title = `已同步保存到工作目录物理文件: ${diskFileName}`;
             } else {
@@ -2661,6 +2929,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
+                // 若处于云端工作台模式，同步写入 Cloudflare 云端
+                if (activeWorkspaceMode === 'cloud') {
+                    try {
+                        const cloudRes = await cloudApiCall('/api/protocols', 'POST', newProto);
+                        if (cloudRes.ok && cloudRes.data && cloudRes.data.success) {
+                            newProto._cloudKey = cloudRes.data.key;
+                            newProto._fromCloud = true;
+                        }
+                    } catch (cloudErr) {
+                        console.warn("向云端写入新建协议失败:", cloudErr);
+                    }
+                }
+
                 const id = await dbHelper.saveProtocol(newProto);
                 newProto.id = id;
                 currentArincProtocol = newProto;
@@ -3399,10 +3680,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.warn("ProtoView: 演示数据初始化异常:", err);
         }
 
+        // 初始化工作台模式 (本地硬盘目录 vs Cloudflare 云端工作台)
         try {
-            await tryRestoreWorkspaceDirectory();
-        } catch (err) {
-            console.warn("ProtoView: 恢复本地工作目录异常:", err);
+            setWorkspaceMode(activeWorkspaceMode, false);
+            if (activeWorkspaceMode === 'cloud') {
+                await syncCloudProtocols(false);
+            } else {
+                await tryRestoreWorkspaceDirectory();
+            }
+        } catch (wsErr) {
+            console.warn("ProtoView: 初始化工作台异常:", wsErr);
         }
 
         try {
