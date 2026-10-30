@@ -45,56 +45,57 @@
             
             <!-- 视图 1：协议管理库 -->
             <section id="protocol-view" class="view-section active">
-                <header class="view-header">
-                    <div>
-                        <h1>协议管理库</h1>
-                        <p>集中管理 ARINC 429、CAN 及串口总线通信协议</p>
+                <header class="view-header compact-view-header">
+                    <div class="view-header-title-box">
+                        <h1><i class="fa-solid fa-layer-group" style="color:var(--accent-color); font-size: 1.15rem;"></i> 协议管理库</h1>
+                        <span class="view-header-desc">集中管理 ARINC 429、CAN 及串口总线通信协议</span>
                     </div>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <button class="btn btn-secondary" id="btn-main-import" onclick="document.getElementById('arinc-file-input').click()" title="从电脑硬盘选择已保存的 .json 协议文件导入">
+                    <div class="view-header-actions">
+                        <button class="btn btn-secondary btn-sm" id="btn-create-product" title="新建产品型号，在产品下归类和管理多包通信协议">
+                            <i class="fa-solid fa-cubes"></i> 新建产品
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="btn-main-import" onclick="document.getElementById('arinc-file-input').click()" title="从电脑硬盘选择已保存的 .json 协议文件导入">
                             <i class="fa-solid fa-file-import"></i> 导入协议文件
                         </button>
-                        <button class="btn btn-primary" id="btn-create-protocol">
+                        <button class="btn btn-primary btn-sm" id="btn-create-protocol">
                             <i class="fa-solid fa-plus"></i> 新建协议
                         </button>
                     </div>
                 </header>
 
-                <!-- 工作台模式选择与目录同步条 (支持「本地硬盘目录」与「Cloudflare 云端工作台」双引擎) -->
-                <div class="workspace-container">
-                    <div class="workspace-mode-nav">
+                <!-- 工作台模式选择与目录同步条 (统一为单行高密度桌面级控制条) -->
+                <div class="workspace-container compact-workspace-bar">
+                    <div class="workspace-mode-nav compact-mode-nav">
                         <button type="button" class="ws-mode-btn active" id="btn-mode-local" title="直接关联电脑硬盘物理文件夹，编辑自动写回磁盘 .json 文件">
-                            <i class="fa-solid fa-hard-drive"></i> 本地硬盘目录
+                            <i class="fa-solid fa-hard-drive"></i> 本地硬盘
                         </button>
                         <button type="button" class="ws-mode-btn" id="btn-mode-cloud" title="连接 Cloudflare 全球分布式云端数据库，手机和电脑实时多端同步">
-                            <i class="fa-solid fa-cloud"></i> Cloudflare 云端工作台
-                            <span class="ws-mode-badge">手机/电脑云同步</span>
+                            <i class="fa-solid fa-cloud"></i> 云端
+                            <span class="ws-mode-badge">同步</span>
                         </button>
                     </div>
 
                     <!-- 1. 本地工作目录模式视图 -->
                     <div class="workspace-dir-strip" id="workspace-local-strip">
                         <div class="ws-left">
-                            <div class="ws-icon-box" id="ws-local-icon">
+                            <div class="ws-icon-box ws-mini-icon-box" id="ws-local-icon">
                                 <i class="fa-solid fa-folder-tree"></i>
                             </div>
-                            <div class="ws-info">
-                                <div class="ws-label">本地工作目录 (电脑磁盘文件同步):</div>
-                                <div class="ws-name" id="ws-folder-name" title="未关联本地工作目录">未关联本地目录 (当前保存在浏览器内部)</div>
-                            </div>
+                            <span class="ws-label-prefix">本地目录:</span>
+                            <span class="ws-name" id="ws-folder-name" title="未关联本地工作目录">未关联本地目录 (当前保存在浏览器内部)</span>
                             <span class="ws-status-badge" id="ws-status-badge">浏览器内部</span>
                         </div>
                         <div class="ws-right">
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-set-workspace" title="选择电脑上的文件夹作为工作目录，自动读取该文件夹下的所有协议文件">
-                                <i class="fa-solid fa-folder-open"></i> <span id="btn-set-workspace-text">设置本地目录</span>
+                            <button type="button" class="btn btn-secondary btn-xs" id="btn-set-workspace" title="选择电脑上的文件夹作为工作目录，自动读取该文件夹下的所有协议文件">
+                                <i class="fa-solid fa-folder-open"></i> <span id="btn-set-workspace-text">设置目录</span>
                             </button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-workspace" style="display:none;" title="重新扫描工作目录下的协议文件">
-                                <i class="fa-solid fa-arrows-rotate"></i> 刷新目录
+                            <button type="button" class="btn btn-secondary btn-xs" id="btn-refresh-workspace" style="display:none;" title="重新扫描工作目录下的协议文件">
+                                <i class="fa-solid fa-arrows-rotate"></i> 刷新
                             </button>
-                            <button type="button" class="btn btn-primary-soft btn-sm btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
+                            <button type="button" class="btn btn-primary-soft btn-xs btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
                                 <i class="fa-solid fa-arrow-right-arrow-left"></i> 硬盘与云端同步
                             </button>
-                            <button type="button" class="btn btn-danger-outline btn-sm" id="btn-disconnect-workspace" style="display:none;" title="断开本地目录关联">
+                            <button type="button" class="btn btn-danger-outline btn-xs" id="btn-disconnect-workspace" style="display:none;" title="断开本地目录关联">
                                 <i class="fa-solid fa-link-slash"></i> 断开
                             </button>
                         </div>
@@ -103,29 +104,44 @@
                     <!-- 2. Cloudflare 云端工作台模式视图 -->
                     <div class="workspace-dir-strip workspace-cloud-strip" id="workspace-cloud-strip" style="display:none;">
                         <div class="ws-left">
-                            <div class="ws-icon-box ws-cloud-icon">
+                            <div class="ws-icon-box ws-mini-icon-box ws-cloud-icon">
                                 <i class="fa-solid fa-cloud"></i>
                             </div>
-                            <div class="ws-info">
-                                <div class="ws-label">Cloudflare 云端工作台 (手机/电脑实时跨端同步):</div>
-                                <div class="ws-name" id="ws-cloud-name" title="云端工作空间">工作空间: [default] (正在连接云端...)</div>
-                            </div>
+                            <span class="ws-label-prefix">云端空间:</span>
+                            <span class="ws-name" id="ws-cloud-name" title="云端工作空间">工作空间: [default] (正在连接云端...)</span>
                             <span class="ws-status-badge ws-cloud-status" id="ws-cloud-status-badge">☁️ 正在连接</span>
                         </div>
                         <div class="ws-right">
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-refresh" title="从 Cloudflare 云端重新加载并同步所有协议">
+                            <button type="button" class="btn btn-secondary btn-xs" id="btn-cloud-refresh" title="从 Cloudflare 云端重新加载并同步所有协议">
                                 <i class="fa-solid fa-arrows-rotate"></i> 同步刷新
                             </button>
-                            <button type="button" class="btn btn-primary-soft btn-sm btn-open-sync-hub" id="btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
+                            <button type="button" class="btn btn-primary-soft btn-xs btn-open-sync-hub" id="btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
                                 <i class="fa-solid fa-arrow-right-arrow-left"></i> 硬盘与云端同步
                             </button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-cloud-settings" title="配置云端空间名称与访问私密口令">
+                            <button type="button" class="btn btn-secondary btn-xs" id="btn-cloud-settings" title="配置云端空间名称与访问私密口令">
                                 <i class="fa-solid fa-gear"></i> 空间与口令
                             </button>
                         </div>
                     </div>
                 </div>
                 <input type="file" id="workspace-folder-input" webkitdirectory directory multiple style="display:none">
+
+                <!-- 产品分组快捷筛选与搜索过滤条 -->
+                <div class="product-filter-bar" id="product-filter-bar">
+                    <div class="product-tabs" id="product-tabs-container">
+                        <!-- 动态渲染: 全部产品、各产品胶囊标签 -->
+                    </div>
+                    <div class="product-filter-right-actions">
+                        <button type="button" class="btn btn-secondary btn-xs btn-toggle-collapse-all" id="btn-toggle-collapse-all" title="全部折叠 / 全部展开产品卡片">
+                            <i class="fa-solid fa-angles-up" id="icon-collapse-all"></i> <span id="btn-collapse-all-text">全部折叠</span>
+                        </button>
+                        <div class="product-search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="product-proto-search" placeholder="搜索产品、协议、设备或标号..." autocomplete="off">
+                            <button type="button" class="btn-clear-search" id="btn-clear-product-search" style="display:none;" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- 协议列表展示区 -->
                 <div class="protocol-list-container" id="protocol-list">
@@ -197,11 +213,11 @@
                             <table class="dense-table dense-words-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 42px; text-align: center;">#</th>
+                                        <th style="width: 36px; text-align: center;">#</th>
                                         <th>Label (八进制)</th>
-                                        <th style="width: 44px; text-align: center;">方向</th>
-                                        <th style="width: 48px; text-align: center;">字段数</th>
-                                        <th style="width: 34px; text-align: center;">操作</th>
+                                        <th style="width: 40px; text-align: center;">方向</th>
+                                        <th style="width: 42px; text-align: center;">字段数</th>
+                                        <th style="width: 30px; text-align: center;">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="arinc-words-list">
@@ -382,6 +398,10 @@
                     <input type="text" id="protocol-name" required placeholder="如：BMS CAN 协议">
                 </div>
                 <div class="form-group">
+                    <label><i class="fa-solid fa-cube" style="color:var(--accent-color);"></i> 所属产品 / 设备型号</label>
+                    <input type="text" id="protocol-product" list="product-datalist" placeholder="选择已有产品或输入新产品名称" autocomplete="off">
+                </div>
+                <div class="form-group">
                     <label>协议类型</label>
                     <select id="protocol-type">
                         <option value="CAN">CAN (基于 ID)</option>
@@ -427,6 +447,13 @@
                         <div class="form-group col-span-2">
                             <label for="create-429-name">协议名称 <span class="req-star">*</span></label>
                             <input type="text" id="create-429-name" required placeholder="例如：某型航电总线通信协议" value="新建 ARINC 429 协议">
+                        </div>
+                        <div class="form-group col-span-2">
+                            <label for="create-429-product"><i class="fa-solid fa-cube" style="color:var(--accent-color);"></i> 所属产品 / 设备型号</label>
+                            <input type="text" id="create-429-product" list="product-datalist" placeholder="选择已有产品或直接输入新产品（如：机载配电单元 RPDU）" autocomplete="off">
+                            <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 3px; display: block;">
+                                💡 一个产品可包含多包总线协议；可下拉选择已有产品，也可直接输入新产品名称自动建立归属
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="create-429-type">协议总线类型 <span class="req-star">*</span></label>
@@ -508,6 +535,13 @@
                         <div class="form-group col-span-2">
                             <label for="props-429-name">协议名称 <span class="req-star">*</span></label>
                             <input type="text" id="props-429-name" required>
+                        </div>
+                        <div class="form-group col-span-2">
+                            <label for="props-429-product"><i class="fa-solid fa-cube" style="color:var(--accent-color);"></i> 所属产品 / 设备型号</label>
+                            <input type="text" id="props-429-product" list="product-datalist" placeholder="选择已有产品或输入新产品名称" autocomplete="off">
+                            <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 3px; display: block;">
+                                💡 修改后该协议将自动归入此产品分组下
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="props-429-device">对端设备 / 来源系统 <span class="req-star">*</span></label>
@@ -900,6 +934,46 @@
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 产品名称自动联想补全数据源 -->
+    <datalist id="product-datalist"></datalist>
+
+    <!-- 弹窗：新建/编辑产品型号 -->
+    <div class="modal" id="product-manage-modal">
+        <div class="modal-content" style="max-width: 520px; width: 92vw;">
+            <div class="modal-header">
+                <h2 id="product-modal-title"><i class="fa-solid fa-cubes" style="color:var(--accent-color);"></i> 新建产品型号</h2>
+                <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="product-manage-form">
+                <input type="hidden" id="product-manage-original-name">
+                <div style="padding: 18px 22px;">
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label for="product-manage-name" style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: block;">
+                            产品名称 / 设备全称 <span class="req-star">*</span>
+                        </label>
+                        <input type="text" id="product-manage-name" placeholder="例如：机载配电单元 RPDU 或 飞行控制计算机 FCC" required autocomplete="off">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label for="product-manage-code" style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: block;">
+                            产品型号规格 / 代号 (可选)
+                        </label>
+                        <input type="text" id="product-manage-code" placeholder="例如：RPDU-V2 / Model-A" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 8px;">
+                        <label for="product-manage-desc" style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: block;">
+                            产品研制说明 / 备注
+                        </label>
+                        <textarea id="product-manage-desc" rows="3" placeholder="可选：填写产品研制代号、接口批次、研制团队等..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-actions" style="margin-top: 0; padding: 14px 22px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-product-submit"><i class="fa-solid fa-check"></i> 保存产品</button>
+                </div>
+            </form>
         </div>
     </div>
 

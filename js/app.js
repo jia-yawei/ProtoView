@@ -230,6 +230,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             } else {
                                 delete proto.id;
                             }
+                            if (proto.product) {
+                                await dbHelper.saveProduct({ name: proto.product });
+                            }
                             await dbHelper.saveProtocol(proto);
                             loadedCount++;
                         }
@@ -958,6 +961,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             } else {
                                 delete parsed.id;
                             }
+                            if (parsed.product) {
+                                await dbHelper.saveProduct({ name: parsed.product });
+                            }
                             await dbHelper.saveProtocol(parsed);
                             loadedCount++;
                         }
@@ -1089,6 +1095,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         } else {
                             delete parsed.id;
                         }
+                        if (parsed.product) {
+                            await dbHelper.saveProduct({ name: parsed.product });
+                        }
                         await dbHelper.saveProtocol(parsed);
                         count++;
                     }
@@ -1124,94 +1133,833 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // ---------------------- 数据加载与渲染 ----------------------
+    // ---------------------- 产品管理与视图过滤 DOM ----------------------
+    const btnCreateProduct = document.getElementById('btn-create-product');
+    const productManageModal = document.getElementById('product-manage-modal');
+    const productManageForm = document.getElementById('product-manage-form');
+    const productModalTitle = document.getElementById('product-modal-title');
+    const productManageOriginalName = document.getElementById('product-manage-original-name');
+    const productManageName = document.getElementById('product-manage-name');
+    const productManageCode = document.getElementById('product-manage-code');
+    const productManageDesc = document.getElementById('product-manage-desc');
+    const productDatalist = document.getElementById('product-datalist');
+    const productTabsContainer = document.getElementById('product-tabs-container');
+    const productProtoSearch = document.getElementById('product-proto-search');
+    const btnClearProductSearch = document.getElementById('btn-clear-product-search');
+
+    const create429Product = document.getElementById('create-429-product');
+    const props429Product = document.getElementById('props-429-product');
+    const protocolProduct = document.getElementById('protocol-product');
+
+    const btnToggleCollapseAll = document.getElementById('btn-toggle-collapse-all');
+    const iconCollapseAll = document.getElementById('icon-collapse-all');
+    const btnCollapseAllText = document.getElementById('btn-collapse-all-text');
+
+    let activeProductFilter = 'all';
+    let productSearchQuery = '';
+
+    // 产品卡片折叠记忆 (保存在 localStorage)
+    let collapsedProducts = new Set();
+    try {
+        const savedCollapsed = localStorage.getItem('protoview_collapsed_products');
+        if (savedCollapsed) {
+            collapsedProducts = new Set(JSON.parse(savedCollapsed));
+        }
+    } catch (e) {
+        collapsedProducts = new Set();
+    }
+
+    function saveCollapsedProductsState() {
+        try {
+            localStorage.setItem('protoview_collapsed_products', JSON.stringify(Array.from(collapsedProducts)));
+        } catch (e) {
+            console.warn("保存产品折叠状态失败:", e);
+        }
+    }
+
+    function updateCollapseAllButtonState() {
+        if (!btnToggleCollapseAll || !btnCollapseAllText || !iconCollapseAll) return;
+        const allCards = document.querySelectorAll('.product-group-card');
+        if (allCards.length === 0) {
+            btnToggleCollapseAll.style.display = 'none';
+            return;
+        }
+        btnToggleCollapseAll.style.display = 'inline-flex';
+        
+        const collapsedCards = document.querySelectorAll('.product-group-card.is-collapsed');
+        if (collapsedCards.length > 0 && collapsedCards.length === allCards.length) {
+            btnCollapseAllText.textContent = '全部展开';
+            iconCollapseAll.className = 'fa-solid fa-angles-down';
+            btnToggleCollapseAll.title = '全部展开所有产品卡片';
+        } else {
+            btnCollapseAllText.textContent = '全部折叠';
+            iconCollapseAll.className = 'fa-solid fa-angles-up';
+            btnToggleCollapseAll.title = '全部折叠所有产品卡片以节省空间';
+        }
+    }
+
+    if (btnToggleCollapseAll) {
+        btnToggleCollapseAll.addEventListener('click', () => {
+            const allCards = document.querySelectorAll('.product-group-card');
+            const collapsedCards = document.querySelectorAll('.product-group-card.is-collapsed');
+            const shouldCollapse = (collapsedCards.length < allCards.length);
+
+            allCards.forEach(card => {
+                const pName = card.getAttribute('data-product-name');
+                if (shouldCollapse) {
+                    card.classList.add('is-collapsed');
+                    if (pName) collapsedProducts.add(pName);
+                } else {
+                    card.classList.remove('is-collapsed');
+                    if (pName) collapsedProducts.delete(pName);
+                }
+            });
+            saveCollapsedProductsState();
+            updateCollapseAllButtonState();
+        });
+    }
+
+    // 辅助转义函数
+    function escapeHTML(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // 刷新产品 datalist 自动联想数据
+    async function refreshProductDatalist() {
+        if (!productDatalist) return;
+        const [products, protocols] = await Promise.all([
+            dbHelper.getAllProducts(),
+            dbHelper.getAllProtocols()
+        ]);
+        const set = new Set();
+        (products || []).forEach(p => { if (p && p.name) set.add(p.name.trim()); });
+        (protocols || []).forEach(p => { if (p && p.product) set.add(p.product.trim()); });
+
+        productDatalist.innerHTML = '';
+        set.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            productDatalist.appendChild(opt);
+        });
+    }
+
+    // 打开新建/编辑产品弹窗
+    function openProductModal(prod = null) {
+        if (!productManageModal) return;
+        if (prod) {
+            if (productModalTitle) productModalTitle.innerHTML = `<i class="fa-solid fa-pen-to-square" style="color:var(--accent-color);"></i> 编辑产品型号 [${escapeHTML(prod.name)}]`;
+            if (productManageOriginalName) productManageOriginalName.value = prod.name;
+            if (productManageName) productManageName.value = prod.name;
+            if (productManageCode) productManageCode.value = prod.code || '';
+            if (productManageDesc) productManageDesc.value = prod.desc || '';
+        } else {
+            if (productModalTitle) productModalTitle.innerHTML = `<i class="fa-solid fa-cubes" style="color:var(--accent-color);"></i> 新建产品型号`;
+            if (productManageOriginalName) productManageOriginalName.value = '';
+            if (productManageName) productManageName.value = '';
+            if (productManageCode) productManageCode.value = '';
+            if (productManageDesc) productManageDesc.value = '';
+        }
+        productManageModal.classList.add('active');
+        setTimeout(() => {
+            if (productManageName) productManageName.focus();
+        }, 150);
+    }
+    window.openProductModal = openProductModal;
+
+    if (btnCreateProduct) {
+        btnCreateProduct.addEventListener('click', () => openProductModal());
+    }
+
+    if (productManageForm) {
+        productManageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const originalName = (productManageOriginalName ? productManageOriginalName.value.trim() : '');
+            const name = (productManageName ? productManageName.value.trim() : '');
+            const code = (productManageCode ? productManageCode.value.trim() : '');
+            const desc = (productManageDesc ? productManageDesc.value.trim() : '');
+
+            if (!name) {
+                alert("请输入产品名称！");
+                return;
+            }
+
+            if (originalName && originalName !== name) {
+                await dbHelper.renameProduct(originalName, name);
+            }
+            await dbHelper.saveProduct({ name, code, desc });
+
+            if (productManageModal) productManageModal.classList.remove('active');
+            await refreshProductDatalist();
+            await loadProtocols();
+        });
+    }
+
+    // 全局编辑产品函数
+    window.editProductByName = async (productName) => {
+        if (!productName) return;
+        const products = await dbHelper.getAllProducts();
+        const found = products.find(p => p.name === productName) || { name: productName };
+        openProductModal(found);
+    };
+
+    // 全局删除产品函数 (名下协议解除归属，移入未分类，不丢失协议数据)
+    window.deleteProductByName = async (productName) => {
+        if (!productName) return;
+        const allProtos = await dbHelper.getAllProtocols();
+        const related = allProtos.filter(p => (p.product || '').trim() === productName);
+        
+        let msg = `确定要删除产品型号「${productName}」吗？`;
+        if (related.length > 0) {
+            msg += `\n\n【提示】检测到当前产品下有 ${related.length} 个通信协议。删除产品后，这些协议不会被删除，而是自动移入「未分类 / 通用协议」中。`;
+        }
+
+        if (confirm(msg)) {
+            for (const proto of related) {
+                proto.product = '';
+                await dbHelper.saveProtocol(proto);
+            }
+            await dbHelper.deleteProduct(productName);
+            if (activeProductFilter === productName) {
+                activeProductFilter = 'all';
+            }
+            await refreshProductDatalist();
+            await loadProtocols();
+        }
+    };
+
+    // 搜索输入框与清空按钮事件
+    if (productProtoSearch) {
+        productProtoSearch.addEventListener('input', (e) => {
+            productSearchQuery = e.target.value.trim().toLowerCase();
+            if (btnClearProductSearch) {
+                btnClearProductSearch.style.display = productSearchQuery ? 'flex' : 'none';
+            }
+            loadProtocols();
+        });
+    }
+
+    if (btnClearProductSearch) {
+        btnClearProductSearch.addEventListener('click', () => {
+            if (productProtoSearch) {
+                productProtoSearch.value = '';
+                productSearchQuery = '';
+                btnClearProductSearch.style.display = 'none';
+                loadProtocols();
+                productProtoSearch.focus();
+            }
+        });
+    }
+
+    function filterProtocolsBySearch(list, query) {
+        if (!query) return list;
+        const q = query.toLowerCase();
+        return (list || []).filter(p => {
+            if (!p) return false;
+            if (p.name && p.name.toLowerCase().includes(q)) return true;
+            if (p.device && p.device.toLowerCase().includes(q)) return true;
+            if (p.source && p.source.toLowerCase().includes(q)) return true;
+            if (p.description && p.description.toLowerCase().includes(q)) return true;
+            if (p.type && p.type.toLowerCase().includes(q)) return true;
+            if (p.product && p.product.toLowerCase().includes(q)) return true;
+            if (p._fileName && p._fileName.toLowerCase().includes(q)) return true;
+            if (p.words && p.words.some(w => (w.label && w.label.includes(q)) || (w.name && w.name.toLowerCase().includes(q)))) return true;
+            return false;
+        });
+    }
+
+    // 全局悬浮反馈提示 (Toast)
+    function showToast(message, type = 'success') {
+        const existing = document.querySelectorAll('.pv-toast');
+        existing.forEach(t => t.remove());
+
+        const toast = document.createElement('div');
+        toast.className = `pv-toast ${type}`;
+        const icon = type === 'success' ? 'fa-circle-check' : 'fa-circle-info';
+        toast.innerHTML = `<i class="fa-solid ${icon}" style="color:${type === 'success' ? '#10b981' : 'var(--accent-color)'};"></i> <span>${escapeHTML(message)}</span>`;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(10px) scale(0.95)';
+            setTimeout(() => toast.remove(), 280);
+        }, 2500);
+    }
+    window.showToast = showToast;
+
+    // 将协议移动到指定产品下 (支持拖拽归类)
+    async function moveProtocolToProduct(protoId, targetProduct) {
+        if (!protoId) return;
+        const proto = await dbHelper.getProtocol(protoId);
+        if (!proto) return;
+
+        const cleanOldProduct = (proto.product || '').trim();
+        const cleanNewProduct = (targetProduct || '').trim();
+
+        if (cleanOldProduct === cleanNewProduct) {
+            return;
+        }
+
+        proto.product = cleanNewProduct;
+        await dbHelper.saveProtocol(proto);
+
+        // 如果移入具体产品且尚未在产品表中注册，自动登记
+        if (cleanNewProduct) {
+            await dbHelper.saveProduct({ name: cleanNewProduct });
+        }
+
+        // 同步写回本地磁盘文件
+        if (currentWorkspaceHandle && proto._fileName) {
+            try {
+                const fileHandle = await currentWorkspaceHandle.getFileHandle(proto._fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(JSON.stringify(proto, null, 2));
+                await writable.close();
+            } catch (diskErr) {
+                console.warn("更新工作目录协议文件所属产品失败:", diskErr);
+            }
+        }
+
+        // 同步推送至 Cloudflare 云端
+        if (activeWorkspaceMode === 'cloud' || proto._cloudKey) {
+            try {
+                await cloudApiCall('/api/protocols', 'POST', proto);
+            } catch (cloudErr) {
+                console.warn("同步云端协议所属产品失败:", cloudErr);
+            }
+        }
+
+        // 移入具体产品时自动展开该产品卡片，便于直观核对
+        if (cleanNewProduct && collapsedProducts.has(cleanNewProduct)) {
+            collapsedProducts.delete(cleanNewProduct);
+            saveCollapsedProductsState();
+        } else if (!cleanNewProduct && collapsedProducts.has('__uncategorized__')) {
+            collapsedProducts.delete('__uncategorized__');
+            saveCollapsedProductsState();
+        }
+
+        await refreshProductDatalist();
+        await loadProtocols();
+
+        const destName = cleanNewProduct ? `产品「${cleanNewProduct}」` : '「未分类 / 通用协议」';
+        showToast(`已成功将协议「${proto.name}」移入 ${destName}！`, 'success');
+    }
+    window.moveProtocolToProduct = moveProtocolToProduct;
+
+    function renderProductFilterTabs(productMap, groupMap, totalCount) {
+        if (!productTabsContainer) return;
+        productTabsContainer.innerHTML = '';
+
+        // "全部产品" 胶囊标签
+        const allPill = document.createElement('button');
+        allPill.type = 'button';
+        allPill.className = `product-tab-pill ${activeProductFilter === 'all' ? 'active' : ''}`;
+        allPill.innerHTML = `<span>全部产品</span><span class="product-tab-count">${totalCount}</span>`;
+        allPill.addEventListener('click', () => {
+            activeProductFilter = 'all';
+            loadProtocols();
+        });
+        productTabsContainer.appendChild(allPill);
+
+        // 各产品胶囊标签 (支持拖拽放置)
+        const sortedNames = Array.from(productMap.keys()).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        sortedNames.forEach(name => {
+            const count = (groupMap.get(name) || []).length;
+            const pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = `product-tab-pill ${activeProductFilter === name ? 'active' : ''}`;
+            pill.setAttribute('data-tab-product', name);
+            pill.title = `点击筛选；可将协议直接拖至此处移入「${escapeHTML(name)}」`;
+            pill.innerHTML = `<span><i class="fa-solid fa-cube" style="font-size:11px; margin-right:2px; opacity:0.8;"></i> ${escapeHTML(name)}</span><span class="product-tab-count">${count}</span>`;
+            
+            pill.addEventListener('click', () => {
+                activeProductFilter = name;
+                loadProtocols();
+            });
+
+            // 拖拽至 Tab 放置支持
+            pill.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                pill.classList.add('tab-drop-hover');
+            });
+            pill.addEventListener('dragleave', () => {
+                pill.classList.remove('tab-drop-hover');
+            });
+            pill.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                pill.classList.remove('tab-drop-hover');
+                const protoId = Number(e.dataTransfer.getData('text/plain') || (window._draggingProtocol && window._draggingProtocol.id));
+                if (protoId) {
+                    await moveProtocolToProduct(protoId, name);
+                }
+            });
+
+            productTabsContainer.appendChild(pill);
+        });
+
+        // "未分类" 胶囊标签 (支持拖拽移除归属)
+        const UNCATEGORIZED_KEY = '__uncategorized__';
+        const uncatCount = (groupMap.get(UNCATEGORIZED_KEY) || []).length;
+        if (uncatCount > 0) {
+            const uncatPill = document.createElement('button');
+            uncatPill.type = 'button';
+            uncatPill.className = `product-tab-pill ${activeProductFilter === UNCATEGORIZED_KEY ? 'active' : ''}`;
+            uncatPill.setAttribute('data-tab-product', UNCATEGORIZED_KEY);
+            uncatPill.title = '点击筛选；可将协议拖至此处转为通用协议';
+            uncatPill.innerHTML = `<span><i class="fa-solid fa-folder-tree" style="font-size:11px; margin-right:2px; opacity:0.8;"></i> 未分类</span><span class="product-tab-count">${uncatCount}</span>`;
+            
+            uncatPill.addEventListener('click', () => {
+                activeProductFilter = UNCATEGORIZED_KEY;
+                loadProtocols();
+            });
+
+            uncatPill.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                uncatPill.classList.add('tab-drop-hover');
+            });
+            uncatPill.addEventListener('dragleave', () => {
+                uncatPill.classList.remove('tab-drop-hover');
+            });
+            uncatPill.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                uncatPill.classList.remove('tab-drop-hover');
+                const protoId = Number(e.dataTransfer.getData('text/plain') || (window._draggingProtocol && window._draggingProtocol.id));
+                if (protoId) {
+                    await moveProtocolToProduct(protoId, '');
+                }
+            });
+
+            productTabsContainer.appendChild(uncatPill);
+        }
+    }
+
+    function createProtocolCardElement(p) {
+        const card = document.createElement('div');
+        card.className = 'card glass-effect protocol-card';
+        card.title = '点击进入编辑；按住可拖动至任意产品卡片或上方产品标签进行归类';
+        card.draggable = true;
+        card.setAttribute('data-protocol-id', p.id);
+        card.setAttribute('data-current-product', p.product || '');
+
+        // 拖拽事件监听
+        card.addEventListener('dragstart', (e) => {
+            if (e.target.closest('.protocol-actions') || e.target.closest('button')) {
+                e.preventDefault();
+                return;
+            }
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', p.id.toString());
+            window._draggingProtocol = { id: p.id, name: p.name, currentProduct: (p.product || '').trim() };
+            card.classList.add('is-dragging');
+            document.body.classList.add('protocol-dragging-active');
+        });
+
+        card.addEventListener('dragend', () => {
+            card.classList.remove('is-dragging');
+            document.body.classList.remove('protocol-dragging-active');
+            window._draggingProtocol = null;
+            document.querySelectorAll('.drop-target-hover').forEach(el => el.classList.remove('drop-target-hover'));
+            document.querySelectorAll('.tab-drop-hover').forEach(el => el.classList.remove('tab-drop-hover'));
+        });
+
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.protocol-actions') || e.target.closest('button')) {
+                return;
+            }
+            window.editProtocol(p.id);
+        });
+
+        const productName = (p.product || '').trim();
+
+        if (p.type === 'ARINC429') {
+            const wordCount = p.words ? p.words.length : 0;
+            const modeName = p.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式';
+            const deviceName = p.device || p.source || '未指定设备';
+            const directionName = p.direction || 'Tx';
+            const parityName = p.parity === 'odd' ? '奇校验' : (p.parity === 'even' ? '偶校验' : '无校验');
+
+            card.innerHTML = `
+                <div class="protocol-card-header">
+                    <div class="protocol-card-title-wrap">
+                        <span class="card-drag-handle" title="按住拖拽至上方产品标签或其它产品卡片进行归类"><i class="fa-solid fa-grip-vertical"></i></span>
+                        <i class="fa-solid fa-plane-departure proto-card-icon"></i>
+                        <h3 class="protocol-card-title" title="${escapeHTML(p.name)}">${escapeHTML(p.name)}</h3>
+                    </div>
+                    <span class="protocol-type-badge">${modeName}</span>
+                </div>
+                <div class="protocol-stats">
+                    ${productName ? `<span class="pstat-item pstat-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
+                    ${p._cloudKey ? `<span class="pstat-item pstat-cloud" title="Cloudflare 云端存储: ${escapeHTML(p._cloudKey)}"><i class="fa-solid fa-cloud"></i> 云端同步</span>` : ''}
+                    ${p._fileName ? `<span class="pstat-item pstat-file" title="本地硬盘文件: ${escapeHTML(p._fileName)}"><i class="fa-solid fa-file-code"></i> ${escapeHTML(p._fileName)}</span>` : ''}
+                    <span class="pstat-item"><i class="fa-solid fa-layer-group"></i> ${wordCount} 个字</span>
+                    <span class="pstat-item"><i class="fa-solid fa-desktop"></i> ${escapeHTML(deviceName)}</span>
+                    <span class="pstat-item"><i class="fa-solid fa-arrows-left-right"></i> ${directionName}</span>
+                    <span class="pstat-item"><i class="fa-solid fa-clock"></i> ${p.period || 20}ms</span>
+                    <span class="pstat-item"><i class="fa-solid fa-gauge-high"></i> ${p.speed || '100kbps'}</span>
+                    <span class="pstat-item"><i class="fa-solid fa-shield-halved"></i> ${parityName}</span>
+                </div>
+                <p class="protocol-card-desc">
+                    ${escapeHTML(p.description || '机载 ARINC 429 航空总线通信协议')}
+                </p>
+                <div class="protocol-actions">
+                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocol(${p.id})"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById(${p.id})" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
+                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol(${p.id})"><i class="fa-solid fa-trash"></i> 删除</button>
+                </div>
+            `;
+        } else {
+            card.innerHTML = `
+                <div class="protocol-card-header">
+                    <div class="protocol-card-title-wrap">
+                        <span class="card-drag-handle" title="按住拖拽至上方产品标签或其它产品卡片进行归类"><i class="fa-solid fa-grip-vertical"></i></span>
+                        <i class="fa-solid fa-network-wired proto-card-icon"></i>
+                        <h3 class="protocol-card-title" title="${escapeHTML(p.name)}">${escapeHTML(p.name)}</h3>
+                    </div>
+                    <span class="protocol-type-badge">${p.type}</span>
+                </div>
+                <div class="protocol-stats">
+                    ${productName ? `<span class="pstat-item pstat-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
+                    ${p._fileName ? `<span class="pstat-item pstat-file" title="本地硬盘文件: ${escapeHTML(p._fileName)}"><i class="fa-solid fa-file-code"></i> ${escapeHTML(p._fileName)}</span>` : ''}
+                    <span class="pstat-item"><i class="fa-solid fa-layer-group"></i> ${p.frames ? p.frames.length : 0} 个报文</span>
+                </div>
+                <p class="protocol-card-desc">
+                    ${escapeHTML(p.description || '工业总线通信协议')}
+                </p>
+                <div class="protocol-actions">
+                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocol(${p.id})"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById(${p.id})" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
+                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol(${p.id})"><i class="fa-solid fa-trash"></i> 删除</button>
+                </div>
+            `;
+        }
+        return card;
+    }
+
+    // ---------------------- 数据加载与渲染 (产品中心与协议分组) ----------------------
     async function loadProtocols() {
         if (!protocolList) return;
-        const protocols = await dbHelper.getAllProtocols();
-        protocolList.innerHTML = '';
-        
-        if (!protocols || protocols.length === 0) {
+        const [protocols, products] = await Promise.all([
+            dbHelper.getAllProtocols(),
+            dbHelper.getAllProducts()
+        ]);
+        await refreshProductDatalist();
+
+        // 建立已知产品映射字典: name -> productObj
+        const productMap = new Map();
+        (products || []).forEach(p => {
+            if (p && p.name) {
+                productMap.set(p.name.trim(), {
+                    name: p.name.trim(),
+                    code: p.code || '',
+                    desc: p.desc || ''
+                });
+            }
+        });
+
+        // 将协议中出现的但尚未保存到 products 表的新产品也加入产品映射字典中
+        (protocols || []).forEach(p => {
+            const pName = (p.product || '').trim();
+            if (pName && !productMap.has(pName)) {
+                productMap.set(pName, {
+                    name: pName,
+                    code: '',
+                    desc: ''
+                });
+            }
+        });
+
+        // 将协议按产品归类分组
+        const UNCATEGORIZED_KEY = '__uncategorized__';
+        const groupMap = new Map();
+
+        // 先把所有已知产品都放进 groupMap (即使暂无协议，也建立空数组)
+        for (const [prodName] of productMap) {
+            groupMap.set(prodName, []);
+        }
+        groupMap.set(UNCATEGORIZED_KEY, []);
+
+        (protocols || []).forEach(p => {
+            const pName = (p.product || '').trim();
+            if (pName) {
+                if (!groupMap.has(pName)) groupMap.set(pName, []);
+                groupMap.get(pName).push(p);
+            } else {
+                groupMap.get(UNCATEGORIZED_KEY).push(p);
+            }
+        });
+
+        // 渲染产品筛选 Tabs
+        renderProductFilterTabs(productMap, groupMap, protocols ? protocols.length : 0);
+
+        // 如果全部为空
+        if ((!protocols || protocols.length === 0) && productMap.size === 0) {
             protocolList.innerHTML = `
-                <div class="empty-state" style="grid-column: 1 / -1; padding: 3rem 1.5rem; text-align: center; background: var(--bg-secondary); border: 1px dashed var(--border-color); border-radius: 12px;">
-                    <i class="fa-solid fa-folder-open" style="font-size: 2.2rem; color: var(--accent-color); margin-bottom: 0.8rem; display: block; opacity: 0.85;"></i>
-                    <h3 style="font-size: 1.1rem; color: var(--text-primary); margin-bottom: 0.4rem;">暂无通信协议</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.2rem;">您可以点击右上角「+ 新建协议」，或点击上方「设置工作目录」直接关联电脑本地协议工程文件夹。</p>
+                <div class="empty-state" style="padding: 3.5rem 1.5rem; text-align: center; background: var(--bg-secondary); border: 1px dashed var(--border-color); border-radius: 12px;">
+                    <i class="fa-solid fa-cubes" style="font-size: 2.5rem; color: var(--accent-color); margin-bottom: 0.8rem; display: block; opacity: 0.85;"></i>
+                    <h3 style="font-size: 1.15rem; color: var(--text-primary); margin-bottom: 0.4rem;">暂无通信协议与产品</h3>
+                    <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.2rem; max-width: 520px; margin-left: auto; margin-right: auto; line-height: 1.5;">
+                        在航电与工业系统中，协议通常归属于特定产品设备。您可以先点击「新建产品」再在其下录入协议，或直接点击「新建协议」随手创建。
+                    </p>
+                    <div style="display: inline-flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-secondary" onclick="openProductModal()"><i class="fa-solid fa-cubes"></i> 新建产品型号</button>
+                        <button type="button" class="btn btn-primary" onclick="openCreate429Modal()"><i class="fa-solid fa-plus"></i> 新建通信协议</button>
+                    </div>
                 </div>
             `;
             return;
         }
 
-        protocols.forEach(p => {
-            const card = document.createElement('div');
-            card.className = 'card glass-effect protocol-card';
-            card.title = '点击直接进入协议编辑工作台';
+        protocolList.innerHTML = '';
 
-            // 点击卡片直接进入协议编辑工作台 (排除底部按钮点击)
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.protocol-actions') || e.target.closest('button')) {
+        // 排序：先渲染有定义的产品，最后渲染未分类协议
+        const sortedProductNames = Array.from(productMap.keys()).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        const uncategorizedList = groupMap.get(UNCATEGORIZED_KEY) || [];
+        const hasUncategorized = uncategorizedList.length > 0;
+
+        let renderedGroupCount = 0;
+
+        // 渲染具体产品卡片
+        sortedProductNames.forEach(prodName => {
+            if (activeProductFilter !== 'all' && activeProductFilter !== prodName) {
+                return;
+            }
+
+            const prodInfo = productMap.get(prodName);
+            const protoList = groupMap.get(prodName) || [];
+
+            // 搜索过滤匹配判断
+            const filteredProtos = filterProtocolsBySearch(protoList, productSearchQuery);
+            const isProductSelfMatch = productSearchQuery && (
+                prodName.toLowerCase().includes(productSearchQuery) ||
+                (prodInfo.code && prodInfo.code.toLowerCase().includes(productSearchQuery)) ||
+                (prodInfo.desc && prodInfo.desc.toLowerCase().includes(productSearchQuery))
+            );
+
+            if (productSearchQuery && !isProductSelfMatch && filteredProtos.length === 0) {
+                return;
+            }
+
+            const protosToRender = isProductSelfMatch ? protoList : filteredProtos;
+
+            const groupCard = document.createElement('div');
+            groupCard.className = 'product-group-card';
+            groupCard.setAttribute('data-product-name', prodName);
+
+            // 折叠状态初始化 (搜索中有关键字匹配时自动展开便于浏览)
+            const isCollapsed = collapsedProducts.has(prodName);
+            if (isCollapsed && !productSearchQuery) {
+                groupCard.classList.add('is-collapsed');
+            }
+
+            // 拖拽放置事件监听
+            groupCard.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (window._draggingProtocol && window._draggingProtocol.currentProduct === prodName) {
                     return;
                 }
-                window.editProtocol(p.id);
+                groupCard.classList.add('drop-target-hover');
             });
 
-            if (p.type === 'ARINC429') {
-                const wordCount = p.words ? p.words.length : 0;
-                const modeName = p.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式';
-                const deviceName = p.device || p.source || '未指定设备';
-                const directionName = p.direction || 'Tx';
-                const parityName = p.parity === 'odd' ? '奇校验' : (p.parity === 'even' ? '偶校验' : '无校验');
-                card.innerHTML = `
-                    <div class="protocol-card-header">
-                        <div class="protocol-card-title-wrap">
-                            <i class="fa-solid fa-plane-departure proto-card-icon"></i>
-                            <h3 class="protocol-card-title" title="${p.name}">${p.name}</h3>
+            groupCard.addEventListener('dragleave', (e) => {
+                if (!groupCard.contains(e.relatedTarget)) {
+                    groupCard.classList.remove('drop-target-hover');
+                }
+            });
+
+            groupCard.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                groupCard.classList.remove('drop-target-hover');
+                document.body.classList.remove('protocol-dragging-active');
+                const protoId = Number(e.dataTransfer.getData('text/plain') || (window._draggingProtocol && window._draggingProtocol.id));
+                if (protoId) {
+                    await moveProtocolToProduct(protoId, prodName);
+                }
+            });
+
+            groupCard.innerHTML = `
+                <div class="product-group-header">
+                    <div class="product-group-left product-group-header-clickable" title="点击折叠或展开「${escapeHTML(prodName)}」的协议列表">
+                        <button type="button" class="btn-product-collapse" title="折叠/展开此产品">
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                        <div class="product-group-icon">
+                            <i class="fa-solid fa-cubes"></i>
                         </div>
-                        <span class="protocol-type-badge">${modeName}</span>
+                        <div class="product-group-meta">
+                            <div class="product-group-title-row">
+                                <h2 class="product-group-title">${escapeHTML(prodName)}</h2>
+                                ${prodInfo.code ? `<span class="product-code-badge">${escapeHTML(prodInfo.code)}</span>` : ''}
+                                <span class="product-proto-count-badge">${protoList.length} 包协议</span>
+                                <span class="product-collapsed-tag"><i class="fa-solid fa-angles-down"></i> 已折叠 (点击展开)</span>
+                                <span class="product-drop-indicator"><i class="fa-solid fa-arrow-down-to-bracket"></i> 释放移入此产品</span>
+                            </div>
+                            ${prodInfo.desc ? `<p class="product-group-desc" title="${escapeHTML(prodInfo.desc)}">${escapeHTML(prodInfo.desc)}</p>` : ''}
+                        </div>
                     </div>
-                    <div class="protocol-stats">
-                        ${p._cloudKey ? `<span class="pstat-item pstat-cloud" title="Cloudflare 云端存储: ${p._cloudKey}"><i class="fa-solid fa-cloud"></i> 云端同步</span>` : ''}
-                        ${p._fileName ? `<span class="pstat-item pstat-file" title="本地硬盘文件: ${p._fileName}"><i class="fa-solid fa-file-code"></i> ${p._fileName}</span>` : ''}
-                        <span class="pstat-item"><i class="fa-solid fa-layer-group"></i> ${wordCount} 个字</span>
-                        <span class="pstat-item"><i class="fa-solid fa-desktop"></i> ${deviceName}</span>
-                        <span class="pstat-item"><i class="fa-solid fa-arrows-left-right"></i> ${directionName}</span>
-                        <span class="pstat-item"><i class="fa-solid fa-clock"></i> ${p.period || 20}ms</span>
-                        <span class="pstat-item"><i class="fa-solid fa-gauge-high"></i> ${p.speed || '100kbps'}</span>
-                        <span class="pstat-item"><i class="fa-solid fa-shield-halved"></i> ${parityName}</span>
+                    <div class="product-group-right">
+                        <button type="button" class="btn-product-add-proto" title="在产品「${escapeHTML(prodName)}」下新建协议" onclick="openCreate429Modal('', '${escapeHTML(prodName)}')">
+                            <i class="fa-solid fa-plus"></i> 此产品下新建协议
+                        </button>
+                        <button type="button" class="btn-product-tool" title="编辑产品信息" onclick="window.editProductByName('${escapeHTML(prodName)}')">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button type="button" class="btn-product-tool danger" title="删除该产品" onclick="window.deleteProductByName('${escapeHTML(prodName)}')">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
                     </div>
-                    <p class="protocol-card-desc">
-                        ${p.description || '机载 ARINC 429 航空总线通信协议'}
-                    </p>
-                    <div class="protocol-actions">
-                        <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocol(${p.id})"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
-                        <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById(${p.id})" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
-                        <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol(${p.id})"><i class="fa-solid fa-trash"></i> 删除</button>
+                </div>
+                <div class="product-protocols-grid">
+                    <!-- 协议卡片 -->
+                </div>
+            `;
+
+            // 点击左侧标题栏区域折叠/展开
+            const headerLeft = groupCard.querySelector('.product-group-left');
+            if (headerLeft) {
+                headerLeft.addEventListener('click', (e) => {
+                    if (groupCard.classList.contains('is-collapsed')) {
+                        groupCard.classList.remove('is-collapsed');
+                        collapsedProducts.delete(prodName);
+                    } else {
+                        groupCard.classList.add('is-collapsed');
+                        collapsedProducts.add(prodName);
+                    }
+                    saveCollapsedProductsState();
+                    updateCollapseAllButtonState();
+                });
+            }
+
+            const grid = groupCard.querySelector('.product-protocols-grid');
+            if (protosToRender.length === 0) {
+                grid.innerHTML = `
+                    <div class="product-empty-protos" style="grid-column: 1 / -1;">
+                        <i class="fa-solid fa-folder-open"></i>
+                        <div>该产品下暂无协议。点击右上角「+ 此产品下新建协议」即可快速为此产品创建协议包。</div>
                     </div>
                 `;
             } else {
-                card.innerHTML = `
-                    <div class="protocol-card-header">
-                        <div class="protocol-card-title-wrap">
-                            <i class="fa-solid fa-network-wired proto-card-icon"></i>
-                            <h3 class="protocol-card-title" title="${p.name}">${p.name}</h3>
-                        </div>
-                        <span class="protocol-type-badge">${p.type}</span>
-                    </div>
-                    <div class="protocol-stats">
-                        ${p._fileName ? `<span class="pstat-item pstat-file" title="本地硬盘文件: ${p._fileName}"><i class="fa-solid fa-file-code"></i> ${p._fileName}</span>` : ''}
-                        <span class="pstat-item"><i class="fa-solid fa-layer-group"></i> ${p.frames ? p.frames.length : 0} 个报文</span>
-                    </div>
-                    <p class="protocol-card-desc">
-                        ${p.description || '工业总线通信协议'}
-                    </p>
-                    <div class="protocol-actions">
-                        <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocol(${p.id})"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
-                        <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById(${p.id})" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
-                        <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol(${p.id})"><i class="fa-solid fa-trash"></i> 删除</button>
-                    </div>
-                `;
+                protosToRender.forEach(p => {
+                    grid.appendChild(createProtocolCardElement(p));
+                });
             }
-            protocolList.appendChild(card);
+
+            protocolList.appendChild(groupCard);
+            renderedGroupCount++;
         });
+
+        // 渲染未分类/通用协议分组
+        if (hasUncategorized && (activeProductFilter === 'all' || activeProductFilter === UNCATEGORIZED_KEY)) {
+            const filteredUncategorized = filterProtocolsBySearch(uncategorizedList, productSearchQuery);
+            if (!productSearchQuery || filteredUncategorized.length > 0) {
+                const groupCard = document.createElement('div');
+                groupCard.className = 'product-group-card is-uncategorized';
+                groupCard.setAttribute('data-product-name', '__uncategorized__');
+
+                // 未分类折叠状态初始化
+                const isUncatCollapsed = collapsedProducts.has('__uncategorized__');
+                if (isUncatCollapsed && !productSearchQuery) {
+                    groupCard.classList.add('is-collapsed');
+                }
+
+                groupCard.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (window._draggingProtocol && !window._draggingProtocol.currentProduct) {
+                        return;
+                    }
+                    groupCard.classList.add('drop-target-hover');
+                });
+
+                groupCard.addEventListener('dragleave', (e) => {
+                    if (!groupCard.contains(e.relatedTarget)) {
+                        groupCard.classList.remove('drop-target-hover');
+                    }
+                });
+
+                groupCard.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    groupCard.classList.remove('drop-target-hover');
+                    document.body.classList.remove('protocol-dragging-active');
+                    const protoId = Number(e.dataTransfer.getData('text/plain') || (window._draggingProtocol && window._draggingProtocol.id));
+                    if (protoId) {
+                        await moveProtocolToProduct(protoId, '');
+                    }
+                });
+
+                groupCard.innerHTML = `
+                    <div class="product-group-header">
+                        <div class="product-group-left product-group-header-clickable" title="点击折叠或展开未分类协议列表">
+                            <button type="button" class="btn-product-collapse" title="折叠/展开未分类协议">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </button>
+                            <div class="product-group-icon">
+                                <i class="fa-solid fa-folder-tree"></i>
+                            </div>
+                            <div class="product-group-meta">
+                                <div class="product-group-title-row">
+                                    <h2 class="product-group-title">未分类 / 通用协议</h2>
+                                    <span class="product-proto-count-badge" style="background:rgba(100,116,139,0.15); color:#64748b;">${uncategorizedList.length} 包协议</span>
+                                    <span class="product-collapsed-tag"><i class="fa-solid fa-angles-down"></i> 已折叠 (点击展开)</span>
+                                    <span class="product-drop-indicator"><i class="fa-solid fa-arrow-down-to-bracket"></i> 释放转为未分类通用</span>
+                                </div>
+                                <p class="product-group-desc">未指定所属产品型号的通信协议，可直接将协议拖入此处解除产品归属，或拖动至上方产品。</p>
+                            </div>
+                        </div>
+                        <div class="product-group-right">
+                            <button type="button" class="btn-product-add-proto" style="background:rgba(100,116,139,0.12); color:#64748b; border-color:rgba(100,116,139,0.25);" onclick="openCreate429Modal('', '')">
+                                <i class="fa-solid fa-plus"></i> 新建通用协议
+                            </button>
+                        </div>
+                    </div>
+                    <div class="product-protocols-grid"></div>
+                `;
+                // 点击未分类标题栏折叠/展开
+                const uncatHeaderLeft = groupCard.querySelector('.product-group-left');
+                if (uncatHeaderLeft) {
+                    uncatHeaderLeft.addEventListener('click', () => {
+                        if (groupCard.classList.contains('is-collapsed')) {
+                            groupCard.classList.remove('is-collapsed');
+                            collapsedProducts.delete('__uncategorized__');
+                        } else {
+                            groupCard.classList.add('is-collapsed');
+                            collapsedProducts.add('__uncategorized__');
+                        }
+                        saveCollapsedProductsState();
+                        updateCollapseAllButtonState();
+                    });
+                }
+
+                const grid = groupCard.querySelector('.product-protocols-grid');
+                filteredUncategorized.forEach(p => {
+                    grid.appendChild(createProtocolCardElement(p));
+                });
+                protocolList.appendChild(groupCard);
+                renderedGroupCount++;
+            }
+        }
+
+        // 更新全部折叠/展开按钮状态
+        updateCollapseAllButtonState();
+
+        // 若筛选/搜索后无任何匹配结果
+        if (renderedGroupCount === 0) {
+            protocolList.innerHTML = `
+                <div class="empty-state" style="padding: 3rem 1.5rem; text-align: center; background: var(--bg-secondary); border: 1px dashed var(--border-color); border-radius: 12px;">
+                    <i class="fa-solid fa-magnifying-glass" style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 0.6rem; display: block; opacity: 0.6;"></i>
+                    <h3 style="font-size: 1.05rem; color: var(--text-primary); margin-bottom: 0.3rem;">未找到匹配的产品或协议</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">请尝试更换搜索关键字或切换产品标签。</p>
+                </div>
+            `;
+        }
     }
 
     async function loadProtocolsForSelect() {
@@ -1222,7 +1970,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         protocols.forEach(p => {
             const option = document.createElement('option');
             option.value = p.id;
-            option.textContent = `[${p.type}] ${p.name}`;
+            const prodPrefix = p.product ? `[${p.product}] ` : '';
+            option.textContent = `[${p.type}] ${prodPrefix}${p.name}`;
             selectProtocolParse.appendChild(option);
         });
     }
@@ -1342,11 +2091,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             frames.push({ frameId, frameName, signals });
         });
 
-        const protocolData = { name, type, frames };
+        const product = (protocolProduct ? protocolProduct.value.trim() : '');
+        if (product) {
+            await dbHelper.saveProduct({ name: product });
+        }
+
+        const protocolData = { name, type, product, frames };
         if (id) protocolData.id = id;
 
         await dbHelper.saveProtocol(protocolData);
         protocolModal.classList.remove('active');
+        await refreshProductDatalist();
         loadProtocols();
         loadProtocolsForSelect(); // 刷新下拉框
     });
@@ -1402,6 +2157,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('protocol-id').value = p.id;
         document.getElementById('protocol-name').value = p.name;
+        if (protocolProduct) protocolProduct.value = p.product || '';
         document.getElementById('protocol-type').value = p.type;
         document.getElementById('modal-title').textContent = '编辑协议';
         
@@ -1627,8 +2383,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         const p = currentArincProtocol;
         if (toolbarProtoTitle) {
-            toolbarProtoTitle.innerHTML = `<i class="fa-solid fa-plane-departure"></i> ${p.name || '429 协议'}`;
-            toolbarProtoTitle.title = p.name || 'ARINC 429 协议';
+            const prodTag = p.product ? `[${p.product}] ` : '';
+            toolbarProtoTitle.innerHTML = `<i class="fa-solid fa-plane-departure"></i> ${escapeHTML(prodTag + (p.name || '429 协议'))}`;
+            toolbarProtoTitle.title = (p.product ? `所属产品: ${p.product}\n` : '') + (p.name || 'ARINC 429 协议');
         }
         if (badgeProtoMode) {
             badgeProtoMode.textContent = p.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式';
@@ -1651,16 +2408,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ----------------- 打开新建协议对话框 (统一配置名称、类型、对端、方向、速率、校验、划分模式等) -----------------
-    function openCreate429Modal(defaultName = '') {
+    function openCreate429Modal(defaultName = '', targetProduct = '') {
         if (create429Name) create429Name.value = defaultName || '新建 ARINC 429 协议';
+        if (create429Product) create429Product.value = targetProduct || '';
         if (create429Type) create429Type.value = 'ARINC429';
-        if (create429Device) create429Device.value = '机载航电系统';
+        if (create429Device) create429Device.value = targetProduct ? `${targetProduct}系统` : '机载航电系统';
         if (create429Direction) create429Direction.value = 'Tx';
         if (create429Period) create429Period.value = 20;
         if (create429Speed) create429Speed.value = '100kbps';
         if (create429Parity) create429Parity.value = 'odd';
         if (create429Mode) create429Mode.value = 'classic';
         if (create429Desc) create429Desc.value = '';
+
+        refreshProductDatalist();
 
         // 重置 ARINC 专有属性可见性
         const arincDivider = document.getElementById('create-429-divider-arinc');
@@ -1695,6 +2455,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (props429Id) props429Id.value = p.id || '';
         if (props429Name) props429Name.value = p.name || '';
+        if (props429Product) props429Product.value = p.product || '';
         if (props429Device) props429Device.value = p.device || p.source || '机载航电系统';
         if (props429Direction) props429Direction.value = p.direction || 'Tx';
         if (props429Period) props429Period.value = p.period || 20;
@@ -1704,6 +2465,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (props429Desc) props429Desc.value = p.description || '';
         if (propsSummaryWords) propsSummaryWords.textContent = (p.words ? p.words.length : 0) + ' 个';
         if (propsSummaryId) propsSummaryId.textContent = p.id ? `#${p.id}` : '(新)';
+
+        refreshProductDatalist();
 
         if (arincPropsModal) arincPropsModal.classList.add('active');
     }
@@ -1719,7 +2482,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             arincList.forEach(p => {
                 const opt = document.createElement('option');
                 opt.value = p.id;
-                opt.textContent = `${p.name} (${p.words ? p.words.length : 0}个字)`;
+                const prodPrefix = p.product ? `[${p.product}] ` : '';
+                opt.textContent = `${prodPrefix}${p.name} (${p.words ? p.words.length : 0}个字)`;
                 arincProtocolSelect.appendChild(opt);
             });
             if (currentArincProtocol && currentArincProtocol.id) {
@@ -3334,7 +4098,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const protoType = (create429Type ? create429Type.value : 'ARINC429') || 'ARINC429';
                 const name = (create429Name ? create429Name.value.trim() : '') || '新建通信协议';
-                const device = (create429Device ? create429Device.value.trim() : '') || '机载航电系统';
+                const product = (create429Product ? create429Product.value.trim() : '');
+                if (product) {
+                    await dbHelper.saveProduct({ name: product });
+                }
+                const device = (create429Device ? create429Device.value.trim() : '') || (product ? `${product}系统` : '机载航电系统');
                 const direction = create429Direction ? create429Direction.value : 'Tx';
                 const speed = create429Speed ? create429Speed.value : '100kbps';
                 const parity = create429Parity ? create429Parity.value : 'odd';
@@ -3344,6 +4112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (protoType === 'CAN' || protoType === 'Serial') {
                     const newProto = {
                         name: name,
+                        product: product,
                         type: protoType,
                         device: device,
                         direction: direction,
@@ -3428,6 +4197,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const newProto = {
                     name: name,
+                    product: product,
                     type: 'ARINC429',
                     mode: mode,
                     period: period,
@@ -3500,6 +4270,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (!targetProto) return;
 
                 targetProto.name = (props429Name ? props429Name.value.trim() : '') || '未命名429协议';
+                const newProduct = (props429Product ? props429Product.value.trim() : '');
+                targetProto.product = newProduct;
+                if (newProduct) {
+                    await dbHelper.saveProduct({ name: newProduct });
+                }
                 targetProto.device = props429Device ? props429Device.value.trim() : '';
                 targetProto.source = targetProto.device;
                 targetProto.direction = props429Direction ? props429Direction.value : 'Tx';
@@ -3531,6 +4306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (arincPropsModal) arincPropsModal.classList.remove('active');
 
+                await refreshProductDatalist();
                 await loadArincProtocolsForSelect();
                 await loadProtocols();
             } catch (err) {
@@ -3643,6 +4419,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } catch (e) {
                         console.warn("向工作目录写入导入协议失败:", e);
                     }
+                }
+
+                if (imported.product) {
+                    await dbHelper.saveProduct({ name: imported.product });
                 }
 
                 const id = await dbHelper.saveProtocol(imported);

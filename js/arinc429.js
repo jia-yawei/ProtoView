@@ -502,9 +502,10 @@ class Arinc429Helper {
         const pSpeed = protocol.speed || '100kbps';
         const pParity = protocol.parity === 'odd' ? 'PARITY (奇校验)' : (protocol.parity === 'even' ? 'PARITY (偶校验)' : 'PARITY (无校验)');
         const pMode = protocol.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式';
+        const pProduct = protocol.product ? ` [产品: ${protocol.product}]` : '';
         const words = protocol.words || [];
 
-        let md = `# ${pName} - ARINC 429 总线IC接口卡片定义规范\n\n`;
+        let md = `# ${pName}${pProduct} - ARINC 429 总线IC接口卡片定义规范\n\n`;
 
         words.forEach((w, idx) => {
             const oct = (w.label || '000').toString().padStart(3, '0');
@@ -683,6 +684,9 @@ class Arinc429Helper {
             remarks.push(`SSM 有效性标识: ${ssmDesc}`);
 
             // 5. 数据字与协议整体备注
+            if (protocol.product && protocol.product.trim() && !remarks.includes(`所属产品: ${protocol.product.trim()}`)) {
+                remarks.push(`所属产品: ${protocol.product.trim()}`);
+            }
             if (w.remark && w.remark.trim() && !remarks.includes(`字备注: ${w.remark.trim()}`)) {
                 remarks.push(`字备注: ${w.remark.trim()}`);
             }
@@ -1320,6 +1324,7 @@ class UpperComputerCodeGen {
             schema: "arinc429-host-specification-v1",
             metadata: {
                 protocolName: protocol.name || 'ARINC 429 通信协议',
+                product: protocol.product || '',
                 version: protocol.version || '1.0.0',
                 targetDevice: protocol.device || protocol.source || 'ADC',
                 defaultDirection: protocol.direction || 'Tx',

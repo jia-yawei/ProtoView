@@ -121,6 +121,7 @@ export async function onRequestGet(context) {
                 protocols.push({
                     _cloudKey: keyName,
                     name: cleanName || keyName,
+                    product: meta.product || '',
                     type: meta.type || 'ARINC429',
                     mode: meta.mode || 'classic',
                     device: meta.device || '',
@@ -140,6 +141,7 @@ export async function onRequestGet(context) {
                 protocols.push({
                     _cloudKey: k.name,
                     name: meta.name || k.name.replace(/^ws:[^:]+:proto:/i, '').replace(/^proto:/i, ''),
+                    product: meta.product || '',
                     type: meta.type || 'ARINC429',
                     mode: meta.mode || 'classic',
                     device: meta.device || '',
@@ -219,6 +221,7 @@ export async function onRequestPost(context) {
         // 提取精炼元数据（方便无需加载完整大 JSON 即可在卡片列表中秒开秒列出）
         const metadata = {
             name: body.name,
+            product: body.product || '',
             type: body.type || 'ARINC429',
             mode: body.mode || 'classic',
             device: body.device || body.source || '',

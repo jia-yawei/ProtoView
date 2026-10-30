@@ -7,6 +7,7 @@
 // LocalStorage 键名配置
 const LS_KEY_PROTOCOLS = 'protoview_protocols_data';
 const LS_KEY_ID = 'protoview_protocols_next_id';
+const LS_KEY_PRODUCTS = 'protoview_products_data';
 
 let useDexie = false;
 let db = null;
@@ -17,6 +18,10 @@ try {
         db = new Dexie("ProtoViewDB");
         db.version(1).stores({
             protocols: '++id, name, type'
+        });
+        db.version(2).stores({
+            protocols: '++id, name, type, product',
+            products: '++id, &name'
         });
         useDexie = true;
         console.log("ProtoView: 已启用 Dexie (IndexedDB) 数据库引擎");
@@ -45,6 +50,21 @@ function saveLSProtocols(list) {
     } catch (e) {
         console.error("写入 LocalStorage 协议数据失败:", e);
     }
+}
+
+function getLSProducts() {
+    try {
+        const raw = localStorage.getItem(LS_KEY_PRODUCTS);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveLSProducts(list) {
+    try {
+        localStorage.setItem(LS_KEY_PRODUCTS, JSON.stringify(list));
+    } catch (e) {}
 }
 
 function getNextLSId() {
@@ -134,6 +154,106 @@ const dbHelper = {
         let list = getLSProtocols();
         list = list.filter(p => p.id !== numId);
         saveLSProtocols(list);
+    },
+
+    // ---------------------- 产品管理接口 ----------------------
+    // 获取所有独立产品清单
+    async getAllProducts() {
+        if (useDexie && db && db.products) {
+            try {
+                return await db.products.toArray();
+            } catch(e) {
+                console.warn("Dexie 读取产品列表失败:", e);
+            }
+        }
+        return getLSProducts();
+    },
+
+    // 保存产品 (新建或更新)
+    async saveProduct(product) {
+        if (!product || !product.name) return;
+        const name = product.name.trim();
+        const item = {
+            name: name,
+            code: (product.code || '').trim(),
+            desc: (product.desc || '').trim(),
+            updateTime: Date.now()
+        };
+
+        if (useDexie && db && db.products) {
+            try {
+                const existing = await db.products.where('name').equals(name).first();
+                if (existing) {
+                    item.id = existing.id;
+                    await db.products.put(item);
+                } else {
+                    await db.products.add(item);
+                }
+            } catch(e) {
+                console.warn("Dexie 保存产品异常:", e);
+            }
+        }
+
+        const list = getLSProducts();
+        const idx = list.findIndex(p => p.name === name);
+        if (idx >= 0) {
+            list[idx] = { ...list[idx], ...item };
+        } else {
+            list.push(item);
+        }
+        saveLSProducts(list);
+        return item;
+    },
+
+    // 删除产品
+    async deleteProduct(name) {
+        if (!name) return;
+        const cleanName = name.trim();
+        if (useDexie && db && db.products) {
+            try {
+                await db.products.where('name').equals(cleanName).delete();
+            } catch(e) {
+                console.warn("Dexie 删除产品异常:", e);
+            }
+        }
+        let list = getLSProducts();
+        list = list.filter(p => p.name !== cleanName);
+        saveLSProducts(list);
+    },
+
+    // 重命名产品并级联更新名下所有协议
+    async renameProduct(oldName, newName) {
+        if (!oldName || !newName || oldName === newName) return;
+        const cleanOld = oldName.trim();
+        const cleanNew = newName.trim();
+
+        // 1. 更新产品表
+        if (useDexie && db && db.products) {
+            try {
+                const existing = await db.products.where('name').equals(cleanOld).first();
+                if (existing) {
+                    await db.products.delete(existing.id);
+                    existing.name = cleanNew;
+                    delete existing.id;
+                    await db.products.add(existing);
+                }
+            } catch(e) {}
+        }
+        const prodList = getLSProducts();
+        const pIdx = prodList.findIndex(p => p.name === cleanOld);
+        if (pIdx >= 0) {
+            prodList[pIdx].name = cleanNew;
+            saveLSProducts(prodList);
+        }
+
+        // 2. 级联更新所有属于该产品的协议
+        const allProtos = await this.getAllProtocols();
+        for (const proto of allProtos) {
+            if ((proto.product || '').trim() === cleanOld) {
+                proto.product = cleanNew;
+                await this.saveProtocol(proto);
+            }
+        }
     },
 
     // 检查并清理历史内置演示模板 (用户要求纯净工作台)
