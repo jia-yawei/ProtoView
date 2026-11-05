@@ -1574,7 +1574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (e.target.closest('.protocol-actions') || e.target.closest('button')) {
                 return;
             }
-            window.editProtocol(p.id);
+            window.openProtocolWorkbench(p.id);
         });
 
         const productName = (p.product || '').trim();
@@ -1610,9 +1610,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${escapeHTML(p.description || '机载 ARINC 429 航空总线通信协议')}
                 </p>
                 <div class="protocol-actions">
-                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocol(${p.id})"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-open" onclick="window.openProtocolWorkbench(${p.id})" title="进入协议工作台编辑标号字与字段"><i class="fa-solid fa-folder-open"></i> 打开</button>
+                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps(${p.id})" title="编辑协议属性 (名称、产品型号、传输方向、周期、速率等)"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
                     <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById(${p.id})" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
-                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol(${p.id})"><i class="fa-solid fa-trash"></i> 删除</button>
+                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol(${p.id})" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
                 </div>
             `;
         } else {
@@ -1634,9 +1635,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${escapeHTML(p.description || '工业总线通信协议')}
                 </p>
                 <div class="protocol-actions">
-                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocol(${p.id})"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-open" onclick="window.openProtocolWorkbench(${p.id})" title="进入工作台编辑报文与信号"><i class="fa-solid fa-folder-open"></i> 打开</button>
+                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps(${p.id})" title="编辑协议属性 (名称、产品型号、传输方向、周期等)"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
                     <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById(${p.id})" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
-                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol(${p.id})"><i class="fa-solid fa-trash"></i> 删除</button>
+                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol(${p.id})" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
                 </div>
             `;
         }
@@ -2145,7 +2147,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    window.editProtocol = async (id) => {
+    // 进入协议全量工作台 (ARINC 429 工作台或通用报文/信号工作台)
+    window.openProtocolWorkbench = async (id) => {
         const p = await dbHelper.getProtocol(id);
         if (!p) return;
 
@@ -2155,11 +2158,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // CAN / Serial 等通用协议：进入其报文帧与信号编辑工作台
         document.getElementById('protocol-id').value = p.id;
         document.getElementById('protocol-name').value = p.name;
         if (protocolProduct) protocolProduct.value = p.product || '';
         document.getElementById('protocol-type').value = p.type;
-        document.getElementById('modal-title').textContent = '编辑协议';
+        document.getElementById('modal-title').textContent = `编辑报文帧与信号 [${p.name}]`;
         
         framesContainer.innerHTML = '';
         if (p.frames) {
@@ -2206,6 +2210,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         protocolModal.classList.add('active');
+    };
+
+    // 编辑协议属性（点击编辑按钮，只编辑属性配置，不切换全量工作台）
+    window.editProtocolProps = async (id) => {
+        await openProtocolPropsModal(id);
+    };
+
+    // 兼容调用：点击“编辑”统一定位为编辑协议属性
+    window.editProtocol = async (id) => {
+        await openProtocolPropsModal(id);
     };
 
     // ========================================================
@@ -2446,31 +2460,76 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ----------------- 打开查看/编辑协议属性对话框 -----------------
-    function openProps429Modal(protocol = null) {
-        const p = protocol || currentArincProtocol;
+    async function openProtocolPropsModal(idOrProto = null) {
+        let p = idOrProto;
+        if (typeof idOrProto === 'number' || typeof idOrProto === 'string') {
+            p = await dbHelper.getProtocol(Number(idOrProto));
+        }
         if (!p) {
-            alert('请先选择或创建一个 429 协议！');
+            p = currentArincProtocol;
+        }
+        if (!p) {
+            alert('请先选择或创建一个通信协议！');
             return;
+        }
+
+        const propsModalTitle = document.getElementById('props-modal-title');
+        if (propsModalTitle) {
+            propsModalTitle.innerHTML = `<i class="fa-solid fa-sliders" style="color:var(--accent-color);"></i> 协议属性配置 [${escapeHTML(p.name || '通信协议')}]`;
         }
 
         if (props429Id) props429Id.value = p.id || '';
         if (props429Name) props429Name.value = p.name || '';
         if (props429Product) props429Product.value = p.product || '';
-        if (props429Device) props429Device.value = p.device || p.source || '机载航电系统';
+        if (props429Device) props429Device.value = p.device || p.source || (p.product ? `${p.product}系统` : '机载航电系统');
         if (props429Direction) props429Direction.value = p.direction || 'Tx';
         if (props429Period) props429Period.value = p.period || 20;
         if (props429Speed) props429Speed.value = p.speed || '100kbps';
         if (props429Parity) props429Parity.value = p.parity || 'odd';
         if (props429Mode) props429Mode.value = p.mode || 'classic';
         if (props429Desc) props429Desc.value = p.description || '';
-        if (propsSummaryWords) propsSummaryWords.textContent = (p.words ? p.words.length : 0) + ' 个';
+        
+        if (propsSummaryWords) {
+            if (p.type === 'ARINC429') {
+                propsSummaryWords.textContent = (p.words ? p.words.length : 0) + ' 个标号字';
+            } else {
+                propsSummaryWords.textContent = (p.frames ? p.frames.length : 0) + ' 个报文';
+            }
+        }
         if (propsSummaryId) propsSummaryId.textContent = p.id ? `#${p.id}` : '(新)';
+
+        // 针对 CAN/Serial 或 ARINC 429 协议微调专有字段显示
+        const arincSectionDivider = document.querySelector('#arinc-props-modal .modal-section-divider:nth-of-type(2)');
+        const parityGroup = props429Parity ? props429Parity.closest('.form-group') : null;
+        const modeGroup = props429Mode ? props429Mode.closest('.form-group') : null;
+        const speedGroup = props429Speed ? props429Speed.closest('.form-group') : null;
+
+        if (p.type === 'ARINC429') {
+            if (arincSectionDivider) arincSectionDivider.innerHTML = '<i class="fa-solid fa-microchip"></i> 429 总线电气与模式';
+            if (parityGroup) parityGroup.style.display = '';
+            if (modeGroup) modeGroup.style.display = '';
+            if (speedGroup) {
+                const label = speedGroup.querySelector('label');
+                if (label) label.textContent = '总线通信速率';
+            }
+        } else {
+            if (arincSectionDivider) arincSectionDivider.innerHTML = `<i class="fa-solid fa-microchip"></i> ${p.type} 总线参数`;
+            if (parityGroup) parityGroup.style.display = 'none';
+            if (modeGroup) modeGroup.style.display = 'none';
+            if (speedGroup) {
+                const label = speedGroup.querySelector('label');
+                if (label) label.textContent = '总线波特率';
+            }
+        }
 
         refreshProductDatalist();
 
         if (arincPropsModal) arincPropsModal.classList.add('active');
     }
-    window.openProps429Modal = openProps429Modal;
+    const openProps429Modal = openProtocolPropsModal;
+    window.openProtocolPropsModal = openProtocolPropsModal;
+    window.openProps429Modal = openProtocolPropsModal;
+    window.editProtocolProps = openProtocolPropsModal;
 
     // ----------------- 加载 ARINC 429 协议列表 -----------------
     async function loadArincProtocolsForSelect() {
@@ -4263,13 +4322,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             try {
                 const targetId = Number(props429Id ? props429Id.value : 0);
-                let targetProto = currentArincProtocol;
-                if (targetId && (!currentArincProtocol || currentArincProtocol.id !== targetId)) {
+                let targetProto = null;
+                if (targetId) {
                     targetProto = await dbHelper.getProtocol(targetId);
+                }
+                if (!targetProto) {
+                    targetProto = currentArincProtocol;
                 }
                 if (!targetProto) return;
 
-                targetProto.name = (props429Name ? props429Name.value.trim() : '') || '未命名429协议';
+                targetProto.name = (props429Name ? props429Name.value.trim() : '') || (targetProto.type === 'ARINC429' ? '未命名429协议' : '未命名通信协议');
                 const newProduct = (props429Product ? props429Product.value.trim() : '');
                 targetProto.product = newProduct;
                 if (newProduct) {
@@ -4297,6 +4359,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const savedId = await dbHelper.saveProtocol(targetProto);
                 targetProto.id = savedId;
 
+                // 若关联了本地工作目录，同步写回硬盘物理文件
+                if (currentWorkspaceHandle && targetProto._fileName) {
+                    try {
+                        const fileHandle = await currentWorkspaceHandle.getFileHandle(targetProto._fileName, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(JSON.stringify(targetProto, null, 2));
+                        await writable.close();
+                    } catch (diskErr) {
+                        console.warn("同步写回本地工作目录属性文件失败:", diskErr);
+                    }
+                }
+
+                // 若处于云端工作台模式或为云端协议，同步推送至 Cloudflare KV
+                if (activeWorkspaceMode === 'cloud' || targetProto._cloudKey) {
+                    try {
+                        await cloudApiCall('/api/protocols', 'POST', targetProto);
+                    } catch (cloudErr) {
+                        console.warn("同步云端协议属性失败:", cloudErr);
+                    }
+                }
+
                 if (currentArincProtocol && currentArincProtocol.id === savedId) {
                     currentArincProtocol = targetProto;
                     updateToolbarProtocolInfo();
@@ -4309,6 +4392,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await refreshProductDatalist();
                 await loadArincProtocolsForSelect();
                 await loadProtocols();
+
+                showToast(`已成功保存协议「${targetProto.name}」的属性配置！`, 'success');
             } catch (err) {
                 console.error("保存协议属性失败:", err);
                 alert("保存协议属性异常: " + err.message);
