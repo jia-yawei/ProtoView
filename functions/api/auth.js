@@ -43,23 +43,12 @@ let d1TablesInitialized = false;
 async function ensureD1Tables(db) {
     if (d1TablesInitialized) return;
     try {
-        await db.exec(`
-            CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY,
-                salt TEXT NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS sessions (
-                token TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
-                created_at INTEGER NOT NULL,
-                expires_at INTEGER NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
-            CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-        `);
+        await db.prepare(`CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, salt TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`).run();
+        await db.prepare(`CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`).run();
+        try {
+            await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username)`).run();
+            await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`).run();
+        } catch (ie) {}
         d1TablesInitialized = true;
     } catch (e) {
         console.warn("D1 表结构自动检查提示:", e.message);

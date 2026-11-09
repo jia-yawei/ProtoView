@@ -465,24 +465,19 @@ export async function onRequestPost(context) {
         }
 
         try {
-            await db.exec(`
-                CREATE TABLE IF NOT EXISTS users (
-                    username TEXT PRIMARY KEY,
-                    salt TEXT NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS sessions (
-                    token TEXT PRIMARY KEY,
-                    username TEXT NOT NULL,
-                    created_at INTEGER NOT NULL,
-                    expires_at INTEGER NOT NULL,
-                    FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
-                CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-            `);
+            // 1. 创建 users 用户表 (仅保存用户名与加盐安全哈希密码)
+            await db.prepare(`CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, salt TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`).run();
+
+            // 2. 创建 sessions 登录会话表 (30天会话 Token)
+            await db.prepare(`CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`).run();
+
+            // 3. 创建索引以优化高频会话与用户名查询
+            try {
+                await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username)`).run();
+            } catch (ie) {}
+            try {
+                await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`).run();
+            } catch (ie) {}
 
             return new Response(JSON.stringify({
                 success: true,
