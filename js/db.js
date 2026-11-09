@@ -87,19 +87,24 @@ const dbHelper = {
         return getLSProtocols();
     },
 
-    // 根据 ID 获取协议
+    // 根据 ID 获取协议 (支持数值 ID 与字符串 ID 兼容检索)
     async getProtocol(id) {
+        if (id === null || id === undefined) return null;
         const numId = Number(id);
         if (useDexie && db) {
             try {
-                const res = await db.protocols.get(numId);
-                if (res) return res;
+                if (!isNaN(numId)) {
+                    const res = await db.protocols.get(numId);
+                    if (res) return res;
+                }
+                const resStr = await db.protocols.get(id);
+                if (resStr) return resStr;
             } catch (e) {
                 console.warn("Dexie 根据ID查询失败:", e);
             }
         }
         const list = getLSProtocols();
-        return list.find(p => p.id === numId) || null;
+        return list.find(p => p.id === id || String(p.id) === String(id) || (!isNaN(numId) && Number(p.id) === numId)) || null;
     },
 
     // 保存协议 (新建或更新)
@@ -177,6 +182,7 @@ const dbHelper = {
             name: name,
             code: (product.code || '').trim(),
             desc: (product.desc || '').trim(),
+            softwareItems: Array.isArray(product.softwareItems) ? product.softwareItems : [],
             updateTime: Date.now()
         };
 
@@ -185,6 +191,15 @@ const dbHelper = {
                 const existing = await db.products.where('name').equals(name).first();
                 if (existing) {
                     item.id = existing.id;
+                    if (!product.softwareItems && existing.softwareItems) {
+                        item.softwareItems = existing.softwareItems;
+                    }
+                    if (!product.code && existing.code) {
+                        item.code = existing.code;
+                    }
+                    if (!product.desc && existing.desc) {
+                        item.desc = existing.desc;
+                    }
                     await db.products.put(item);
                 } else {
                     await db.products.add(item);
@@ -197,7 +212,13 @@ const dbHelper = {
         const list = getLSProducts();
         const idx = list.findIndex(p => p.name === name);
         if (idx >= 0) {
-            list[idx] = { ...list[idx], ...item };
+            list[idx] = {
+                ...list[idx],
+                ...item,
+                softwareItems: product.softwareItems !== undefined ? item.softwareItems : (list[idx].softwareItems || []),
+                code: product.code !== undefined ? item.code : (list[idx].code || ''),
+                desc: product.desc !== undefined ? item.desc : (list[idx].desc || '')
+            };
         } else {
             list.push(item);
         }
@@ -256,18 +277,33 @@ const dbHelper = {
         }
     },
 
-    // 检查并清理历史内置演示模板 (用户要求纯净工作台)
+    // 纯净工作台：清理历史内置演示模板与示例数据，绝不自动内置任何协议
     async initDemoData() {
         try {
             const list = await this.getAllProtocols();
             if (list && list.length > 0) {
                 for (const p of list) {
-                    if (p.name && (p.name.includes("演示：BMS") || p.name.includes("民航客机 ADC") || p.id === 'tpl_adc')) {
+                    if (p.name && (p.name.includes("演示：BMS") || p.name.includes("民航客机 ADC") || p.name.includes("智能测控总线") || p.name.includes("智能配电单元") || p.id === 'tpl_adc')) {
                         console.log(`ProtoView: 清理历史内置演示模板 [${p.name}]...`);
                         await this.deleteProtocol(p.id);
                     }
                 }
             }
+            // 清理历史演示产品名称
+            try {
+                if (db.products) {
+                    const demoProds = await db.products.filter(p => p.name && (p.name.includes("智能配电单元") || p.name.includes("演示"))).toArray();
+                    for (const dp of demoProds) {
+                        await db.products.delete(dp.id);
+                    }
+                }
+                const prodList = getLSProducts();
+                const cleanList = prodList.filter(p => p.name && !p.name.includes("智能配电单元") && !p.name.includes("演示"));
+                if (cleanList.length !== prodList.length) {
+                    saveLSProducts(cleanList);
+                }
+            } catch(e) {}
+            // 纯净工作台模式：用户自行创建协议，绝不自动插入任何内置协议
         } catch (err) {
             console.warn("ProtoView: initDemoData 清理异常:", err);
         }

@@ -33,6 +33,23 @@
                     <span class="sidebar-text">协议管理</span>
                 </button>
             </nav>
+            <!-- 用户账号状态与登录入口 -->
+            <div class="sidebar-user-section">
+                <div class="sidebar-user-card" id="sidebar-user-card" title="点击管理云端用户账号">
+                    <div class="sidebar-user-avatar" id="sidebar-user-avatar">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <div class="sidebar-user-info">
+                        <span class="sidebar-user-name" id="sidebar-user-name">访客未登录</span>
+                        <div class="sidebar-user-status" id="sidebar-user-status">
+                            <i class="fa-solid fa-circle"></i> <span>本地模式</span>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn-sidebar-auth" id="btn-sidebar-auth-action" title="登录或注册独立账号">
+                    <i class="fa-solid fa-user-plus"></i> <span class="sidebar-text">登录/注册</span>
+                </button>
+            </div>
             <div class="settings">
                 <button class="theme-toggle" id="theme-toggle" title="切换深色/浅色模式">
                     <i class="fa-solid fa-moon"></i>
@@ -57,7 +74,7 @@
                         <button class="btn btn-secondary btn-sm" id="btn-main-import" onclick="document.getElementById('arinc-file-input').click()" title="从电脑硬盘选择已保存的 .json 协议文件导入">
                             <i class="fa-solid fa-file-import"></i> 导入协议文件
                         </button>
-                        <button class="btn btn-primary btn-sm" id="btn-create-protocol">
+                        <button class="btn btn-primary btn-sm" id="btn-create-protocol" onclick="if(window.openCreateProtocolModal){window.openCreateProtocolModal();}else if(window.openCreate429Modal){window.openCreate429Modal();}">
                             <i class="fa-solid fa-plus"></i> 新建协议
                         </button>
                     </div>
@@ -108,18 +125,19 @@
                                 <i class="fa-solid fa-cloud"></i>
                             </div>
                             <span class="ws-label-prefix">云端空间:</span>
-                            <span class="ws-name" id="ws-cloud-name" title="云端工作空间">工作空间: [default] (正在连接云端...)</span>
+                            <span class="ws-name" id="ws-cloud-name" title="云端工作空间">云端专属空间</span>
+                            <span class="ws-user-badge" id="ws-cloud-user-badge" title="当前登录的独立账号"><i class="fa-solid fa-user-shield"></i> 未登录账号</span>
                             <span class="ws-status-badge ws-cloud-status" id="ws-cloud-status-badge">☁️ 正在连接</span>
                         </div>
                         <div class="ws-right">
-                            <button type="button" class="btn btn-secondary btn-xs" id="btn-cloud-refresh" title="从 Cloudflare 云端重新加载并同步所有协议">
+                            <button type="button" class="btn btn-secondary btn-xs" id="btn-cloud-refresh" title="从 Cloudflare 云端重新加载并同步我的协议">
                                 <i class="fa-solid fa-arrows-rotate"></i> 同步刷新
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-xs" id="btn-ws-cloud-user-switch" title="切换账号或注册新用户">
+                                <i class="fa-solid fa-user-gear"></i> 切换/登录账号
                             </button>
                             <button type="button" class="btn btn-primary-soft btn-xs btn-open-sync-hub" id="btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
                                 <i class="fa-solid fa-arrow-right-arrow-left"></i> 硬盘与云端同步
-                            </button>
-                            <button type="button" class="btn btn-secondary btn-xs" id="btn-cloud-settings" title="配置云端空间名称与访问私密口令">
-                                <i class="fa-solid fa-gear"></i> 空间与口令
                             </button>
                         </div>
                     </div>
@@ -151,27 +169,49 @@
 
             <!-- 视图 3：ARINC 429 航电通信协议编辑工作台 (高数据密度工程视图) -->
             <section id="arinc429-view" class="view-section">
-                <!-- 极简高密度顶部工具栏 (约36px高度) -->
+                <!-- 极简高密度顶部工具栏 (约42px高度，精简对齐串口视图) -->
                 <header class="arinc-dense-toolbar">
                     <div class="dense-tb-left">
-                        <button class="dense-btn" id="btn-arinc-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 协议列表</button>
-                        <span class="dense-tb-title" id="toolbar-proto-title"><i class="fa-solid fa-plane-departure"></i> 429 协议</span>
-                        <div class="dense-tb-badges" id="toolbar-proto-badges">
-                            <span class="dense-prop-badge highlight" id="badge-proto-mode">经典模式</span>
-                            <span class="dense-prop-badge" id="badge-proto-period" title="协议全局调度周期 (点击查看/修改协议属性)" style="cursor: pointer;"><i class="fa-solid fa-clock"></i> 周期: 20ms</span>
-                            <span class="dense-prop-badge" id="badge-proto-device">对端: ADC</span>
-                            <span class="dense-prop-badge" id="badge-proto-dir">方向: Tx</span>
-                            <span class="dense-prop-badge" id="badge-proto-speed">100kbps</span>
-                            <span class="dense-prop-badge" id="badge-proto-parity">奇校验</span>
+                        <button type="button" class="dense-btn" id="btn-arinc-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 协议列表</button>
+                        <span class="dense-tb-title" id="toolbar-proto-title" title="ARINC 429 通信协议"><i class="fa-solid fa-plane-departure" style="color: var(--accent-color);"></i> 429 协议</span>
+                    </div>
+
+                    <!-- 顶部中央：429 数据包切换与管理 (支持多包：一包协议要么发送要么接收，严格单向不共存) -->
+                    <div class="dense-tb-packet-selector" id="arinc-packet-selector-strip">
+                        <label>
+                            <i class="fa-solid fa-box-archive" style="color: var(--accent-color);"></i> 数据包:
+                        </label>
+                        <select id="arinc-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 130px; max-width: 185px;" title="切换当前编辑的 429 数据包"></select>
+                        <button type="button" class="dense-btn dense-btn-xs" id="btn-add-arinc-packet" title="添加新数据包"><i class="fa-solid fa-plus"></i> 新包</button>
+                        <button type="button" class="dense-btn dense-btn-xs" id="btn-duplicate-arinc-packet" title="克隆当前数据包及其标号字"><i class="fa-solid fa-copy"></i></button>
+                        <button type="button" class="dense-btn dense-btn-danger dense-btn-xs" id="btn-delete-arinc-packet" title="删除当前数据包"><i class="fa-solid fa-trash"></i></button>
+
+                        <span class="dense-tb-divider"></span>
+
+                        <div class="dense-form-item">
+                            <label>方向:</label>
+                            <select id="arinc-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 75px;" title="该包通信方向 (严格单向：要么发送要么接收，绝不共存)">
+                                <option value="Tx">Tx (发)</option>
+                                <option value="Rx">Rx (收)</option>
+                            </select>
+                        </div>
+                        <div class="dense-form-item" id="arinc-packet-period-item">
+                            <label>发送周期:</label>
+                            <input type="number" id="arinc-packet-period" class="dense-input-xs" style="width: 55px;" min="1" max="10000" placeholder="20" title="发送数据包通讯周期 (ms)">
+                            <span style="font-size: 11px; color: var(--text-secondary);">ms</span>
+                        </div>
+                        <div class="dense-form-item">
+                            <label>包名:</label>
+                            <input type="text" id="arinc-packet-name" class="dense-input-xs" style="width: 130px;" placeholder="数据包名称" title="当前 429 数据包业务名称 (如: 主航电发送包 / 传感器接收包)">
                         </div>
                     </div>
+
                     <div class="dense-tb-actions">
-                        <button class="dense-btn" id="btn-arinc-check" title="语法与工程逻辑健康度检查 (排查重复标号、重名字段、位段越界、异常精度范围等)"><i class="fa-solid fa-stethoscope" style="color:var(--accent-color);"></i> 协议检查</button>
-                        <button class="dense-btn dense-btn-accent" id="btn-arinc-export-md" title="导出 Markdown 协议表格 (便于发给 AI 做上位机)"><i class="fa-solid fa-file-lines"></i> 导出 Markdown 表格</button>
-                        <button class="dense-btn" id="btn-view-arinc-props" title="查看或修改当前协议属性"><i class="fa-solid fa-sliders"></i> 协议属性</button>
+                        <button type="button" class="dense-btn" id="btn-arinc-check" title="对当前协议进行静态合规与健康度全面体检"><i class="fa-solid fa-stethoscope" style="color:var(--accent-color);"></i> 协议检查</button>
+                        <button type="button" class="dense-btn" id="btn-view-arinc-props" title="查看或修改当前协议属性"><i class="fa-solid fa-sliders"></i> 协议属性</button>
                         <input type="file" id="arinc-file-input" accept=".json" style="display:none">
-                        <button class="dense-btn" id="btn-arinc-export" title="将当前协议作为 .json 模板文件保存到电脑本地 (永久保存不怕清缓存)"><i class="fa-solid fa-download"></i> 导出到电脑</button>
-                        <button class="dense-btn dense-btn-primary" id="btn-arinc-save" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+                        <button type="button" class="dense-btn" id="btn-arinc-export" title="导出为电脑本地 .json 协议文件"><i class="fa-solid fa-download"></i> 导出</button>
+                        <button type="button" class="dense-btn dense-btn-primary" id="btn-arinc-save" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                     </div>
                 </header>
 
@@ -198,13 +238,12 @@
                             </button>
                         </div>
 
-                        <!-- 搜索与筛选工具栏 -->
+                        <!-- 搜索与标号字排序工具栏 -->
                         <div class="dense-filter-strip">
-                            <input type="text" id="arinc-word-search" class="dense-input-sm" placeholder="搜索标号/字名/字段名..." style="flex: 1; min-width: 100px;">
-                            <div class="dense-btn-group" id="word-filter-buttons">
-                                <button class="active" data-filter="all">全部</button>
-                                <button data-filter="Tx">Tx</button>
-                                <button data-filter="Rx">Rx</button>
+                            <input type="text" id="arinc-word-search" class="dense-input-sm" placeholder="搜索标号/字名/字段名..." style="flex: 1; min-width: 90px;">
+                            <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-move-word-up" onclick="if(window.moveArincWord){window.moveArincWord(-1);}" title="上移当前选中的标号字"><i class="fa-solid fa-arrow-up"></i> 上移</button>
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-move-word-down" onclick="if(window.moveArincWord){window.moveArincWord(1);}" title="下移当前选中的标号字"><i class="fa-solid fa-arrow-down"></i> 下移</button>
                             </div>
                         </div>
 
@@ -258,9 +297,9 @@
                             <span class="dense-mode-indicator-pill" id="detail-mode-badge">经典航电模式</span>
 
                             <!-- 4. 协议统一周期与方向 (只读) -->
-                            <div class="dense-form-item meta-item-period">
-                                <label>周期:</label>
-                                <span class="dense-readonly-tag dense-period-tag" id="word-period-badge" title="继承自协议全局周期 (只读，点击修改协议周期)" style="cursor: pointer;">20ms</span>
+                            <div class="dense-form-item meta-item-period" id="word-period-container">
+                                <label>发送周期:</label>
+                                <span class="dense-readonly-tag dense-period-tag" id="word-period-badge" title="继承自当前数据包发送周期" style="cursor: pointer;">20ms</span>
                             </div>
                             <div class="dense-form-item meta-item-direction">
                                 <label>方向:</label>
@@ -381,224 +420,371 @@
                 </div>
             </section>
 
+            <!-- 视图 4：串口通信协议编辑工作台 (UART / RS422 / RS485 字节时序流工程视图) -->
+            <section id="serial-view" class="view-section">
+                <!-- 极简高密度顶部工具栏 (约42px高度) -->
+                <header class="arinc-dense-toolbar">
+                    <div class="dense-tb-left">
+                        <button type="button" class="dense-btn" id="btn-serial-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 协议列表</button>
+                        <span class="dense-tb-title" id="serial-toolbar-proto-title" title="串口总线通信协议"><i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 串口协议</span>
+                    </div>
+
+                    <!-- 顶部中央：当前数据包切换下拉与包名/发送周期定义 -->
+                    <div class="dense-tb-packet-selector" id="serial-packet-selector-strip">
+                        <label>
+                            <i class="fa-solid fa-box-archive" style="color: var(--accent-color);"></i> 数据包:
+                        </label>
+                        <select id="serial-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 130px; max-width: 185px;" title="切换当前编辑的数据包"></select>
+                        <button type="button" class="dense-btn dense-btn-xs" id="btn-add-serial-packet" title="添加新数据包"><i class="fa-solid fa-plus"></i> 新包</button>
+                        <button type="button" class="dense-btn dense-btn-xs" id="btn-duplicate-serial-packet" title="克隆当前数据包"><i class="fa-solid fa-copy"></i></button>
+                        <button type="button" class="dense-btn dense-btn-danger dense-btn-xs" id="btn-delete-serial-packet" title="删除当前数据包"><i class="fa-solid fa-trash"></i></button>
+
+                        <span class="dense-tb-divider"></span>
+
+                        <div class="dense-form-item">
+                            <label>方向:</label>
+                            <select id="serial-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 75px;" title="该包通信方向 (严格单向：要么发送要么接收)">
+                                <option value="Tx">Tx (发)</option>
+                                <option value="Rx">Rx (收)</option>
+                            </select>
+                        </div>
+                        <div class="dense-form-item" id="serial-packet-period-item">
+                            <label>发送周期:</label>
+                            <input type="number" id="serial-packet-period" class="dense-input-xs" style="width: 55px;" min="1" max="10000" placeholder="20" title="发送数据包通讯周期 (ms)">
+                            <span style="font-size: 11px; color: var(--text-secondary);">ms</span>
+                        </div>
+                        <div class="dense-form-item">
+                            <label>包名:</label>
+                            <input type="text" id="serial-packet-name" class="dense-input-xs" style="width: 130px;" placeholder="数据包名称" title="当前数据包业务名称 (如 遥测状态上报包)">
+                        </div>
+                    </div>
+
+                    <div class="dense-tb-actions">
+                        <button type="button" class="dense-btn" id="btn-view-serial-props" title="查看或修改串口物理参数 (接口类型、波特率、校验、周期等)"><i class="fa-solid fa-sliders"></i> 协议属性</button>
+                        <button type="button" class="dense-btn" id="btn-serial-export-json" title="导出为电脑本地 .json 协议文件"><i class="fa-solid fa-download"></i> 导出</button>
+                        <button type="button" class="dense-btn dense-btn-primary" id="btn-serial-save" onclick="window.saveCurrentSerialProtocol && window.saveCurrentSerialProtocol()" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+                    </div>
+                </header>
+
+                <!-- 移动端专属 Tab 切换条 (仅窄屏显示) -->
+                <div class="arinc-mobile-tab-bar" id="serial-mobile-tab-bar">
+                    <button type="button" class="arinc-mobile-tab-btn active" id="btn-serial-mobile-tab-packets">
+                        <i class="fa-solid fa-list-ol"></i> 字节序 (<span id="mobile-serial-packets-count">0</span>)
+                    </button>
+                    <button type="button" class="arinc-mobile-tab-btn" id="btn-serial-mobile-tab-detail">
+                        <i class="fa-solid fa-cube"></i> 字段属性与位域 (<span id="mobile-active-packet-cmd">Byte 0</span>)
+                    </button>
+                </div>
+
+                <!-- 高数据密度主工作区 (双栏布局) -->
+                <div class="arinc-dense-workbench mobile-view-words" id="serial-dense-workbench">
+                    <!-- 左栏：数据包字节序列清单 (高密度表格) -->
+                    <div class="arinc-dense-words-panel" id="serial-packets-panel" style="width: 330px;">
+                        <div class="dense-panel-header">
+                            <span class="dense-panel-title">
+                                <i class="fa-solid fa-list-ol"></i> 字节序 (<span id="serial-bytes-count-badge">0</span> 字节)
+                            </span>
+                            <div style="display: flex; gap: 4px;">
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-serial-auto-offsets" onclick="if(window.autoAssignSerialOffsets){window.autoAssignSerialOffsets();}else{console.warn('autoAssignSerialOffsets未就绪');}" title="按照列表当前顺序重新紧凑分配起始偏移 (消除重叠与空洞)"><i class="fa-solid fa-arrow-down-1-9"></i> 顺排偏移</button>
+                                <button type="button" class="dense-btn dense-btn-primary dense-btn-xs" id="btn-add-serial-byte" onclick="window.addSerialByte && window.addSerialByte();">
+                                    <i class="fa-solid fa-plus"></i> 添加字节
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 搜索与字节排序工具栏 -->
+                        <div class="dense-filter-strip">
+                            <input type="text" id="serial-byte-search" class="dense-input-sm" placeholder="搜索偏移/字节名/字段名..." style="flex: 1; min-width: 90px;">
+                            <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-move-byte-up" onclick="if(window.moveSerialField){window.moveSerialField(-1);}" title="上移当前选中的字节"><i class="fa-solid fa-arrow-up"></i> 上移</button>
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-move-byte-down" onclick="if(window.moveSerialField){window.moveSerialField(1);}" title="下移当前选中的字节"><i class="fa-solid fa-arrow-down"></i> 下移</button>
+                            </div>
+                        </div>
+
+                        <!-- 高密度字节表格容器 -->
+                        <div class="dense-words-table-wrap">
+                            <table class="dense-table dense-words-table" id="serial-bytes-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 36px; text-align: center;">序号</th>
+                                        <th>名称</th>
+                                        <th style="width: 54px; text-align: center;">字段数</th>
+                                        <th style="width: 36px; text-align: center;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="serial-bytes-list">
+                                    <!-- 由 JS 渲染单字节行 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 左右分栏可拖拽调整尺寸手柄 -->
+                    <div class="workbench-resizer" id="serial-workbench-resizer" title="左右拖动调整字节列表宽度"></div>
+
+                    <!-- 右栏：选中的单字节详细配置与内部 Bit 信号面板 -->
+                    <div class="arinc-dense-detail-panel" id="serial-inspector-panel">
+                        <!-- 核心控制栏：醒目 Byte、字节名称与角色选择 -->
+                        <div class="dense-word-primary-bar">
+                            <button type="button" class="dense-btn dense-btn-xs mobile-back-words-btn" id="btn-serial-mobile-back-packets" title="返回字节列表">
+                                <i class="fa-solid fa-arrow-left"></i> 字节列表
+                            </button>
+
+                            <!-- 1. 醒目字节编号标识卡片 -->
+                            <div class="prominent-label-card" id="card-active-byte-span" title="当前选中的单字节">
+                                <span class="plc-tag"><i class="fa-solid fa-cube"></i> 字节:</span>
+                                <span id="inspector-byte-span-val" style="font-family: 'JetBrains Mono', Consolas, monospace; font-weight: 800; color: #ea580c; font-size: 13.5px;">Byte 0</span>
+                            </div>
+
+                            <!-- 2. 字节名称输入区 -->
+                            <div class="prominent-word-name-box">
+                                <i class="fa-solid fa-tag word-name-icon"></i>
+                                <input type="text" id="serial-field-name" class="prominent-word-name-input" placeholder="输入字节名称 (如: 同步帧头1 / 主母线电压高字节 / 系统状态字)">
+                            </div>
+
+                            <!-- 3. 字段变量 Key -->
+                            <div class="dense-form-item" style="margin: 0;">
+                                <label style="font-size: 11px;">Key:</label>
+                                <input type="text" id="serial-field-key" class="dense-input-xs mono-input" style="width: 105px;" placeholder="byte_key" title="程序代码变量标识符">
+                            </div>
+
+                            <!-- 4. 默认 Hex (十六进制，如 EB, 00) -->
+                            <div class="dense-form-item" style="margin: 0;">
+                                <label style="font-size: 11px;">默认 Hex:</label>
+                                <input type="text" id="serial-prop-fixed-hex" class="dense-input-xs mono-input" style="width: 50px; text-align: center; font-weight: 700; color: #0891b2;" placeholder="00" value="00" maxlength="2" title="默认单字节十六进制数值 (如 EB 或 00)">
+                            </div>
+
+                            <!-- 5. 操作按钮 -->
+                            <div class="dense-row-actions">
+                                <button type="button" class="dense-clone-btn" id="btn-clone-serial-byte" onclick="if(window.cloneSerialByte){window.cloneSerialByte();}" title="克隆当前字节"><i class="fa-solid fa-copy"></i> 克隆字节</button>
+                            </div>
+                        </div>
+
+                        <!-- 字段卡片列表容器 (对齐 429：每个字段独立卡片，包含名称、字典、位段、类型、分辨率、精度、范围、单位、备注) -->
+                        <div class="dense-fields-section">
+                            <div class="dense-fields-header">
+                                <span class="dense-section-title">
+                                    <i class="fa-solid fa-layer-group"></i> 字段定义与卡片列表
+                                    <span class="dense-sub-info" id="serial-fields-table-desc">(每个字段独立卡片：配置起始位与占用长度、数据类型与工程量字典，无大小端)</span>
+                                </span>
+                                <div style="display: flex; gap: 6px;">
+                                    <button type="button" class="dense-btn dense-btn-primary dense-btn-xs" id="btn-add-serial-field" onclick="window.addSerialFieldCard && window.addSerialFieldCard();" title="为当前字节添加一个新字段卡片">
+                                        <i class="fa-solid fa-plus"></i> 添加字段卡片
+                                    </button>
+                                    <button type="button" class="dense-btn dense-btn-xs" id="btn-preset-serial-bits" onclick="window.presetSerial8Bits && window.presetSerial8Bits();" title="一键将当前字节快速划分为 8 个独立的 Bit 状态开关 (bit0 ~ bit7)">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> 预设 8 Bits
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="dense-fields-cards-scroll" id="serial-fields-container">
+                                <!-- 由 JS 渲染每个字段的独立卡片 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
-    <!-- 弹窗：新建/编辑通用协议 (CAN/Serial) -->
-    <div class="modal" id="protocol-modal">
-        <div class="modal-content" style="padding: 20px;">
-            <div class="modal-header" style="background:transparent; padding:0 0 15px 0;">
-                <h2 id="modal-title">新建协议</h2>
-                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="protocol-form">
-                <input type="hidden" id="protocol-id">
-                <div class="form-group">
-                    <label>协议名称</label>
-                    <input type="text" id="protocol-name" required placeholder="如：BMS CAN 协议">
-                </div>
-                <div class="form-group">
-                    <label><i class="fa-solid fa-cube" style="color:var(--accent-color);"></i> 所属产品 / 设备型号</label>
-                    <input type="text" id="protocol-product" list="product-datalist" placeholder="选择已有产品或输入新产品名称" autocomplete="off">
-                </div>
-                <div class="form-group">
-                    <label>协议类型</label>
-                    <select id="protocol-type">
-                        <option value="CAN">CAN (基于 ID)</option>
-                        <option value="Serial">串口 (基于帧头特征)</option>
-                        <option value="ARINC429">ARINC 429 (航空通信总线)</option>
-                    </select>
-                </div>
-                
-                <hr class="divider">
-                <div class="frames-manager">
-                    <div class="manager-header">
-                        <h3>帧/报文定义</h3>
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-add-frame">
-                            <i class="fa-solid fa-plus"></i> 添加报文
-                        </button>
-                    </div>
-                    <div id="frames-container">
-                        <!-- 帧模板由 JS 生成 -->
-                    </div>
-                </div>
-
-                <div class="modal-actions" style="background:transparent; padding:15px 0 0 0; margin-top:1rem;">
-                    <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
-                    <button type="submit" class="btn btn-primary">保存协议</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- 弹窗：新建协议 (弹窗配置名称、类型、对端设备、方向、速率、校验、划分模式等) -->
-    <div class="modal" id="arinc-create-modal">
-        <div class="modal-content" style="max-width: 620px;">
+    <!-- 统一通信协议配置弹窗：新建协议与编辑属性统一弹窗 (支持 ARINC 429 / 串口 / CAN，新建自选类型，编辑接口类型锁定) -->
+    <div class="modal" id="protocol-config-modal">
+        <div class="modal-content" style="max-width: 720px;">
             <div class="modal-header">
-                <h2><i class="fa-solid fa-folder-plus" style="color:var(--accent-color);"></i> 新建通信协议</h2>
+                <h2 id="proto-modal-title"><i class="fa-solid fa-folder-plus" style="color:var(--accent-color);"></i> 新建通信协议</h2>
                 <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <form id="arinc-create-form">
+            <form id="protocol-config-form">
+                <input type="hidden" id="proto-form-id">
+                <input type="hidden" id="proto-form-mode" value="create">
+                <input type="hidden" id="proto-form-locked-type" value="">
+
                 <div class="modal-body-scroll">
                     <div class="modal-form-grid">
+                        <!-- 分组 1：基本协议信息 -->
                         <div class="modal-section-divider">
                             <i class="fa-solid fa-circle-info"></i> 基本协议信息
                         </div>
-                        <div class="form-group col-span-2">
-                            <label for="create-429-name">协议名称 <span class="req-star">*</span></label>
-                            <input type="text" id="create-429-name" required placeholder="例如：某型航电总线通信协议" value="新建 ARINC 429 协议">
-                        </div>
-                        <div class="form-group col-span-2">
-                            <label for="create-429-product"><i class="fa-solid fa-cube" style="color:var(--accent-color);"></i> 所属产品 / 设备型号</label>
-                            <input type="text" id="create-429-product" list="product-datalist" placeholder="选择已有产品或直接输入新产品（如：机载配电单元 RPDU）" autocomplete="off">
-                            <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 3px; display: block;">
-                                💡 一个产品可包含多包总线协议；可下拉选择已有产品，也可直接输入新产品名称自动建立归属
-                            </small>
+                        <div class="form-group">
+                            <label for="proto-form-name">协议名称 <span class="req-star">*</span></label>
+                            <input type="text" id="proto-form-name" required placeholder="如：某型航电总线协议 / BMS通信协议" value="新建 ARINC 429 协议">
                         </div>
                         <div class="form-group">
-                            <label for="create-429-type">协议总线类型 <span class="req-star">*</span></label>
-                            <select id="create-429-type">
-                                <option value="ARINC429" selected>ARINC 429 (航空通信总线)</option>
-                                <option value="CAN">CAN (基于 ID 报文)</option>
-                                <option value="Serial">串口 (基于帧头特征)</option>
+                            <label for="proto-form-product"><i class="fa-solid fa-cube" style="color:var(--accent-color);"></i> 所属产品 / 设备型号</label>
+                            <input type="text" id="proto-form-product" list="product-datalist" placeholder="选择已有或输入新产品型号(如: RPDU)" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                <label for="proto-form-type" style="margin-bottom: 0;">通信总线接口类型 <span class="req-star">*</span></label>
+                                <span id="proto-type-lock-badge" class="proto-lock-badge" style="display: none;" title="创建后总线类型不可变更">
+                                    <i class="fa-solid fa-lock"></i> 已锁定
+                                </span>
+                            </div>
+                            <select id="proto-form-type" required>
+                                <option value="ARINC429" selected>ARINC 429 (航空通信总线 - 32位数据字)</option>
+                                <option value="Serial">串口 (RS485 / RS422 / UART)</option>
+                                <option value="CAN">CAN (控制器局域网总线)</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="create-429-device">对端设备 / 来源系统 <span class="req-star">*</span></label>
-                            <input type="text" id="create-429-device" required placeholder="例如：主控计算机 / 传感器系统" value="机载航电系统">
+                            <label for="proto-form-device">对端设备 / 来源系统 <span class="req-star">*</span></label>
+                            <input type="text" id="proto-form-device" required placeholder="例如：主控计算机 / 传感器系统" value="机载航电系统">
+                        </div>
+                        <div class="form-group" id="proto-form-period-group">
+                            <label for="proto-form-period">发送周期 (ms) <span class="req-star">*</span></label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <input type="number" id="proto-form-period" min="1" max="10000" value="20" placeholder="例如：20" required style="flex: 1;">
+                                <span style="font-size: 12px; color: var(--text-secondary); white-space: nowrap;">毫秒 (ms)</span>
+                            </div>
+                            <span id="proto-form-period-hint" style="display: none;"></span>
                         </div>
                         <div class="form-group">
-                            <label for="create-429-direction">通信传输方向 <span class="req-star">*</span></label>
-                            <select id="create-429-direction">
-                                <option value="Tx">Tx (发送 - 本系统向对端发送)</option>
-                                <option value="Rx">Rx (接收 - 接收对端系统数据)</option>
+                            <label for="proto-form-desc">协议备注说明 <span style="font-size: 11px; font-weight: normal; color: var(--text-secondary);">(可选)</span></label>
+                            <input type="text" id="proto-form-desc" placeholder="可选：填写协议版本号、通道分配要求、电气规范说明等...">
+                        </div>
+
+                        <!-- 分组 2A：ARINC 429 专有参数 -->
+                        <div class="modal-section-divider section-type-arinc">
+                            <i class="fa-solid fa-plane-departure" style="color: var(--accent-color);"></i> ARINC 429 航空总线电气与模式参数
+                        </div>
+                        <div class="form-group section-type-arinc">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                <label for="proto-arinc-subtype" style="margin-bottom: 0;">航空总线标准规范 / 标签 <span class="req-star">*</span></label>
+                                <span id="proto-arinc-subtype-lock-badge" class="proto-lock-badge" style="display: none;">
+                                    <i class="fa-solid fa-lock"></i> 已锁定
+                                </span>
+                            </div>
+                            <select id="proto-arinc-subtype">
+                                <option value="ARINC429 (HB6096)" selected>ARINC429 (HB6096 航空标准)</option>
+                                <option value="ARINC429">ARINC429 (通用航电规范)</option>
+                                <option value="HB6096">HB6096 (航空工业标准)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="create-429-period">总线调度周期 (ms) <span class="req-star">*</span></label>
-                            <input type="number" id="create-429-period" min="1" max="10000" value="20" placeholder="例如：20" required>
+                        <div class="form-group section-type-arinc">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                <label for="proto-arinc-mode" style="margin-bottom: 0;">字段划分模式 <span class="req-star">*</span></label>
+                                <span id="proto-arinc-mode-lock-badge" class="proto-lock-badge" style="display: none;">
+                                    <i class="fa-solid fa-lock"></i> 已锁定
+                                </span>
+                            </div>
+                            <select id="proto-arinc-mode">
+                                <option value="classic" selected>经典航电模式 (SDI占用 9~10, SSM 30~31)</option>
+                                <option value="bitstream">自由 Bit 流模式 (数据 21位, SSM 30~31)</option>
+                            </select>
                         </div>
-                        <div class="form-group">
-                            <label for="create-429-speed">总线通信速率 <span class="req-star">*</span></label>
-                            <select id="create-429-speed">
-                                <option value="100kbps">100 kbps (高速，机载推荐)</option>
+                        <div class="form-group section-type-arinc">
+                            <label for="proto-arinc-speed">总线通信速率 <span class="req-star">*</span></label>
+                            <select id="proto-arinc-speed">
+                                <option value="100kbps" selected>100 kbps (高速，机载推荐)</option>
                                 <option value="12.5kbps">12.5 kbps (低速)</option>
                             </select>
                         </div>
-
-                        <div class="modal-section-divider" id="create-429-divider-arinc">
-                            <i class="fa-solid fa-microchip"></i> 429 帧结构与校验
-                        </div>
-                        <div class="form-group">
-                            <label for="create-429-parity">奇偶校验 (Bit 32) <span class="req-star">*</span></label>
-                            <select id="create-429-parity">
-                                <option value="odd">奇校验 (Odd，航电标准)</option>
+                        <div class="form-group section-type-arinc">
+                            <label for="proto-arinc-parity">奇偶校验 (Bit 32) <span class="req-star">*</span></label>
+                            <select id="proto-arinc-parity">
+                                <option value="odd" selected>奇校验 (Odd，航电标准)</option>
                                 <option value="even">偶校验 (Even)</option>
                                 <option value="none">无校验 (None)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="create-429-mode">字段划分模式 <span class="req-star">*</span></label>
-                            <select id="create-429-mode">
-                                <option value="classic">经典模式 (Label/SDI/Data/SSM/P)</option>
-                                <option value="bitstream">自由 Bit 流模式 (32位顺延划分)</option>
-                            </select>
-                        </div>
-                        <div class="form-group col-span-2">
-                            <label for="create-429-desc">协议备注说明</label>
-                            <textarea id="create-429-desc" rows="2" placeholder="可选：填写协议版本号、通道分配要求或设备说明..."></textarea>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
-                    <button type="submit" class="btn btn-primary" id="btn-confirm-create-429"><i class="fa-solid fa-arrow-right"></i> 创建协议并进入工作台</button>
-                </div>
-            </form>
-        </div>
-    </div>
 
-    <!-- 弹窗：查看/编辑 ARINC 429 协议属性 -->
-    <div class="modal" id="arinc-props-modal">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h2 id="props-modal-title"><i class="fa-solid fa-sliders" style="color:var(--accent-color);"></i> 协议属性配置</h2>
-                <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="arinc-props-form">
-                <input type="hidden" id="props-429-id">
-                <div class="modal-body-scroll">
-                    <div class="modal-form-grid">
-                        <div class="modal-section-divider">
-                            <i class="fa-solid fa-circle-info"></i> 基本协议信息
+                        <!-- 分组 2B：串口 Serial 专有参数 -->
+                        <div class="modal-section-divider section-type-serial" style="display: none;">
+                            <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 串口物理电气与通信参数
                         </div>
-                        <div class="form-group col-span-2">
-                            <label for="props-429-name">协议名称 <span class="req-star">*</span></label>
-                            <input type="text" id="props-429-name" required>
-                        </div>
-                        <div class="form-group col-span-2">
-                            <label for="props-429-product"><i class="fa-solid fa-cube" style="color:var(--accent-color);"></i> 所属产品 / 设备型号</label>
-                            <input type="text" id="props-429-product" list="product-datalist" placeholder="选择已有产品或输入新产品名称" autocomplete="off">
-                            <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 3px; display: block;">
-                                💡 修改后该协议将自动归入此产品分组下
-                            </small>
-                        </div>
-                        <div class="form-group">
-                            <label for="props-429-device">对端设备 / 来源系统 <span class="req-star">*</span></label>
-                            <input type="text" id="props-429-device" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="props-429-direction">通信传输方向 <span class="req-star">*</span></label>
-                            <select id="props-429-direction">
-                                <option value="Tx">Tx (发送 - 本系统向对端发送)</option>
-                                <option value="Rx">Rx (接收 - 接收对端系统数据)</option>
+                        <div class="form-group section-type-serial" style="display: none;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                <label for="proto-serial-subtype" style="margin-bottom: 0;">串口物理接口 <span class="req-star">*</span></label>
+                                <span id="proto-serial-subtype-lock-badge" class="proto-lock-badge" style="display: none;">
+                                    <i class="fa-solid fa-lock"></i> 已锁定
+                                </span>
+                            </div>
+                            <select id="proto-serial-subtype">
+                                <option value="RS485" selected>RS485 (半双工差分总线)</option>
+                                <option value="RS422">RS422 (全双工差分)</option>
+                                <option value="UART">UART / RS232 (点对点串口)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="props-429-period">总线调度周期 (ms) <span class="req-star">*</span></label>
-                            <input type="number" id="props-429-period" min="1" max="10000" value="20" required>
+                        <div class="form-group section-type-serial" style="display: none;">
+                            <label for="proto-serial-baud">通信波特率 <span class="req-star">*</span></label>
+                            <select id="proto-serial-baud">
+                                <option value="9600">9600 bps</option>
+                                <option value="19200">19200 bps</option>
+                                <option value="38400">38400 bps</option>
+                                <option value="57600">57600 bps</option>
+                                <option value="115200" selected>115200 bps (标准工控推荐)</option>
+                                <option value="230400">230400 bps</option>
+                                <option value="460800">460800 bps</option>
+                                <option value="921600">921600 bps</option>
+                            </select>
+                        </div>
+                        <div class="form-group section-type-serial" style="display: none;">
+                            <label for="proto-serial-databits">数据位 <span class="req-star">*</span></label>
+                            <select id="proto-serial-databits">
+                                <option value="8" selected>8 位 (标准)</option>
+                                <option value="7">7 位</option>
+                            </select>
+                        </div>
+                        <div class="form-group section-type-serial" style="display: none;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div>
+                                    <label for="proto-serial-parity">校验位 <span class="req-star">*</span></label>
+                                    <select id="proto-serial-parity">
+                                        <option value="none" selected>None (无校验)</option>
+                                        <option value="even">Even (偶校验)</option>
+                                        <option value="odd">Odd (奇校验)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="proto-serial-stopbits">停止位 <span class="req-star">*</span></label>
+                                    <select id="proto-serial-stopbits">
+                                        <option value="1" selected>1 位</option>
+                                        <option value="2">2 位</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="modal-section-divider">
-                            <i class="fa-solid fa-microchip"></i> 429 总线电气与模式
+                        <!-- 分组 2C：CAN 总线专有参数 -->
+                        <div class="modal-section-divider section-type-can" style="display: none;">
+                            <i class="fa-solid fa-network-wired" style="color: #10b981;"></i> CAN 总线电气与帧格式参数
                         </div>
-                        <div class="form-group">
-                            <label for="props-429-speed">总线通信速率 <span class="req-star">*</span></label>
-                            <select id="props-429-speed">
-                                <option value="100kbps">100 kbps (高速)</option>
-                                <option value="12.5kbps">12.5 kbps (低速)</option>
+                        <div class="form-group section-type-can" style="display: none;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                <label for="proto-can-standard" style="margin-bottom: 0;">CAN 规范标准 <span class="req-star">*</span></label>
+                                <span id="proto-can-standard-lock-badge" class="proto-lock-badge" style="display: none;">
+                                    <i class="fa-solid fa-lock"></i> 已锁定
+                                </span>
+                            </div>
+                            <select id="proto-can-standard">
+                                <option value="CAN2.0B" selected>CAN 2.0B (扩展帧 29位 ID)</option>
+                                <option value="CAN2.0A">CAN 2.0A (标准帧 11位 ID)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="props-429-parity">奇偶校验 (Bit 32) <span class="req-star">*</span></label>
-                            <select id="props-429-parity">
-                                <option value="odd">奇校验 (Odd)</option>
-                                <option value="even">偶校验 (Even)</option>
-                                <option value="none">无校验 (None)</option>
+                        <div class="form-group section-type-can" style="display: none;">
+                            <label for="proto-can-baud">CAN 通信波特率 <span class="req-star">*</span></label>
+                            <select id="proto-can-baud">
+                                <option value="500000" selected>500 kbps (标准工控推荐)</option>
+                                <option value="250000">250 kbps</option>
+                                <option value="1000000">1 Mbps (高速)</option>
+                                <option value="125000">125 kbps</option>
                             </select>
-                        </div>
-                        <div class="form-group col-span-2">
-                            <label for="props-429-mode">字段划分模式 <span class="req-star">*</span></label>
-                            <select id="props-429-mode">
-                                <option value="classic">经典模式 (Label/SDI/Data/SSM/P)</option>
-                                <option value="bitstream">自由 Bit 流模式 (32位顺延划分)</option>
-                            </select>
-                        </div>
-                        <div class="form-group col-span-2">
-                            <label for="props-429-desc">协议备注说明</label>
-                            <textarea id="props-429-desc" rows="2"></textarea>
                         </div>
 
-                        <div class="props-summary-box">
-                            <span><i class="fa-solid fa-layer-group"></i> 标号字数量: <strong id="props-summary-words" style="color:var(--text-primary);">0</strong></span>
-                            <span><i class="fa-solid fa-hashtag"></i> 协议ID: <strong id="props-summary-id" style="color:var(--text-primary);">-</strong></span>
+                        <!-- 编辑模式下展示的摘要统计盒 -->
+                        <div class="props-summary-box col-span-2" id="proto-form-summary-box" style="display: none;">
+                            <span><i class="fa-solid fa-layer-group"></i> <span id="proto-summary-count-label">数据项数量</span>: <strong id="proto-summary-count-val" style="color:var(--text-primary);">0</strong></span>
+                            <span><i class="fa-solid fa-hashtag"></i> 协议ID: <strong id="proto-summary-id-val" style="color:var(--text-primary);">-</strong></span>
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary close-modal-btn">关闭</button>
-                    <button type="submit" class="btn btn-primary" id="btn-save-props-submit"><i class="fa-solid fa-floppy-disk"></i> 保存属性修改</button>
+                    <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
+                    <button type="submit" class="btn btn-primary" id="btn-proto-form-submit">
+                        <i class="fa-solid fa-arrow-right"></i> <span id="btn-proto-submit-text">创建协议并进入工作台</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -946,45 +1132,175 @@
 
     <!-- 弹窗：新建/编辑产品型号 -->
     <div class="modal" id="product-manage-modal">
-        <div class="modal-content" style="max-width: 520px; width: 92vw;">
+        <div class="modal-content" style="max-width: 580px; width: 92vw;">
             <div class="modal-header">
                 <h2 id="product-modal-title"><i class="fa-solid fa-cubes" style="color:var(--accent-color);"></i> 新建产品型号</h2>
                 <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form id="product-manage-form">
                 <input type="hidden" id="product-manage-original-name">
-                <div style="padding: 18px 22px;">
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <label for="product-manage-name" style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: block;">
-                            产品名称 / 设备全称 <span class="req-star">*</span>
+                <div style="padding: 16px 20px;">
+                    <!-- 第一项：产品型号 -->
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <label for="product-manage-code" style="font-weight: 600; font-size: 12.5px; margin-bottom: 5px; display: flex; align-items: center; gap: 4px;">
+                            产品型号 <span class="req-star" style="color:var(--danger);">*</span>
                         </label>
-                        <input type="text" id="product-manage-name" placeholder="例如：机载配电单元 RPDU 或 飞行控制计算机 FCC" required autocomplete="off">
+                        <input type="text" id="product-manage-code" placeholder="例如：RPDU-01 / FCC-3000 / Model-A" required autocomplete="off" style="height: 34px;">
                     </div>
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <label for="product-manage-code" style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: block;">
-                            产品型号规格 / 代号 (可选)
+
+                    <!-- 第二项：产品名称 -->
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="product-manage-name" style="font-weight: 600; font-size: 12.5px; margin-bottom: 5px; display: flex; align-items: center; gap: 4px;">
+                            产品名称 / 设备全称 <span class="req-star" style="color:var(--danger);">*</span>
                         </label>
-                        <input type="text" id="product-manage-code" placeholder="例如：RPDU-V2 / Model-A" autocomplete="off">
+                        <input type="text" id="product-manage-name" placeholder="例如：机载配电单元 / 飞行控制计算机" required autocomplete="off" style="height: 34px;">
                     </div>
-                    <div class="form-group" style="margin-bottom: 8px;">
-                        <label for="product-manage-desc" style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: block;">
-                            产品研制说明 / 备注
+
+                    <!-- 第三项：软件配置项名称及版本 -->
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label style="font-weight: 600; font-size: 12.5px; margin-bottom: 0; display: flex; align-items: center; gap: 5px;">
+                                <i class="fa-solid fa-code-branch" style="color:var(--accent-color);"></i> 软件配置项及版本 (CSCI)
+                                <span style="font-size: 11px; font-weight: normal; color: var(--text-secondary);">(一个产品可含多个软件配置项)</span>
+                            </label>
+                            <button type="button" class="btn btn-secondary btn-xs" id="btn-add-product-csci" style="font-size: 11.5px; padding: 2px 9px; height: 26px;">
+                                <i class="fa-solid fa-plus"></i> 添加配置项
+                            </button>
+                        </div>
+                        <div id="product-csci-container" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; max-height: 180px; overflow-y: auto;">
+                            <div id="product-csci-list">
+                                <!-- 动态渲染配置项行 -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 备注说明 -->
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="product-manage-desc" style="font-weight: 600; font-size: 12px; margin-bottom: 4px; display: block; color: var(--text-secondary);">
+                            产品研制说明 / 备注 (可选)
                         </label>
-                        <textarea id="product-manage-desc" rows="3" placeholder="可选：填写产品研制代号、接口批次、研制团队等..."></textarea>
+                        <input type="text" id="product-manage-desc" placeholder="可选：填写产品研制代号、批次、研制团队等..." style="height: 34px;">
                     </div>
                 </div>
-                <div class="modal-actions" style="margin-top: 0; padding: 14px 22px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
+                <div class="modal-actions" style="margin-top: 0; padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
                     <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
-                    <button type="submit" class="btn btn-primary" id="btn-save-product-submit"><i class="fa-solid fa-check"></i> 保存产品</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-product-submit"><i class="fa-solid fa-check"></i> 保存产品信息</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- 业务逻辑脚本 -->
-    <script src="js/arinc429.js"></script>
+    <!-- 弹窗 7：Cloudflare 独立账号登录与注册弹窗 (精致高保真航电与现代云原生设计) -->
+    <div class="modal auth-modal" id="auth-modal">
+        <div class="modal-content auth-modal-content glass-effect">
+            <button type="button" class="close-modal auth-modal-close" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+
+            <!-- 弹窗顶部品牌与身份指示头 -->
+            <div class="auth-modal-header">
+                <div class="auth-brand-badge">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <h2 class="auth-modal-title" id="auth-modal-title">云端账号登录</h2>
+                <p class="auth-modal-subtitle" id="auth-modal-subtitle">登录后协议将保存在您的独立云端空间，多人使用互不干扰</p>
+            </div>
+            
+            <!-- 精美分段选择器 (Segmented Control) -->
+            <div class="auth-tab-bar">
+                <button type="button" class="auth-tab-btn active" id="tab-auth-login">
+                    <i class="fa-solid fa-right-to-bracket"></i> 账号登录
+                </button>
+                <button type="button" class="auth-tab-btn" id="tab-auth-register">
+                    <i class="fa-solid fa-user-plus"></i> 注册新账号
+                </button>
+            </div>
+
+            <!-- 登录表单 -->
+            <form id="form-auth-login" class="auth-form" autocomplete="on">
+                <div class="auth-form-body">
+                    <div class="auth-input-group">
+                        <label for="login-username"><i class="fa-solid fa-user"></i> 用户名 / 账号</label>
+                        <div class="auth-input-wrapper">
+                            <i class="fa-solid fa-user auth-input-icon"></i>
+                            <input type="text" id="login-username" name="username" required placeholder="请输入您的账号名称" autocomplete="username">
+                        </div>
+                    </div>
+                    <div class="auth-input-group">
+                        <label for="login-password"><i class="fa-solid fa-lock"></i> 登录密码</label>
+                        <div class="auth-input-wrapper">
+                            <i class="fa-solid fa-lock auth-input-icon"></i>
+                            <input type="password" id="login-password" name="password" required placeholder="请输入登录密码" autocomplete="current-password">
+                        </div>
+                    </div>
+                    <div class="auth-field-tip">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>每个账号享有严格物理隔离的 Cloudflare 专属协议库，私密安全。</span>
+                    </div>
+                </div>
+                <div class="auth-form-footer">
+                    <span class="auth-switch-hint">没有账号？<a href="javascript:void(0)" class="btn-switch-to-register" onclick="if(window.switchAuthTab) window.switchAuthTab('register');">免费注册</a></span>
+                    <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-login-submit">
+                        <i class="fa-solid fa-right-to-bracket"></i> 立即登录
+                    </button>
+                </div>
+            </form>
+
+            <!-- 注册表单 -->
+            <form id="form-auth-register" class="auth-form" style="display:none;" autocomplete="off">
+                <div class="auth-form-body">
+                    <div class="auth-input-group">
+                        <label for="reg-username"><i class="fa-solid fa-user-tag"></i> 用户名 (登录唯一标识)</label>
+                        <div class="auth-input-wrapper">
+                            <i class="fa-solid fa-user-tag auth-input-icon"></i>
+                            <input type="text" id="reg-username" name="username" required placeholder="英文字母、数字或下划线" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="auth-input-group">
+                        <label for="reg-display-name"><i class="fa-solid fa-id-badge"></i> 姓名 / 称呼 (可选)</label>
+                        <div class="auth-input-wrapper">
+                            <i class="fa-solid fa-id-badge auth-input-icon"></i>
+                            <input type="text" id="reg-display-name" name="displayName" placeholder="如: 张工 (航电室)" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="auth-input-group">
+                        <label for="reg-password"><i class="fa-solid fa-lock"></i> 设置密码</label>
+                        <div class="auth-input-wrapper">
+                            <i class="fa-solid fa-lock auth-input-icon"></i>
+                            <input type="password" id="reg-password" name="password" required placeholder="至少 6 位密码" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="auth-input-group">
+                        <label for="reg-password-confirm"><i class="fa-solid fa-check-double"></i> 确认密码</label>
+                        <div class="auth-input-wrapper">
+                            <i class="fa-solid fa-check-double auth-input-icon"></i>
+                            <input type="password" id="reg-password-confirm" name="passwordConfirm" required placeholder="再次输入密码" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="auth-field-tip auth-tip-success">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>注册成功后将自动分配独立的专属云端空间，仅您本人可见并管理。</span>
+                    </div>
+                </div>
+                <div class="auth-form-footer">
+                    <span class="auth-switch-hint">已有账号？<a href="javascript:void(0)" class="btn-switch-to-login" onclick="if(window.switchAuthTab) window.switchAuthTab('login');">直接登录</a></span>
+                    <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-register-submit">
+                        <i class="fa-solid fa-user-plus"></i> 注册并进入
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 模块化架构分层脚本 -->
+    <script src="js/core.js"></script>
     <script src="js/db.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/workspace-sync.js"></script>
     <script src="js/parser.js"></script>
+    <script src="js/arinc429.js"></script>
+    <script src="js/serial.js"></script>
+    <script src="js/product-ctrl.js"></script>
+    <script src="js/arinc-ctrl.js"></script>
+    <script src="js/serial-ctrl.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

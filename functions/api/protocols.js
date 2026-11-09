@@ -1,23 +1,45 @@
 /**
- * Cloudflare Pages Functions - ProtoView 云端协议存储网关
+ * Cloudflare Pages Functions - ProtoView 云端协议存储网关 (支持多用户隔离与鉴权)
  * 
  * 路由: /api/protocols
  * 绑定: Cloudflare KV 命名空间 (变量名: PROTOVIEW_KV)
- * 可选环境变量: WORKSPACE_TOKEN (全局访问口令)
+ * 安全机制:
+ *   - 自动解析 x-auth-token 关联当前登录用户
+ *   - 严格按用户工作空间前缀隔离：ws:{username}:proto:{protocol_name}
+ *   - 用户 A 无法查看、修改或删除用户 B 的任何协议数据
  */
 
 function corsHeaders() {
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-workspace-token, x-workspace-id",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-auth-token, x-workspace-token, x-workspace-id",
         "Content-Type": "application/json;charset=utf-8"
     };
 }
 
+// 验证会话 Token 并解析出登录用户
+async function getAuthenticatedUser(request, env) {
+    const token = request.headers.get("x-auth-token") ||
+                  (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
+                  new URL(request.url).searchParams.get("authToken");
+    if (!token) return null;
+
+    const kv = env.PROTOVIEW_KV;
+    if (!kv) return null;
+
+    try {
+        const session = await kv.get("session:" + token, "json");
+        return session || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// 兼容全局管理口令 (若配置了 WORKSPACE_TOKEN)
 function verifyAuth(request, env) {
     const serverToken = env.WORKSPACE_TOKEN;
-    if (!serverToken) return true; // 未设密码则公开开放
+    if (!serverToken) return true; // 未设全局口令则开放
 
     const clientToken = request.headers.get("x-workspace-token") || new URL(request.url).searchParams.get("token");
     return clientToken === serverToken;
@@ -35,30 +57,49 @@ export async function onRequestGet(context) {
     const { request, env } = context;
     const headers = corsHeaders();
 
-    if (!verifyAuth(request, env)) {
-        return new Response(JSON.stringify({ success: false, error: "云端工作台访问口令错误，请在设置中输入正确的口令。" }), {
-            status: 401,
-            headers
-        });
-    }
-
     const kv = env.PROTOVIEW_KV;
     if (!kv) {
         return new Response(JSON.stringify({
             success: false,
-            error: "Cloudflare KV 尚未绑定。请前往 Cloudflare 控制台 -> Pages 项目 -> 设置 -> 函数 (Functions) -> KV 命名空间绑定 -> 变量名填 PROTOVIEW_KV。"
+            error: "Cloudflare KV 尚未绑定。请前往 Cloudflare 控制台 -> Pages 项目 -> 设置 -> 函数 -> 绑定 PROTOVIEW_KV 变量。"
         }), {
             status: 503,
             headers
         });
     }
 
+    const authUser = await getAuthenticatedUser(request, env);
     const url = new URL(request.url);
     const key = url.searchParams.get("key");
-    const workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "default").trim().toLowerCase();
+
+    let workspace = "";
+    if (authUser && authUser.username) {
+        // 已登录模式：强制绑定为该账号专属空间
+        workspace = authUser.username.toLowerCase();
+    } else {
+        // 未登录模式：检查传统口令
+        if (!verifyAuth(request, env)) {
+            return new Response(JSON.stringify({ success: false, error: "请先登录账号后再查看和管理云端协议。" }), {
+                status: 401,
+                headers
+            });
+        }
+        workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "default").trim().toLowerCase();
+    }
 
     // 1. 读取单个具体协议详情
     if (key) {
+        // 安全拦截：若为登录用户，禁止非法读取其他用户的协议 key
+        if (authUser && authUser.username) {
+            const expectedPrefix = `ws:${authUser.username.toLowerCase()}:proto:`;
+            if (!key.toLowerCase().startsWith(expectedPrefix)) {
+                return new Response(JSON.stringify({ success: false, error: "无权访问此协议 (非当前登录账号所有)" }), {
+                    status: 403,
+                    headers
+                });
+            }
+        }
+
         try {
             const data = await kv.get(key, "text");
             if (!data) {
@@ -79,7 +120,7 @@ export async function onRequestGet(context) {
         }
     }
 
-    // 2. 列出当前工作空间的所有协议清单 (智能匹配工作空间，并自适应兜底容错)
+    // 2. 列出当前账号/空间下的所有协议清单
     try {
         const listRes = await kv.list();
         const allKeys = listRes.keys || [];
@@ -95,26 +136,17 @@ export async function onRequestGet(context) {
             let isMatch = false;
             let cleanName = meta.name;
 
-            // 规则 1: 精确匹配工作空间前缀 ws:${targetWs}:proto:
+            // 规则 1: 精确匹配用户工作空间前缀 ws:${targetWs}:proto:
             if (keyLower.startsWith(prefix)) {
                 isMatch = true;
                 if (!cleanName) cleanName = keyName.slice(prefix.length);
             }
-            // 规则 2: 当空间名是 protoview_kv 或 default 时，自动双向兼容 ws:default:proto: 与 ws:protoview_kv:proto:
-            else if ((targetWs === 'protoview_kv' || targetWs === 'default') && 
-                     (keyLower.startsWith('ws:default:proto:') || keyLower.startsWith('ws:protoview_kv:proto:'))) {
-                isMatch = true;
-                if (!cleanName) cleanName = keyName.replace(/^ws:[^:]+:proto:/i, '');
-            }
-            // 规则 3: 匹配以 proto: 开头的旧格式或简短 Key
-            else if (keyLower.startsWith('proto:')) {
-                isMatch = true;
-                if (!cleanName) cleanName = keyName.replace(/^proto:/i, '');
-            }
-            // 规则 4: 如果是在 Cloudflare 后台手动添加的无前缀 key (如 "RPDU1"、"xxx.json")
-            else if (!keyLower.startsWith('ws:')) {
-                isMatch = true;
-                if (!cleanName) cleanName = keyName;
+            // 规则 2 (仅限未登录时的 default 空间兼容历史数据)
+            else if (!authUser && (targetWs === 'default' || targetWs === 'protoview_kv')) {
+                if (keyLower.startsWith('ws:default:proto:') || keyLower.startsWith('proto:')) {
+                    isMatch = true;
+                    if (!cleanName) cleanName = keyName.replace(/^ws:[^:]+:proto:/i, '').replace(/^proto:/i, '');
+                }
             }
 
             if (isMatch) {
@@ -134,34 +166,14 @@ export async function onRequestGet(context) {
             }
         }
 
-        // 终极兜底：如果按空间名称过滤后为 0，但 KV 数据库里实际存有 Key，则直接将 KV 里的全部 Key 全部返回！
-        if (protocols.length === 0 && allKeys.length > 0) {
-            for (const k of allKeys) {
-                const meta = k.metadata || {};
-                protocols.push({
-                    _cloudKey: k.name,
-                    name: meta.name || k.name.replace(/^ws:[^:]+:proto:/i, '').replace(/^proto:/i, ''),
-                    product: meta.product || '',
-                    type: meta.type || 'ARINC429',
-                    mode: meta.mode || 'classic',
-                    device: meta.device || '',
-                    direction: meta.direction || 'Tx',
-                    period: meta.period || 20,
-                    speed: meta.speed || '100kbps',
-                    wordCount: meta.wordCount || 0,
-                    updateTime: meta.updateTime || Date.now()
-                });
-            }
-        }
-
         // 按更新时间降序排列
         protocols.sort((a, b) => (b.updateTime || 0) - (a.updateTime || 0));
 
         return new Response(JSON.stringify({
             success: true,
             workspace: workspace,
+            currentUser: authUser ? { username: authUser.username, displayName: authUser.displayName } : null,
             count: protocols.length,
-            totalKeysInKv: allKeys.length,
             protocols: protocols
         }), {
             status: 200,
@@ -175,27 +187,35 @@ export async function onRequestGet(context) {
     }
 }
 
-// POST: 保存/上传协议到云端工作台
+// POST: 保存/上传协议到当前用户的云端工作空间
 export async function onRequestPost(context) {
     const { request, env } = context;
     const headers = corsHeaders();
-
-    if (!verifyAuth(request, env)) {
-        return new Response(JSON.stringify({ success: false, error: "云端工作台访问口令错误" }), {
-            status: 401,
-            headers
-        });
-    }
 
     const kv = env.PROTOVIEW_KV;
     if (!kv) {
         return new Response(JSON.stringify({
             success: false,
-            error: "Cloudflare KV 尚未绑定。请前往 Cloudflare 控制台绑定 PROTOVIEW_KV。"
+            error: "Cloudflare KV 尚未绑定 (PROTOVIEW_KV)。"
         }), {
             status: 503,
             headers
         });
+    }
+
+    const authUser = await getAuthenticatedUser(request, env);
+    let workspace = "";
+    if (authUser && authUser.username) {
+        workspace = authUser.username.toLowerCase();
+    } else {
+        if (!verifyAuth(request, env)) {
+            return new Response(JSON.stringify({ success: false, error: "请先登录账号后再保存协议到云端" }), {
+                status: 401,
+                headers
+            });
+        }
+        const url = new URL(request.url);
+        workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "default").trim().toLowerCase();
     }
 
     try {
@@ -207,18 +227,16 @@ export async function onRequestPost(context) {
             });
         }
 
-        const url = new URL(request.url);
-        const workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "default").trim().toLowerCase();
-        
-        // 规范化 Key 名称
+        // 规范化 Key 名称，严格锁定在当前登录用户的专属前缀下
         const safeName = (body.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
-        const key = body._cloudKey || `ws:${workspace}:proto:${safeName}`;
+        const key = `ws:${workspace}:proto:${safeName}`;
 
         body._cloudKey = key;
         body._cloudWorkspace = workspace;
+        body._cloudOwner = authUser ? (authUser.displayName || authUser.username) : workspace;
         body._cloudUpdated = Date.now();
 
-        // 提取精炼元数据（方便无需加载完整大 JSON 即可在卡片列表中秒开秒列出）
+        // 提取卡片快速列举所需的元数据
         const metadata = {
             name: body.name,
             product: body.product || '',
@@ -252,17 +270,10 @@ export async function onRequestPost(context) {
     }
 }
 
-// DELETE: 从云端工作台删除协议
+// DELETE: 从云端工作台删除协议 (只能删除自己账号下的协议)
 export async function onRequestDelete(context) {
     const { request, env } = context;
     const headers = corsHeaders();
-
-    if (!verifyAuth(request, env)) {
-        return new Response(JSON.stringify({ success: false, error: "云端工作台访问口令错误" }), {
-            status: 401,
-            headers
-        });
-    }
 
     const kv = env.PROTOVIEW_KV;
     if (!kv) {
@@ -272,6 +283,7 @@ export async function onRequestDelete(context) {
         });
     }
 
+    const authUser = await getAuthenticatedUser(request, env);
     const url = new URL(request.url);
     const key = url.searchParams.get("key");
 
@@ -280,6 +292,23 @@ export async function onRequestDelete(context) {
             status: 400,
             headers
         });
+    }
+
+    if (authUser && authUser.username) {
+        const expectedPrefix = `ws:${authUser.username.toLowerCase()}:proto:`;
+        if (!key.toLowerCase().startsWith(expectedPrefix)) {
+            return new Response(JSON.stringify({ success: false, error: "无权删除非本账号的协议" }), {
+                status: 403,
+                headers
+            });
+        }
+    } else {
+        if (!verifyAuth(request, env)) {
+            return new Response(JSON.stringify({ success: false, error: "云端工作台访问口令错误" }), {
+                status: 401,
+                headers
+            });
+        }
     }
 
     try {
@@ -295,4 +324,3 @@ export async function onRequestDelete(context) {
         });
     }
 }
-
