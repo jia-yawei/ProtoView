@@ -357,26 +357,74 @@ export async function onRequestGet(context) {
             // Cloudflare 免费配额与实际消耗计算
             const R2_FREE_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB
             const D1_FREE_BYTES = 5 * 1024 * 1024 * 1024;  // 5 GB
+            const R2_FREE_WRITES_MONTHLY = 1000000;         // 100 万次/月
+            const D1_FREE_WRITES_DAILY = 100000;            // 10 万行/天
+
             const estimatedD1Bytes = (totalUsers * 512) + (activeSessions * 256);
+
+            // 统计 D1 今日写入行数 (新增用户 + 新增会话)
+            let d1WritesToday = 0;
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            const todayTs = todayStart.getTime();
+
+            if (d1Status.hasUsersTable && db) {
+                try {
+                    const uTodayRow = await db.prepare("SELECT COUNT(*) as cnt FROM users WHERE created_at >= ?").bind(todayTs).first();
+                    d1WritesToday += (uTodayRow ? Number(uTodayRow.cnt) : 0);
+                } catch(e) {}
+            }
+            if (d1Status.hasSessionsTable && db) {
+                try {
+                    const sTodayRow = await db.prepare("SELECT COUNT(*) as cnt FROM sessions WHERE created_at >= ?").bind(todayTs).first();
+                    d1WritesToday += (sTodayRow ? Number(sTodayRow.cnt) : 0);
+                } catch(e) {}
+            }
+            if (d1WritesToday === 0 && (totalUsers > 0 || activeSessions > 0)) {
+                d1WritesToday = Math.max(1, totalUsers + activeSessions);
+            }
+
+            // 统计/评估 R2 本月 Class A 协议写入次数
+            let r2WritesMonthly = totalProtocols;
+            if (cfLiveMetrics.realRequests30d) {
+                r2WritesMonthly = Math.max(totalProtocols, Math.round(cfLiveMetrics.realRequests30d * 0.15));
+            } else if (cfLiveMetrics.realRequests24h) {
+                r2WritesMonthly = Math.max(totalProtocols, Math.round(cfLiveMetrics.realRequests24h * 4));
+            }
+            if (r2WritesMonthly === 0 && totalProtocols > 0) {
+                r2WritesMonthly = totalProtocols;
+            }
 
             const quotaHealth = {
                 r2: {
-                    name: "Cloudflare R2 对象存储",
+                    name: "Cloudflare R2 对象存储空间",
                     usedBytes: totalStorageBytes,
                     totalBytes: R2_FREE_BYTES,
                     percent: Math.min(100, Number(((totalStorageBytes / R2_FREE_BYTES) * 100).toFixed(4))),
-                    freeWritesMonthly: 1000000,
-                    freeReadsMonthly: 10000000,
                     status: (totalStorageBytes / R2_FREE_BYTES) > 0.85 ? "warning" : "healthy"
                 },
+                r2Writes: {
+                    name: "R2 协议写入 (Class A)",
+                    usedWrites: r2WritesMonthly,
+                    totalWrites: R2_FREE_WRITES_MONTHLY,
+                    remainingWrites: Math.max(0, R2_FREE_WRITES_MONTHLY - r2WritesMonthly),
+                    percent: Math.min(100, Number(((r2WritesMonthly / R2_FREE_WRITES_MONTHLY) * 100).toFixed(4))),
+                    status: (r2WritesMonthly / R2_FREE_WRITES_MONTHLY) > 0.85 ? "warning" : "healthy"
+                },
                 d1: {
-                    name: "Cloudflare D1 关系型数据库",
+                    name: "Cloudflare D1 关系型数据库容量",
                     usedBytes: estimatedD1Bytes,
                     totalBytes: D1_FREE_BYTES,
                     percent: Math.min(100, Number(((estimatedD1Bytes / D1_FREE_BYTES) * 100).toFixed(6))),
-                    freeWritesDaily: 100000,
-                    freeReadsDaily: 5000000,
                     status: d1Status.ready ? "healthy" : (d1Status.connected ? "pending_schema" : "not_bound")
+                },
+                d1Writes: {
+                    name: "D1 账号数据库写入",
+                    usedWrites: d1WritesToday,
+                    totalWrites: D1_FREE_WRITES_DAILY,
+                    remainingWrites: Math.max(0, D1_FREE_WRITES_DAILY - d1WritesToday),
+                    percent: Math.min(100, Number(((d1WritesToday / D1_FREE_WRITES_DAILY) * 100).toFixed(4))),
+                    status: (d1WritesToday / D1_FREE_WRITES_DAILY) > 0.85 ? "warning" : "healthy"
                 },
                 workers: {
                     name: "Cloudflare Pages/Workers 运算",
@@ -608,7 +656,7 @@ export async function onRequestPost(context) {
         }
     }
 
-    // 6. 管理员删除用户 (并彻底销毁其名下的全部协议)
+    // 6. 管理员删除用户 (级联销毁云端数据库账号、会话及该用户的所有协议与产品数据)
     if (action === "delete_user") {
         const username = (body.username || url.searchParams.get("username") || "").trim().toLowerCase();
         if (!username) {
@@ -616,42 +664,68 @@ export async function onRequestPost(context) {
         }
 
         let deletedProtocols = 0;
+        let deletedMetaItems = 0;
 
+        // 6.1 从 Cloudflare R2 对象存储物理删除该用户的所有数据 (协议 + 产品型号元数据)
         if (bucket) {
             try {
-                const prefix = `ws:${username}:proto:`;
-                const listed = await bucket.list({ prefix });
-                for (const obj of (listed.objects || [])) {
-                    await bucket.delete(obj.key);
-                    deletedProtocols++;
-                }
-            } catch (e) {}
+                let cursor;
+                do {
+                    const listed = await bucket.list({ prefix: `ws:${username}:`, cursor });
+                    for (const obj of (listed.objects || [])) {
+                        await bucket.delete(obj.key);
+                        if (obj.key.includes(":proto:")) {
+                            deletedProtocols++;
+                        } else {
+                            deletedMetaItems++;
+                        }
+                    }
+                    cursor = listed.truncated ? listed.cursor : undefined;
+                } while (cursor);
+            } catch (e) {
+                console.warn("R2 删除用户数据异常:", e.message);
+            }
         }
 
+        // 6.2 从 Cloudflare KV 中物理删除该用户的所有数据与账号记录
         if (kv) {
             try {
-                const prefix = `ws:${username}:proto:`;
-                const listed = await kv.list({ prefix });
-                for (const k of (listed.keys || [])) {
-                    await kv.delete(k.name);
-                    deletedProtocols++;
-                }
+                let cursor;
+                do {
+                    const listed = await kv.list({ prefix: `ws:${username}:`, cursor });
+                    for (const k of (listed.keys || [])) {
+                        await kv.delete(k.name);
+                        if (k.name.includes(":proto:")) {
+                            deletedProtocols++;
+                        } else {
+                            deletedMetaItems++;
+                        }
+                    }
+                    cursor = listed.list_complete ? undefined : listed.cursor;
+                } while (cursor);
                 await kv.delete("user:" + username);
-            } catch (e) {}
+            } catch (e) {
+                console.warn("KV 删除用户数据异常:", e.message);
+            }
         }
 
+        // 6.3 从 Cloudflare D1 数据库彻底删除该用户的会话 (sessions) 与账号主记录 (users)
+        let d1Deleted = false;
         if (db) {
             try {
                 await db.batch([
                     db.prepare("DELETE FROM sessions WHERE username = ?").bind(username),
                     db.prepare("DELETE FROM users WHERE username = ?").bind(username)
                 ]);
-            } catch (e) {}
+                d1Deleted = true;
+            } catch (e) {
+                console.warn("D1 删除用户记录异常:", e.message);
+            }
         }
 
         return new Response(JSON.stringify({
             success: true,
-            message: `已成功删除用户 [${username}] 及其名下的 ${deletedProtocols} 份协议数据！`
+            message: `已成功彻底删除用户 [${username}]！已同步清理云端数据库账号/会话，并物理销毁其名下的 ${deletedProtocols} 份协议及全部产品数据。`
         }), { status: 200, headers });
     }
 

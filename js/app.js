@@ -63,11 +63,28 @@
             });
         });
 
-        // 点击遮罩关闭
+        // 点击遮罩关闭（严格防误触：必须按下与松开均在遮罩背景上，且无文本划选，避免选中文本拖到弹窗边缘时误关闭）
+        let modalBackdropMouseDownTarget = null;
+
+        window.addEventListener('mousedown', (e) => {
+            modalBackdropMouseDownTarget = e.target;
+        });
+
         window.addEventListener('click', (e) => {
-            if (e.target && e.target.classList && e.target.classList.contains('modal')) {
-                e.target.classList.remove('active');
+            // 1. 若当前有文本正在被划选（如复制Token、SQL语句等），绝不关闭弹窗
+            const selection = window.getSelection ? window.getSelection().toString() : '';
+            if (selection && selection.length > 0) {
+                modalBackdropMouseDownTarget = null;
+                return;
             }
+
+            // 2. 只有当鼠标按下的起始目标 (mousedown) 和最终点击目标 (click) 均严格是 .modal 遮罩背景自身时才关闭
+            if (e.target && e.target.classList && e.target.classList.contains('modal')) {
+                if (modalBackdropMouseDownTarget === e.target) {
+                    e.target.classList.remove('active');
+                }
+            }
+            modalBackdropMouseDownTarget = null;
         });
 
         // 按 ESC 关闭

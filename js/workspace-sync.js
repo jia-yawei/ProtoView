@@ -74,6 +74,20 @@
                 await window.dbHelper.clearAllProducts();
             }
 
+            // 1. 同步云端独立保存的产品型号列表 (确保仅新建产品、没有协议时，产品数据绝不丢失)
+            try {
+                const prodRes = await cloudApiCall('/api/products', 'GET');
+                if (prodRes.ok && prodRes.data && Array.isArray(prodRes.data.products)) {
+                    if (window.dbHelper) {
+                        for (const p of prodRes.data.products) {
+                            await window.dbHelper.saveProduct(p);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('拉取云端产品型号异常:', e);
+            }
+
             let loadedCount = 0;
             if (window.dbHelper && list.length > 0) {
                 for (const item of list) {
@@ -91,7 +105,10 @@
                                 if (!proto.type) proto.type = item.type || 'ARINC429';
 
                                 if (proto.product) {
-                                    await window.dbHelper.saveProduct({ name: proto.product });
+                                    const existingP = await window.dbHelper.getProduct(proto.product);
+                                    if (!existingP) {
+                                        await window.dbHelper.saveProduct({ name: proto.product });
+                                    }
                                 }
                                 await window.dbHelper.saveProtocol(proto);
                                 loadedCount++;
@@ -101,15 +118,18 @@
                 }
             }
 
+            if (window.refreshProductDatalist) await window.refreshProductDatalist();
             if (window.loadProtocols) await window.loadProtocols();
             if (window.loadArincProtocolsForSelect) await window.loadArincProtocolsForSelect();
             if (window.loadProtocolsForSelect) await window.loadProtocolsForSelect();
 
             if (notifyUser) {
-                if (loadedCount === 0) {
-                    alert('云端同步完成：当前账号下暂无保存的通信协议，已呈现纯净空白工作台。');
+                const allProds = window.dbHelper ? await window.dbHelper.getAllProducts() : [];
+                const prodCount = allProds.length;
+                if (loadedCount === 0 && prodCount === 0) {
+                    alert('云端同步完成：当前账号下暂无保存的产品型号与通信协议，已呈现纯净空白工作台。');
                 } else {
-                    alert(`云端同步成功！已从 Cloudflare 云端拉取并同步 ${loadedCount} 个通信协议。数据已安全同步至当前设备。`);
+                    alert(`云端同步成功！已从 Cloudflare 云端拉取 ${prodCount} 个产品型号与 ${loadedCount} 份通信协议。数据已安全同步至当前设备。`);
                 }
             }
             return true;
@@ -166,6 +186,27 @@
         }
     }
 
+    // ----------------- 同步全量产品型号到云端 (支持独立保存空产品) -----------------
+    async function syncProductsToCloud() {
+        if (!window.dbHelper) return;
+        try {
+            const products = await window.dbHelper.getAllProducts();
+            await cloudApiCall('/api/products', 'POST', { products: products || [] });
+        } catch (e) {
+            console.warn('ProtoView: 同步产品型号到云端异常:', e);
+        }
+    }
+
+    // ----------------- 从云端删除产品型号 -----------------
+    async function deleteProductFromCloud(productName) {
+        if (!productName) return;
+        try {
+            await cloudApiCall(`/api/products?name=${encodeURIComponent(productName)}`, 'DELETE');
+        } catch (e) {
+            console.warn('ProtoView: 从云端删除产品异常:', e);
+        }
+    }
+
     // ----------------- 初始化引导服务 -----------------
     async function initWorkspaceSync() {
         const btnCloudRefresh = document.getElementById('btn-cloud-refresh');
@@ -193,7 +234,9 @@
         saveProtocolToWorkspaceAndCloud,
         saveProtocolToCloud: saveProtocolToWorkspaceAndCloud,
         deleteProtocolFile,
-        deleteProtocolFromCloud: deleteProtocolFile
+        deleteProtocolFromCloud: deleteProtocolFile,
+        syncProductsToCloud,
+        deleteProductFromCloud
     };
 
     ProtoView.WorkspaceSync = WorkspaceSync;

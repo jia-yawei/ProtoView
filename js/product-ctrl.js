@@ -246,13 +246,20 @@
             for (const proto of related) {
                 proto.product = '';
                 await window.dbHelper.saveProtocol(proto);
+                if (ProtoView.WorkspaceSync) {
+                    await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(proto);
+                }
             }
             await window.dbHelper.deleteProduct(productName);
+            if (ProtoView.WorkspaceSync && ProtoView.WorkspaceSync.deleteProductFromCloud) {
+                await ProtoView.WorkspaceSync.deleteProductFromCloud(productName);
+            }
             if (activeProductFilter === productName) {
                 activeProductFilter = 'all';
             }
             await refreshProductDatalist();
             await loadProtocols();
+            showToast(`已删除产品型号「${productName}」`, 'info');
         }
     }
 
@@ -1273,9 +1280,15 @@
                 }
                 await window.dbHelper.saveProduct({ name, code, desc, softwareItems });
 
+                // 立即持久化同步到云端 (支持即便当前没有任何协议，产品型号也能独立持久化)
+                if (ProtoView.WorkspaceSync && ProtoView.WorkspaceSync.syncProductsToCloud) {
+                    await ProtoView.WorkspaceSync.syncProductsToCloud();
+                }
+
                 if (productManageModal) productManageModal.classList.remove('active');
                 await refreshProductDatalist();
                 await loadProtocols();
+                showToast(`产品型号「${name}」已保存并同步至云端！`, 'success');
             });
         }
 

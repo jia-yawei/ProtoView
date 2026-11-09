@@ -36,7 +36,9 @@
         btnOpenCfApiModalTop,
         // 配额进度条
         quotaR2UsedText, quotaR2Bar, quotaR2Percent,
+        quotaR2WritesUsedText, quotaR2WritesBar, quotaR2WritesRemainText, quotaR2WritesPercent,
         quotaD1UsedText, quotaD1Bar, quotaD1Percent,
+        quotaD1WritesUsedText, quotaD1WritesBar, quotaD1WritesRemainText, quotaD1WritesPercent,
         // 弹窗与配置
         cfConfigModal, cfConfigForm, cfCfgToken, cfCfgAccountId, cfCfgR2Bucket, cfCfgZoneId, cfCfgTestStatus,
         btnTestCfToken, btnSaveCfCfg,
@@ -136,9 +138,19 @@
         quotaR2Bar = document.getElementById('quota-r2-bar');
         quotaR2Percent = document.getElementById('quota-r2-percent');
 
+        quotaR2WritesUsedText = document.getElementById('quota-r2-writes-used');
+        quotaR2WritesBar = document.getElementById('quota-r2-writes-bar');
+        quotaR2WritesRemainText = document.getElementById('quota-r2-writes-remain-text');
+        quotaR2WritesPercent = document.getElementById('quota-r2-writes-percent');
+
         quotaD1UsedText = document.getElementById('quota-d1-used');
         quotaD1Bar = document.getElementById('quota-d1-bar');
         quotaD1Percent = document.getElementById('quota-d1-percent');
+
+        quotaD1WritesUsedText = document.getElementById('quota-d1-writes-used');
+        quotaD1WritesBar = document.getElementById('quota-d1-writes-bar');
+        quotaD1WritesRemainText = document.getElementById('quota-d1-writes-remain-text');
+        quotaD1WritesPercent = document.getElementById('quota-d1-writes-percent');
 
         // 弹窗元素
         cfConfigModal = document.getElementById('cf-config-modal');
@@ -428,11 +440,11 @@
         }
     }
 
-    // 渲染 Cloudflare 官方免费额度健康条
+    // 渲染 Cloudflare 官方免费额度健康条与真实使用量
     function renderQuotaHealth(quota) {
         if (!quota) return;
 
-        // 1. R2 存储进度条 (10 GB)
+        // 1. R2 存储空间进度条 (10 GB)
         if (quota.r2) {
             const usedStr = formatBytes(quota.r2.usedBytes || 0);
             const totalStr = formatBytes(quota.r2.totalBytes || 10737418240);
@@ -446,7 +458,29 @@
             }
         }
 
-        // 2. D1 数据库进度条 (5 GB)
+        // 2. R2 协议写入 (Class A) 进度条 (100 万次/月)
+        if (quota.r2Writes) {
+            const usedWrites = quota.r2Writes.usedWrites || 0;
+            const totalWrites = quota.r2Writes.totalWrites || 1000000;
+            const remaining = quota.r2Writes.remainingWrites !== undefined ? quota.r2Writes.remainingWrites : Math.max(0, totalWrites - usedWrites);
+            const pct = Math.min(100, quota.r2Writes.percent || 0.001);
+
+            if (quotaR2WritesUsedText) {
+                quotaR2WritesUsedText.textContent = `${usedWrites.toLocaleString()} 次 / 100 万次`;
+            }
+            if (quotaR2WritesRemainText) {
+                quotaR2WritesRemainText.textContent = `剩余 ${remaining.toLocaleString()} 次`;
+            }
+            if (quotaR2WritesPercent) {
+                quotaR2WritesPercent.textContent = `${pct < 0.01 ? '<0.01' : pct.toFixed(2)}%`;
+            }
+            if (quotaR2WritesBar) {
+                quotaR2WritesBar.style.width = `${Math.max(1, pct)}%`;
+                quotaR2WritesBar.className = `quota-progress-bar-fill ${pct > 85 ? 'danger' : (pct > 70 ? 'warning' : 'healthy')}`;
+            }
+        }
+
+        // 3. D1 数据库存储容量 (5 GB)
         if (quota.d1) {
             const usedStr = formatBytes(quota.d1.usedBytes || 0);
             const totalStr = formatBytes(quota.d1.totalBytes || 5368709120);
@@ -457,6 +491,28 @@
             if (quotaD1Bar) {
                 quotaD1Bar.style.width = `${Math.max(1, pct)}%`;
                 quotaD1Bar.className = `quota-progress-bar-fill ${pct > 85 ? 'danger' : 'healthy'}`;
+            }
+        }
+
+        // 4. D1 账号数据库写入进度条 (10 万行/天)
+        if (quota.d1Writes) {
+            const usedWrites = quota.d1Writes.usedWrites || 0;
+            const totalWrites = quota.d1Writes.totalWrites || 100000;
+            const remaining = quota.d1Writes.remainingWrites !== undefined ? quota.d1Writes.remainingWrites : Math.max(0, totalWrites - usedWrites);
+            const pct = Math.min(100, quota.d1Writes.percent || 0.001);
+
+            if (quotaD1WritesUsedText) {
+                quotaD1WritesUsedText.textContent = `${usedWrites.toLocaleString()} 行 / 10 万行`;
+            }
+            if (quotaD1WritesRemainText) {
+                quotaD1WritesRemainText.textContent = `剩余 ${remaining.toLocaleString()} 行`;
+            }
+            if (quotaD1WritesPercent) {
+                quotaD1WritesPercent.textContent = `${pct < 0.01 ? '<0.01' : pct.toFixed(3)}%`;
+            }
+            if (quotaD1WritesBar) {
+                quotaD1WritesBar.style.width = `${Math.max(1, pct)}%`;
+                quotaD1WritesBar.className = `quota-progress-bar-fill ${pct > 85 ? 'danger' : 'healthy'}`;
             }
         }
     }
@@ -585,7 +641,7 @@
 
     // 删除用户
     async function adminDeleteUser(username) {
-        if (!confirm(`【危险警告】\n\n确定要永久注销并删除用户 [${username}] 吗？\n该用户在 Cloudflare 存储的所有通信协议文件都将被一并销毁且无法恢复！`)) {
+        if (!confirm(`【危险警告：级联销毁云端数据】\n\n确定要永久注销并彻底删除用户 [${username}] 吗？\n\n执行后将彻底同步销毁以下云端数据：\n1. Cloudflare D1 数据库：永久删除账号记录 (users) 及登录凭证 (sessions)\n2. Cloudflare R2 / KV：物理销毁该用户名下的所有通信协议文件及产品元数据\n\n此操作不可逆，确定继续吗？`)) {
             return;
         }
 

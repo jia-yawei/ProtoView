@@ -803,18 +803,18 @@
                                 </div>
                             </div>
 
-                            <!-- R2 写入额度 -->
+                            <!-- R2 写入额度 (Class A 操作) -->
                             <div class="quota-box">
                                 <div class="quota-box-header">
                                     <span class="quota-title"><i class="fa-solid fa-pen-nib" style="color:#10b981;"></i> R2 协议写入 (Class A)</span>
-                                    <span class="quota-val-badge">每月 100 万次免费</span>
+                                    <span class="quota-val-text" id="quota-r2-writes-used">0 次 / 100 万次</span>
                                 </div>
-                                <div class="quota-desc-text">
-                                    均摊每天约 <b>33,333 次</b> 保存写入，高频上传 500KB 协议完全免超限焦虑。
+                                <div class="quota-progress-track">
+                                    <div class="quota-progress-bar-fill healthy" id="quota-r2-writes-bar" style="width: 1%;"></div>
                                 </div>
                                 <div class="quota-box-footer">
-                                    <span>出站流量费: <b>$0 免费</b></span>
-                                    <span class="quota-status-pill healthy"><i class="fa-solid fa-circle-check"></i> 极充裕</span>
+                                    <span>本月余量: <b id="quota-r2-writes-remain-text">剩余 1,000,000 次</b></span>
+                                    <span class="quota-percent-pill" id="quota-r2-writes-percent">0.00%</span>
                                 </div>
                             </div>
 
@@ -822,14 +822,14 @@
                             <div class="quota-box">
                                 <div class="quota-box-header">
                                     <span class="quota-title"><i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> D1 账号数据库写入</span>
-                                    <span class="quota-val-badge">每日 10 万行免费</span>
+                                    <span class="quota-val-text" id="quota-d1-writes-used">0 行 / 10 万行</span>
                                 </div>
-                                <div class="quota-desc-text">
-                                    用于记录用户注册、会话 Token 与登录验证，每天可承载数十万人次鉴权。
+                                <div class="quota-progress-track">
+                                    <div class="quota-progress-bar-fill healthy" id="quota-d1-writes-bar" style="width: 1%;"></div>
                                 </div>
                                 <div class="quota-box-footer">
-                                    <span>读取额度: 500 万行/天</span>
-                                    <span class="quota-status-pill healthy"><i class="fa-solid fa-circle-check"></i> 极充裕</span>
+                                    <span>今日余量: <b id="quota-d1-writes-remain-text">剩余 100,000 行</b></span>
+                                    <span class="quota-percent-pill" id="quota-d1-writes-percent">0.00%</span>
                                 </div>
                             </div>
 
