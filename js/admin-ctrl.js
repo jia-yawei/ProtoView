@@ -85,7 +85,7 @@
         btnOpenCfConfig = document.getElementById('btn-open-cf-config');
         btnOpenCfGuide = document.getElementById('btn-open-cf-guide');
 
-        // 绑定诊断
+        // 绑定诊断与极简状态条
         bindingOverallPill = document.getElementById('binding-overall-pill');
         btnRecheckBindings = document.getElementById('btn-recheck-bindings');
         btnOpenGuideInline = document.getElementById('btn-open-guide-inline');
@@ -104,6 +104,12 @@
         descCfApiStatus = document.getElementById('desc-cf-api-status');
         cfApiIndicator = document.getElementById('cf-api-indicator');
         btnManageCfApi = document.getElementById('btn-manage-cf-api');
+
+        // 弹窗内 D1 管理组件
+        const modalD1Status = document.getElementById('modal-d1-status');
+        const modalD1Desc = document.getElementById('modal-d1-desc');
+        const btnModalInitD1 = document.getElementById('btn-modal-init-d1');
+        const btnModalViewSql = document.getElementById('btn-modal-view-sql');
 
         // 实时流量与请求
         quotaTrafficUsed = document.getElementById('quota-traffic-used');
@@ -246,9 +252,13 @@
         }
     }
 
-    // 渲染云端绑定状态 (D1, R2, CF API)
+    // 渲染云端绑定状态 (紧凑状态指示条 & 弹窗内 D1 状态)
     function renderBindingsStatus(bindings, quotaHealth) {
         if (!bindings) return;
+
+        const modalD1Status = document.getElementById('modal-d1-status');
+        const modalD1Desc = document.getElementById('modal-d1-desc');
+        const btnModalInitD1 = document.getElementById('btn-modal-init-d1');
 
         let allHealthy = true;
 
@@ -257,47 +267,60 @@
         if (d1.connected) {
             if (d1.ready) {
                 if (badgeD1Status) {
-                    badgeD1Status.className = 'binding-status-tag tag-healthy';
-                    badgeD1Status.innerHTML = '<i class="fa-solid fa-circle-check"></i> 已连接 · 表就绪';
-                }
-                if (descD1Status) {
-                    descD1Status.textContent = '已连接到 Cloudflare D1 关系型数据库，账号密码与会话表结构完整。';
-                }
-                if (d1TablesIndicator) {
-                    d1TablesIndicator.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> users 和 sessions 表结构正常 (生产就绪)';
+                    badgeD1Status.className = 'acsb-pill tag-healthy';
+                    badgeD1Status.innerHTML = '<i class="fa-solid fa-table"></i> D1 账号库: <b>就绪</b>';
                 }
                 if (btnInitD1Schema) {
-                    btnInitD1Schema.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> 重建/校验数据表';
-                    btnInitD1Schema.className = 'btn btn-secondary btn-xs';
+                    btnInitD1Schema.style.display = 'none';
+                }
+                if (modalD1Status) {
+                    modalD1Status.className = 'binding-status-tag tag-healthy';
+                    modalD1Status.innerHTML = '<i class="fa-solid fa-circle-check"></i> 已连接 · 表结构正常';
+                }
+                if (modalD1Desc) {
+                    modalD1Desc.textContent = 'D1 关系型数据库已正常连接，users 与 sessions 表结构完整可用。';
+                }
+                if (btnModalInitD1) {
+                    btnModalInitD1.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> 重建/校验数据表';
+                    btnModalInitD1.className = 'btn btn-secondary btn-xs';
                 }
             } else {
                 allHealthy = false;
                 if (badgeD1Status) {
-                    badgeD1Status.className = 'binding-status-tag tag-warning';
-                    badgeD1Status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 已连接 · 需建表';
-                }
-                if (descD1Status) {
-                    descD1Status.textContent = 'D1 数据库连接成功，但尚未初始化用户表结构。请点击下方一键初始化。';
-                }
-                if (d1TablesIndicator) {
-                    d1TablesIndicator.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;"></i> 缺少 users 或 sessions 表，点击右侧一键初始化即可生成';
+                    badgeD1Status.className = 'acsb-pill tag-warning';
+                    badgeD1Status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> D1 账号库: <b>待建表</b>';
                 }
                 if (btnInitD1Schema) {
-                    btnInitD1Schema.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 一键初始化数据表';
-                    btnInitD1Schema.className = 'btn btn-primary-soft btn-xs';
+                    btnInitD1Schema.style.display = 'inline-flex';
+                    btnInitD1Schema.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 一键建表';
+                }
+                if (modalD1Status) {
+                    modalD1Status.className = 'binding-status-tag tag-warning';
+                    modalD1Status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 已连接 · 需建表';
+                }
+                if (modalD1Desc) {
+                    modalD1Desc.textContent = 'D1 数据库连接成功，但尚未初始化 users 或 sessions 表结构。请点击下方一键初始化。';
+                }
+                if (btnModalInitD1) {
+                    btnModalInitD1.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 一键初始化数据表';
+                    btnModalInitD1.className = 'btn btn-primary-soft btn-xs';
                 }
             }
         } else {
             allHealthy = false;
             if (badgeD1Status) {
-                badgeD1Status.className = 'binding-status-tag tag-unconfigured';
-                badgeD1Status.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 未检测到 D1 绑定';
+                badgeD1Status.className = 'acsb-pill tag-unconfigured';
+                badgeD1Status.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> D1 账号库: <b>未绑定</b>';
             }
-            if (descD1Status) {
-                descD1Status.textContent = '请在 Cloudflare Pages 设置 -> 函数中绑定变量 DB，否则账号将存入临时降级存储。';
+            if (btnInitD1Schema) {
+                btnInitD1Schema.style.display = 'none';
             }
-            if (d1TablesIndicator) {
-                d1TablesIndicator.innerHTML = '<i class="fa-solid fa-circle-info"></i> 在 Pages 后台绑定 DB 后，点击顶部向导可快速配置';
+            if (modalD1Status) {
+                modalD1Status.className = 'binding-status-tag tag-unconfigured';
+                modalD1Status.innerHTML = '未检测到 DB 绑定';
+            }
+            if (modalD1Desc) {
+                modalD1Desc.textContent = '请在 Cloudflare Pages 设置 -> 函数中添加 D1 绑定，变量名称必须为大写 DB。';
             }
         }
 
@@ -305,20 +328,14 @@
         const r2 = bindings.r2 || {};
         if (r2.connected) {
             if (badgeR2Status) {
-                badgeR2Status.className = 'binding-status-tag tag-healthy';
-                badgeR2Status.innerHTML = '<i class="fa-solid fa-circle-check"></i> 已连接';
-            }
-            if (descR2Status) {
-                descR2Status.textContent = '已挂载 PROTO_BUCKET 对象存储桶，无缝持久化大 JSON 航空通信协议，支持 500KB+ 单文件。';
+                badgeR2Status.className = 'acsb-pill tag-healthy';
+                badgeR2Status.innerHTML = '<i class="fa-solid fa-box-archive"></i> R2 协议桶: <b>已挂载</b>';
             }
         } else {
             allHealthy = false;
             if (badgeR2Status) {
-                badgeR2Status.className = 'binding-status-tag tag-warning';
-                badgeR2Status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 未检测到 R2 绑定';
-            }
-            if (descR2Status) {
-                descR2Status.textContent = '当前协议正通过降级引擎工作。请在 Pages 设置中绑定 PROTO_BUCKET 激活全量存储。';
+                badgeR2Status.className = 'acsb-pill tag-warning';
+                badgeR2Status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> R2 协议桶: <b>未挂载</b>';
             }
         }
 
@@ -326,36 +343,18 @@
         const cfApi = bindings.cfApi || {};
         if (cfApi.configured && cfApi.isLive) {
             if (badgeCfApiStatus) {
-                badgeCfApiStatus.className = 'binding-status-tag tag-healthy';
-                badgeCfApiStatus.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> 官方 API 直连';
-            }
-            if (descCfApiStatus) {
-                descCfApiStatus.textContent = '成功连接 Cloudflare GraphQL Analytics 与 REST API，出站流量与请求次数已 100% 同步。';
-            }
-            if (cfApiIndicator) {
-                cfApiIndicator.innerHTML = `<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> 官方遥测已激活 (账户: ${escapeHTML(cfApi.accountId || '已授权')})`;
+                badgeCfApiStatus.className = 'acsb-pill tag-healthy';
+                badgeCfApiStatus.innerHTML = '<i class="fa-brands fa-cloudflare"></i> 官方遥测: <b>直连中</b>';
             }
         } else if (cfApi.configured && !cfApi.isLive) {
             if (badgeCfApiStatus) {
-                badgeCfApiStatus.className = 'binding-status-tag tag-warning';
-                badgeCfApiStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> API 权限受限';
-            }
-            if (descCfApiStatus) {
-                descCfApiStatus.textContent = '已配置 API Token，但暂未成功拉取到监控数据。请检查 Token 是否具备 Analytics 读权限。';
-            }
-            if (cfApiIndicator) {
-                cfApiIndicator.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color:#f59e0b;"></i> 缺少 Account Analytics 权限或账户 ID 不匹配';
+                badgeCfApiStatus.className = 'acsb-pill tag-warning';
+                badgeCfApiStatus.innerHTML = '<i class="fa-brands fa-cloudflare"></i> 官方 API: <b>受限</b>';
             }
         } else {
             if (badgeCfApiStatus) {
-                badgeCfApiStatus.className = 'binding-status-tag tag-unconfigured';
-                badgeCfApiStatus.innerHTML = '未配置官方 API';
-            }
-            if (descCfApiStatus) {
-                descCfApiStatus.textContent = '直接抓取 Cloudflare 官方出站流量 (Bandwidth) 与真实 HTTP 请求次数。';
-            }
-            if (cfApiIndicator) {
-                cfApiIndicator.innerHTML = '<i class="fa-solid fa-circle-info"></i> 配置 API Token 后与官方控制台数据 100% 一致';
+                badgeCfApiStatus.className = 'acsb-pill tag-unconfigured';
+                badgeCfApiStatus.innerHTML = '<i class="fa-brands fa-cloudflare"></i> 官方 API: <b>未配置</b>';
             }
         }
 
@@ -820,6 +819,10 @@
 
         // D1 一键建表
         if (btnInitD1Schema) btnInitD1Schema.addEventListener('click', initD1Schema);
+        const btnModalInitD1 = document.getElementById('btn-modal-init-d1');
+        if (btnModalInitD1) btnModalInitD1.addEventListener('click', initD1Schema);
+        const btnModalViewSql = document.getElementById('btn-modal-view-sql');
+        if (btnModalViewSql) btnModalViewSql.addEventListener('click', openCfGuideModal);
 
         // API Token 测试与保存
         if (btnTestCfToken) btnTestCfToken.addEventListener('click', testCfApiToken);

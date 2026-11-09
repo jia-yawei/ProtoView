@@ -6358,96 +6358,124 @@ html:not(.is-admin) #nav-btn-protocol {
 }
 
 /* ========================================================
-   后台管理：云端服务与数据库绑定状态卡片 & 指标样式
+   后台管理：极简云端运行环境与数据库连线指示条 (紧凑轻量)
    ======================================================== */
-.admin-bindings-section {
-    margin-bottom: 24px;
+.admin-compact-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 14px;
+    margin-bottom: 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    gap: 12px;
 }
 
-.admin-bindings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 16px;
-    padding: 18px 20px 20px 20px;
+@media (max-width: 768px) {
+    .admin-compact-status-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+    }
 }
 
-.binding-item-card {
+.acsb-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.acsb-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-right: 4px;
+}
+
+.acsb-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 2.5px 8px;
+    border-radius: 12px;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
 }
 
-.binding-item-card:hover {
-    border-color: rgba(59, 130, 246, 0.4);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
-    transform: translateY(-1px);
+.acsb-pill b {
+    font-weight: 600;
 }
 
-.bic-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 12px;
+.acsb-pill.tag-healthy {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.25);
+    color: #10b981;
 }
 
-.bic-title-row {
+.acsb-pill.tag-healthy b {
+    color: #059669;
+}
+
+.acsb-pill.tag-warning {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.25);
+    color: #d97706;
+}
+
+.acsb-pill.tag-unconfigured {
+    background: rgba(100, 116, 139, 0.08);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+.acsb-quick-btn {
+    padding: 2px 8px;
+    height: 24px;
+    font-size: 11px;
+    margin-left: 2px;
+}
+
+.acsb-right {
     display: flex;
     align-items: center;
-    gap: 10px;
-}
-
-.bic-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
+    gap: 6px;
     flex-shrink: 0;
 }
 
-.bic-icon-d1 {
-    background: rgba(139, 92, 246, 0.12);
-    color: #8b5cf6;
-}
-
-.bic-icon-r2 {
-    background: rgba(59, 130, 246, 0.12);
-    color: #3b82f6;
-}
-
-.bic-icon-api {
-    background: rgba(243, 128, 32, 0.12);
-    color: #f38020;
-}
-
-.bic-name {
-    font-size: 13.5px;
-    font-weight: 600;
-    color: var(--text-primary);
-    line-height: 1.3;
-}
-
-.bic-binding-var {
-    font-size: 11px;
+.btn-acsb-action {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
     color: var(--text-secondary);
-    margin-top: 2px;
+    font-size: 11.5px;
+    padding: 3px 9px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
 }
 
-.bic-binding-var code {
-    background: rgba(0, 0, 0, 0.05);
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-family: var(--font-mono, monospace);
-    font-size: 10.5px;
-    color: var(--accent-color);
+.btn-acsb-action:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+    background: var(--bg-primary);
+}
+
+.acsb-divider {
+    width: 1px;
+    height: 14px;
+    background: var(--border-color);
+    margin: 0 2px;
 }
 
 [data-theme="dark"] .bic-binding-var code {

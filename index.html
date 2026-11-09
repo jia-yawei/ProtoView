@@ -637,17 +637,14 @@
                     </div>
                     <div class="view-header-actions">
                         <span class="admin-engine-badge" id="admin-engine-badge"><i class="fa-solid fa-server"></i> 存储: <b>检测中</b> · 数据库: <b>检测中</b></span>
-                        <button class="btn btn-secondary btn-sm" id="btn-open-cf-config" title="配置 Cloudflare 官方 API Token 与账户参数，开启真实流量实时采集">
-                            <i class="fa-solid fa-sliders"></i> 绑定设置与 API
-                        </button>
-                        <button class="btn btn-secondary btn-sm" id="btn-open-cf-guide" title="查看 Cloudflare Pages 数据库绑定手把手操作向导">
-                            <i class="fa-solid fa-book-bookmark"></i> 绑定向导
+                        <button class="btn btn-secondary btn-sm" id="btn-open-cf-config" title="配置数据库绑定参数与 Cloudflare 官方 API">
+                            <i class="fa-solid fa-sliders"></i> 绑定设置
                         </button>
                         <button class="btn btn-secondary btn-sm" id="btn-clean-sessions" title="一键清理 D1 数据库中已过期的废弃 Token 会话">
-                            <i class="fa-solid fa-broom"></i> 清理过期会话
+                            <i class="fa-solid fa-broom"></i> 清理会话
                         </button>
                         <button class="btn btn-secondary btn-sm" id="btn-config-admin-key" title="设置或更换后台管理访问口令">
-                            <i class="fa-solid fa-key"></i> 管理密钥
+                            <i class="fa-solid fa-key"></i> 密钥
                         </button>
                         <button class="btn btn-primary btn-sm" id="btn-refresh-admin">
                             <i class="fa-solid fa-arrows-rotate"></i> 刷新数据
@@ -711,108 +708,35 @@
                         </div>
                     </div>
 
-                    <!-- 2. 云端服务与数据库绑定管理控制台 -->
-                    <div class="admin-card glass-effect admin-bindings-section">
-                        <div class="admin-card-header">
-                            <div class="ach-title">
-                                <i class="fa-solid fa-network-wired" style="color:var(--accent-color);"></i>
-                                <span>云端服务与数据库绑定状态</span>
-                                <span class="quota-badge-pill" id="binding-overall-pill">检测中</span>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button type="button" class="btn btn-secondary btn-xs" id="btn-recheck-bindings" title="重新探测各数据库与存储桶的连通状态">
-                                    <i class="fa-solid fa-stethoscope"></i> 探测连通性
-                                </button>
-                                <button type="button" class="btn btn-primary-soft btn-xs" id="btn-open-guide-inline">
-                                    <i class="fa-solid fa-circle-question"></i> 如何绑定真实数据库?
-                                </button>
-                            </div>
+                    <!-- 2. 云端运行环境与数据库连线极简状态条 (小巧占位，重点展示留给下方配额与数据) -->
+                    <div class="admin-compact-status-bar glass-effect">
+                        <div class="acsb-left">
+                            <span class="acsb-label"><i class="fa-solid fa-server" style="color:var(--accent-color);"></i> 云端底座:</span>
+                            <span class="acsb-pill tag-checking" id="badge-d1-status" title="Cloudflare D1 关系型数据库状态 (变量名: DB)">
+                                <i class="fa-solid fa-table"></i> D1 账号库: <b>检测中</b>
+                            </span>
+                            <span class="acsb-pill tag-checking" id="badge-r2-status" title="Cloudflare R2 对象存储桶状态 (变量名: PROTO_BUCKET)">
+                                <i class="fa-solid fa-box-archive"></i> R2 协议桶: <b>检测中</b>
+                            </span>
+                            <span class="acsb-pill tag-checking" id="badge-cf-api-status" title="Cloudflare 官方 API 连线状态">
+                                <i class="fa-brands fa-cloudflare"></i> 官方 API: <b>检测中</b>
+                            </span>
+                            <!-- 当 D1 数据库未建表时显示的快捷一键建表按钮 -->
+                            <button type="button" class="btn btn-primary-soft btn-xs acsb-quick-btn" id="btn-init-d1-schema" style="display:none;" title="一键在 D1 数据库中执行建表语句 (users 和 sessions)">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> 一键建表
+                            </button>
                         </div>
-
-                        <div class="admin-bindings-grid">
-                            <!-- D1 关系型数据库卡片 -->
-                            <div class="binding-item-card" id="card-binding-d1">
-                                <div class="bic-top">
-                                    <div class="bic-title-row">
-                                        <div class="bic-icon bic-icon-d1"><i class="fa-solid fa-table"></i></div>
-                                        <div>
-                                            <div class="bic-name">Cloudflare D1 关系型数据库</div>
-                                            <div class="bic-binding-var">Pages 绑定变量名: <code>DB</code></div>
-                                        </div>
-                                    </div>
-                                    <span class="binding-status-tag tag-checking" id="badge-d1-status"><i class="fa-solid fa-spinner fa-spin"></i> 检测中</span>
-                                </div>
-                                <div class="bic-body">
-                                    <div class="bic-desc" id="desc-d1-status">
-                                        存储全站工程师账号、密码安全哈希与 30 天登录会话。
-                                    </div>
-                                    <div class="bic-table-status" id="d1-tables-indicator">
-                                        <i class="fa-solid fa-circle-notch fa-spin"></i> 正在检查 users / sessions 表结构...
-                                    </div>
-                                </div>
-                                <div class="bic-actions">
-                                    <button type="button" class="btn btn-primary-soft btn-xs" id="btn-init-d1-schema" title="一键在 D1 数据库中执行建表语句 (users 和 sessions)">
-                                        <i class="fa-solid fa-wand-magic-sparkles"></i> 一键初始化数据表
-                                    </button>
-                                    <button type="button" class="btn btn-secondary btn-xs" id="btn-view-d1-sql" title="查看建表 SQL 语句">
-                                        <i class="fa-solid fa-code"></i> 查看 SQL
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- R2 对象存储卡片 -->
-                            <div class="binding-item-card" id="card-binding-r2">
-                                <div class="bic-top">
-                                    <div class="bic-title-row">
-                                        <div class="bic-icon bic-icon-r2"><i class="fa-solid fa-box-archive"></i></div>
-                                        <div>
-                                            <div class="bic-name">Cloudflare R2 对象存储桶</div>
-                                            <div class="bic-binding-var">Pages 绑定变量名: <code>PROTO_BUCKET</code></div>
-                                        </div>
-                                    </div>
-                                    <span class="binding-status-tag tag-checking" id="badge-r2-status"><i class="fa-solid fa-spinner fa-spin"></i> 检测中</span>
-                                </div>
-                                <div class="bic-body">
-                                    <div class="bic-desc" id="desc-r2-status">
-                                        存储 500KB+ 大 JSON 航空通信协议，无单文件体积限制。
-                                    </div>
-                                    <div class="bic-table-status">
-                                        <i class="fa-solid fa-shield-halved" style="color:#10b981;"></i> 10 GB 永久免费 · 出站流量 $0 全免
-                                    </div>
-                                </div>
-                                <div class="bic-actions">
-                                    <button type="button" class="btn btn-secondary btn-xs" id="btn-config-r2-target" title="配置目标 R2 存储桶参数">
-                                        <i class="fa-solid fa-sliders"></i> 配置桶名称
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Cloudflare 官方 API 实时采集卡片 -->
-                            <div class="binding-item-card" id="card-binding-api">
-                                <div class="bic-top">
-                                    <div class="bic-title-row">
-                                        <div class="bic-icon bic-icon-api"><i class="fa-brands fa-cloudflare"></i></div>
-                                        <div>
-                                            <div class="bic-name">Cloudflare 官方 API 连线</div>
-                                            <div class="bic-binding-var">REST & GraphQL 真实指标</div>
-                                        </div>
-                                    </div>
-                                    <span class="binding-status-tag tag-unconfigured" id="badge-cf-api-status">未配置 API</span>
-                                </div>
-                                <div class="bic-body">
-                                    <div class="bic-desc" id="desc-cf-api-status">
-                                        直接抓取 Cloudflare 官方出站流量 (Bandwidth) 与真实 HTTP 请求次数。
-                                    </div>
-                                    <div class="bic-table-status" id="cf-api-indicator">
-                                        <i class="fa-solid fa-circle-info"></i> 配置 API Token 后与官方控制台数据 100% 一致
-                                    </div>
-                                </div>
-                                <div class="bic-actions">
-                                    <button type="button" class="btn btn-primary btn-xs" id="btn-manage-cf-api">
-                                        <i class="fa-solid fa-key"></i> 配置 API 凭据
-                                    </button>
-                                </div>
-                            </div>
+                        <div class="acsb-right">
+                            <button type="button" class="btn-acsb-action" id="btn-recheck-bindings" title="重新探测各数据库与云端连通状态">
+                                <i class="fa-solid fa-arrows-rotate"></i> 探测连通
+                            </button>
+                            <span class="acsb-divider"></span>
+                            <button type="button" class="btn-acsb-action" id="btn-open-guide-inline" title="查看数据库与存储桶快速绑定步骤与 SQL">
+                                <i class="fa-solid fa-book-bookmark"></i> 绑定向导
+                            </button>
+                            <button type="button" class="btn-acsb-action" id="btn-manage-cf-api" title="配置数据库绑定参数与 Cloudflare API 凭证">
+                                <i class="fa-solid fa-sliders"></i> 绑定设置
+                            </button>
                         </div>
                     </div>
 
@@ -1371,6 +1295,27 @@
                         <div style="font-size: 12.5px; line-height: 1.5;">
                             <strong>官方指标与真实流量直连采集</strong><br>
                             配置您的 Cloudflare API Token 与 Account ID 后，系统将直接调用 Cloudflare 官方 GraphQL Analytics API 与 R2 计量接口，100% 还原控制台出站流量与真实请求次数。
+                        </div>
+                    </div>
+
+                    <!-- D1 数据库与数据表管理 (收纳在弹窗内，不占主面板空间) -->
+                    <div class="modal-d1-box" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-weight: 600; font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-table" style="color: #8b5cf6;"></i> D1 关系型数据库 (绑定变量名: <code>DB</code>)
+                            </span>
+                            <span class="binding-status-tag tag-checking" id="modal-d1-status" style="font-size: 10.5px; padding: 1px 6px;">检测中</span>
+                        </div>
+                        <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 10px 0; line-height: 1.4;" id="modal-d1-desc">
+                            存储全站注册账号与登录 Token。若为首次使用，请点击右侧「一键初始化数据表」。
+                        </p>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="btn btn-primary-soft btn-xs" id="btn-modal-init-d1" title="在 D1 中自动创建 users 和 sessions 数据表">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> 一键初始化数据表
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-xs" id="btn-modal-view-sql" title="查看建表 SQL">
+                                <i class="fa-solid fa-code"></i> 查看 SQL
+                            </button>
                         </div>
                     </div>
 
