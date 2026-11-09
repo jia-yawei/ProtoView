@@ -13,9 +13,105 @@
     
     <!-- Dexie.js 简化 IndexedDB -->
     <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <!-- 极速预检主题与登录身份，杜绝页面闪烁 -->
+    <script>
+        (function() {
+            try {
+                var theme = localStorage.getItem('theme');
+                if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+                var token = localStorage.getItem('protoview_auth_token');
+                var user = localStorage.getItem('protoview_auth_user');
+                if (token && user) {
+                    document.documentElement.classList.add('is-authenticated');
+                }
+            } catch(e) {}
+        })();
+    </script>
 </head>
 <body>
-    <div class="app-container">
+    <!-- 全屏系统登录准入门户 (简约现代企业风格) -->
+    <div id="login-portal-screen" class="login-portal-screen">
+        <div class="login-portal-card">
+            <!-- 品牌标识与系统名称 -->
+            <div class="login-portal-header">
+                <div class="portal-brand-badge">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <h1 class="portal-title">ProtoView</h1>
+                <p class="portal-subtitle">航空通信总线协议管理平台</p>
+            </div>
+
+            <!-- 登录 / 注册 分段切换条 -->
+            <div class="portal-tab-bar">
+                <button type="button" class="portal-tab-btn active" id="tab-auth-login">登 录</button>
+                <button type="button" class="portal-tab-btn" id="tab-auth-register">注 册</button>
+            </div>
+
+            <!-- 登录表单 -->
+            <form id="form-auth-login" class="portal-form" autocomplete="on">
+                <div class="portal-form-group">
+                    <label for="login-username">用户名</label>
+                    <div class="portal-input-wrap">
+                        <i class="fa-solid fa-user portal-icon"></i>
+                        <input type="text" id="login-username" name="username" required placeholder="请输入用户名" autocomplete="username">
+                    </div>
+                </div>
+                <div class="portal-form-group">
+                    <label for="login-password">密码</label>
+                    <div class="portal-input-wrap">
+                        <i class="fa-solid fa-lock portal-icon"></i>
+                        <input type="password" id="login-password" name="password" required placeholder="请输入密码" autocomplete="current-password">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary portal-submit-btn" id="btn-login-submit">
+                    立即登录
+                </button>
+                <div class="portal-switch-row">
+                    <span>还没有账号？</span>
+                    <a href="javascript:void(0)" class="btn-switch-to-register">立即注册</a>
+                </div>
+            </form>
+
+            <!-- 注册表单 -->
+            <form id="form-auth-register" class="portal-form" style="display:none;" autocomplete="off">
+                <div class="portal-form-group">
+                    <label for="reg-username">用户名</label>
+                    <div class="portal-input-wrap">
+                        <i class="fa-solid fa-user-tag portal-icon"></i>
+                        <input type="text" id="reg-username" name="username" required placeholder="设置用户名 (字母/数字/下划线)" autocomplete="off">
+                    </div>
+                </div>
+                <div class="portal-form-group">
+                    <label for="reg-password">设置密码</label>
+                    <div class="portal-input-wrap">
+                        <i class="fa-solid fa-lock portal-icon"></i>
+                        <input type="password" id="reg-password" name="password" required placeholder="至少 6 位字符" autocomplete="new-password">
+                    </div>
+                </div>
+                <div class="portal-form-group">
+                    <label for="reg-password-confirm">确认密码</label>
+                    <div class="portal-input-wrap">
+                        <i class="fa-solid fa-check-double portal-icon"></i>
+                        <input type="password" id="reg-password-confirm" name="passwordConfirm" required placeholder="再次输入密码确认" autocomplete="new-password">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary portal-submit-btn" id="btn-register-submit">
+                    注册并登录
+                </button>
+                <div class="portal-switch-row">
+                    <span>已有账号？</span>
+                    <a href="javascript:void(0)" class="btn-switch-to-login">直接登录</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- 右上角简约主题切换按钮 -->
+        <button type="button" class="login-portal-theme-toggle" id="portal-theme-toggle" title="切换深色/浅色模式">
+            <i class="fa-solid fa-moon"></i>
+        </button>
+    </div>
+
+    <div class="app-container" id="app-container">
         <!-- 侧边导航栏 -->
         <aside class="sidebar glass-effect" id="main-sidebar">
             <div class="logo">
@@ -31,6 +127,10 @@
                 <button class="nav-item active" data-view="protocol-view" title="协议管理">
                     <i class="fa-solid fa-book"></i>
                     <span class="sidebar-text">协议管理</span>
+                </button>
+                <button class="nav-item" data-view="admin-view" id="nav-btn-admin" style="display: none;" title="系统监控与用户管理后台">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span class="sidebar-text">系统监控后台</span>
                 </button>
             </nav>
             <!-- 用户账号状态与登录入口 -->
@@ -580,6 +680,194 @@
                             <div class="dense-fields-cards-scroll" id="serial-fields-container">
                                 <!-- 由 JS 渲染每个字段的独立卡片 -->
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 视图 4：系统监控与后台管理中心 (Cloudflare 免费配额 & 用户全景透视) -->
+            <section id="admin-view" class="view-section">
+                <header class="view-header compact-view-header">
+                    <div class="view-header-title-box">
+                        <h1><i class="fa-solid fa-gauge-high" style="color:var(--accent-color); font-size: 1.15rem;"></i> 系统监控与后台管理</h1>
+                        <span class="view-header-desc">实时监控 Cloudflare 免费配额消耗、用户注册规模与分布式云端存储</span>
+                    </div>
+                    <div class="view-header-actions">
+                        <span class="admin-engine-badge" id="admin-engine-badge"><i class="fa-solid fa-server"></i> 存储: <b>R2</b> · 数据库: <b>D1</b></span>
+                        <button class="btn btn-secondary btn-sm" id="btn-clean-sessions" title="一键清理 D1 数据库中已过期的废弃 Token 会话">
+                            <i class="fa-solid fa-broom"></i> 清理过期会话
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="btn-config-admin-key" title="设置或更换后台管理访问口令">
+                            <i class="fa-solid fa-key"></i> 管理密钥
+                        </button>
+                        <button class="btn btn-primary btn-sm" id="btn-refresh-admin">
+                            <i class="fa-solid fa-arrows-rotate"></i> 刷新数据
+                        </button>
+                    </div>
+                </header>
+
+                <div class="admin-dashboard-container">
+                    <!-- 1. 核心 KPI 指标卡 (4 栏) -->
+                    <div class="admin-kpi-grid">
+                        <div class="admin-kpi-card glass-effect">
+                            <div class="kpi-icon-box kpi-blue">
+                                <i class="fa-solid fa-users"></i>
+                            </div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">注册用户总数</span>
+                                <div class="kpi-val-row">
+                                    <span class="kpi-value" id="admin-stat-users">0</span>
+                                    <span class="kpi-sub">人</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin-kpi-card glass-effect">
+                            <div class="kpi-icon-box kpi-green">
+                                <i class="fa-solid fa-signal"></i>
+                            </div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">当前活跃登录会话</span>
+                                <div class="kpi-val-row">
+                                    <span class="kpi-value" id="admin-stat-sessions">0</span>
+                                    <span class="kpi-sub">个有效 Token</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin-kpi-card glass-effect">
+                            <div class="kpi-icon-box kpi-purple">
+                                <i class="fa-solid fa-file-code"></i>
+                            </div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">全站通信协议总数</span>
+                                <div class="kpi-val-row">
+                                    <span class="kpi-value" id="admin-stat-protocols">0</span>
+                                    <span class="kpi-sub">份</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin-kpi-card glass-effect">
+                            <div class="kpi-icon-box kpi-amber">
+                                <i class="fa-solid fa-database"></i>
+                            </div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">云端协议存储占用</span>
+                                <div class="kpi-val-row">
+                                    <span class="kpi-value" id="admin-stat-storage">0 B</span>
+                                    <span class="kpi-sub">在 R2/KV 中</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Cloudflare 官方免费额度与资源健康仪表盘 -->
+                    <div class="admin-card glass-effect admin-quota-section">
+                        <div class="admin-card-header">
+                            <div class="ach-title">
+                                <i class="fa-brands fa-cloudflare" style="color: #f38020; font-size: 1.25rem;"></i>
+                                <span>Cloudflare 免费额度与资源消耗监控</span>
+                                <span class="quota-badge-pill">Free Tier 自动追踪</span>
+                            </div>
+                            <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-xs" title="跳转登录 Cloudflare 官方 Dashboard 查看实时用量图表">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> 打开 Cloudflare 控制台
+                            </a>
+                        </div>
+                        <div class="admin-quota-grid">
+                            <!-- R2 存储容量 -->
+                            <div class="quota-box">
+                                <div class="quota-box-header">
+                                    <span class="quota-title"><i class="fa-solid fa-box-archive" style="color:#3b82f6;"></i> R2 对象存储空间</span>
+                                    <span class="quota-val-text" id="quota-r2-used">0 B / 10 GB</span>
+                                </div>
+                                <div class="quota-progress-track">
+                                    <div class="quota-progress-bar-fill" id="quota-r2-bar" style="width: 1%;"></div>
+                                </div>
+                                <div class="quota-box-footer">
+                                    <span>每月 10 GB 永久免费</span>
+                                    <span class="quota-percent-pill" id="quota-r2-percent">0.00%</span>
+                                </div>
+                            </div>
+
+                            <!-- R2 写入额度 -->
+                            <div class="quota-box">
+                                <div class="quota-box-header">
+                                    <span class="quota-title"><i class="fa-solid fa-pen-nib" style="color:#10b981;"></i> R2 协议写入 (Class A)</span>
+                                    <span class="quota-val-badge">每月 100 万次免费</span>
+                                </div>
+                                <div class="quota-desc-text">
+                                    均摊每天约 <b>33,333 次</b> 保存写入，高频上传 500KB 协议完全免超限焦虑。
+                                </div>
+                                <div class="quota-box-footer">
+                                    <span>出站流量费: <b>$0 免费</b></span>
+                                    <span class="quota-status-pill healthy"><i class="fa-solid fa-circle-check"></i> 极充裕</span>
+                                </div>
+                            </div>
+
+                            <!-- D1 数据库写入 -->
+                            <div class="quota-box">
+                                <div class="quota-box-header">
+                                    <span class="quota-title"><i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> D1 账号数据库写入</span>
+                                    <span class="quota-val-badge">每日 10 万行免费</span>
+                                </div>
+                                <div class="quota-desc-text">
+                                    用于记录用户注册、会话 Token 与登录验证，每天可承载数十万人次鉴权。
+                                </div>
+                                <div class="quota-box-footer">
+                                    <span>读取额度: 500 万行/天</span>
+                                    <span class="quota-status-pill healthy"><i class="fa-solid fa-circle-check"></i> 极充裕</span>
+                                </div>
+                            </div>
+
+                            <!-- D1 数据库存储容量 -->
+                            <div class="quota-box">
+                                <div class="quota-box-header">
+                                    <span class="quota-title"><i class="fa-solid fa-table-cells" style="color:#8b5cf6;"></i> D1 数据库容量</span>
+                                    <span class="quota-val-text" id="quota-d1-used">0 B / 5 GB</span>
+                                </div>
+                                <div class="quota-progress-track">
+                                    <div class="quota-progress-bar-fill" id="quota-d1-bar" style="width: 1%;"></div>
+                                </div>
+                                <div class="quota-box-footer">
+                                    <span>总计 5 GB 免费容量</span>
+                                    <span class="quota-percent-pill" id="quota-d1-percent">0.00%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 用户全景名单与协议管理表格 -->
+                    <div class="admin-card glass-effect admin-users-section">
+                        <div class="admin-card-header">
+                            <div class="ach-title">
+                                <i class="fa-solid fa-users-gear" style="color:var(--accent-color);"></i>
+                                <span>注册用户与协议资产管理</span>
+                                <span class="quota-badge-pill" id="admin-user-count-badge">0</span>
+                            </div>
+                            <div class="ach-actions">
+                                <div class="admin-search-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="admin-search-user" placeholder="搜索用户名..." autocomplete="off">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin-table-container">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 46px; text-align: center;">#</th>
+                                        <th>用户名 (账号唯一标识)</th>
+                                        <th>名下通信协议数 / 存储占用</th>
+                                        <th style="width: 170px;">注册时间</th>
+                                        <th style="width: 160px; text-align: right;">操作管理</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-users-tbody">
+                                    <!-- 动态渲染 -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -1190,101 +1478,29 @@
         </div>
     </div>
 
-    <!-- 弹窗 7：Cloudflare 独立账号登录与注册弹窗 (精致高保真航电与现代云原生设计) -->
-    <div class="modal auth-modal" id="auth-modal">
-        <div class="modal-content auth-modal-content glass-effect">
-            <button type="button" class="close-modal auth-modal-close" title="关闭"><i class="fa-solid fa-xmark"></i></button>
-
-            <!-- 弹窗顶部品牌与身份指示头 -->
-            <div class="auth-modal-header">
-                <div class="auth-brand-badge">
-                    <i class="fa-solid fa-shield-halved"></i>
-                </div>
-                <h2 class="auth-modal-title" id="auth-modal-title">云端账号登录</h2>
-                <p class="auth-modal-subtitle" id="auth-modal-subtitle">登录后协议将保存在您的独立云端空间，多人使用互不干扰</p>
+    <!-- 弹窗 8：后台管理访问口令 (Admin Secret Key) 设置与验证弹窗 -->
+    <div class="modal" id="admin-key-modal">
+        <div class="modal-content glass-effect" style="max-width: 440px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-key" style="color:var(--accent-color);"></i> 后台管理密钥配置</h2>
+                <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            
-            <!-- 精美分段选择器 (Segmented Control) -->
-            <div class="auth-tab-bar">
-                <button type="button" class="auth-tab-btn active" id="tab-auth-login">
-                    <i class="fa-solid fa-right-to-bracket"></i> 账号登录
-                </button>
-                <button type="button" class="auth-tab-btn" id="tab-auth-register">
-                    <i class="fa-solid fa-user-plus"></i> 注册新账号
-                </button>
-            </div>
-
-            <!-- 登录表单 -->
-            <form id="form-auth-login" class="auth-form" autocomplete="on">
-                <div class="auth-form-body">
-                    <div class="auth-input-group">
-                        <label for="login-username"><i class="fa-solid fa-user"></i> 用户名 / 账号</label>
-                        <div class="auth-input-wrapper">
-                            <i class="fa-solid fa-user auth-input-icon"></i>
-                            <input type="text" id="login-username" name="username" required placeholder="请输入您的账号名称" autocomplete="username">
-                        </div>
-                    </div>
-                    <div class="auth-input-group">
-                        <label for="login-password"><i class="fa-solid fa-lock"></i> 登录密码</label>
-                        <div class="auth-input-wrapper">
-                            <i class="fa-solid fa-lock auth-input-icon"></i>
-                            <input type="password" id="login-password" name="password" required placeholder="请输入登录密码" autocomplete="current-password">
-                        </div>
-                    </div>
-                    <div class="auth-field-tip">
-                        <i class="fa-solid fa-cloud-arrow-up"></i>
-                        <span>每个账号享有严格物理隔离的 Cloudflare 专属协议库，私密安全。</span>
+            <form id="admin-key-form" onsubmit="event.preventDefault(); document.getElementById('btn-save-admin-key').click();">
+                <div class="modal-body-scroll" style="padding: 16px 20px;">
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5;">
+                        系统监控与全站管理接口受 Admin Secret Key 保护。输入后将保存在当前浏览器本地，并在调用管理 API 时自动附加。
+                    </p>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="admin-key-input" style="font-weight: 600; font-size: 12.5px;">管理口令 / Secret Key</label>
+                        <input type="password" id="admin-key-input" placeholder="默认口令: admin888" style="height: 38px;" autocomplete="off">
+                        <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; display: block;">
+                            可在 Cloudflare Pages 环境变量中自定义配置 <code>ADMIN_SECRET_KEY</code>。
+                        </span>
                     </div>
                 </div>
-                <div class="auth-form-footer">
-                    <span class="auth-switch-hint">没有账号？<a href="javascript:void(0)" class="btn-switch-to-register" onclick="if(window.switchAuthTab) window.switchAuthTab('register');">免费注册</a></span>
-                    <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-login-submit">
-                        <i class="fa-solid fa-right-to-bracket"></i> 立即登录
-                    </button>
-                </div>
-            </form>
-
-            <!-- 注册表单 -->
-            <form id="form-auth-register" class="auth-form" style="display:none;" autocomplete="off">
-                <div class="auth-form-body">
-                    <div class="auth-input-group">
-                        <label for="reg-username"><i class="fa-solid fa-user-tag"></i> 用户名 (登录唯一标识)</label>
-                        <div class="auth-input-wrapper">
-                            <i class="fa-solid fa-user-tag auth-input-icon"></i>
-                            <input type="text" id="reg-username" name="username" required placeholder="英文字母、数字或下划线" autocomplete="off">
-                        </div>
-                    </div>
-                    <div class="auth-input-group">
-                        <label for="reg-display-name"><i class="fa-solid fa-id-badge"></i> 姓名 / 称呼 (可选)</label>
-                        <div class="auth-input-wrapper">
-                            <i class="fa-solid fa-id-badge auth-input-icon"></i>
-                            <input type="text" id="reg-display-name" name="displayName" placeholder="如: 张工 (航电室)" autocomplete="off">
-                        </div>
-                    </div>
-                    <div class="auth-input-group">
-                        <label for="reg-password"><i class="fa-solid fa-lock"></i> 设置密码</label>
-                        <div class="auth-input-wrapper">
-                            <i class="fa-solid fa-lock auth-input-icon"></i>
-                            <input type="password" id="reg-password" name="password" required placeholder="至少 6 位密码" autocomplete="new-password">
-                        </div>
-                    </div>
-                    <div class="auth-input-group">
-                        <label for="reg-password-confirm"><i class="fa-solid fa-check-double"></i> 确认密码</label>
-                        <div class="auth-input-wrapper">
-                            <i class="fa-solid fa-check-double auth-input-icon"></i>
-                            <input type="password" id="reg-password-confirm" name="passwordConfirm" required placeholder="再次输入密码" autocomplete="new-password">
-                        </div>
-                    </div>
-                    <div class="auth-field-tip auth-tip-success">
-                        <i class="fa-solid fa-circle-check"></i>
-                        <span>注册成功后将自动分配独立的专属云端空间，仅您本人可见并管理。</span>
-                    </div>
-                </div>
-                <div class="auth-form-footer">
-                    <span class="auth-switch-hint">已有账号？<a href="javascript:void(0)" class="btn-switch-to-login" onclick="if(window.switchAuthTab) window.switchAuthTab('login');">直接登录</a></span>
-                    <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-register-submit">
-                        <i class="fa-solid fa-user-plus"></i> 注册并进入
-                    </button>
+                <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
+                    <button type="button" class="btn btn-primary" id="btn-save-admin-key"><i class="fa-solid fa-check"></i> 保存并验证</button>
                 </div>
             </form>
         </div>
@@ -1301,6 +1517,7 @@
     <script src="js/product-ctrl.js"></script>
     <script src="js/arinc-ctrl.js"></script>
     <script src="js/serial-ctrl.js"></script>
+    <script src="js/admin-ctrl.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

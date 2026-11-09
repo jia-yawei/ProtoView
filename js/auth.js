@@ -36,7 +36,6 @@
         btnLoginSubmit = document.getElementById('btn-login-submit');
 
         regUsername = document.getElementById('reg-username');
-        regDisplayName = document.getElementById('reg-display-name');
         regPassword = document.getElementById('reg-password');
         regPasswordConfirm = document.getElementById('reg-password-confirm');
         btnRegisterSubmit = document.getElementById('btn-register-submit');
@@ -79,9 +78,11 @@
             localStorage.setItem(AUTH_STORAGE_KEY_TOKEN, token);
             // 自动将当前工作空间名称锁定为当前账号的用户名
             localStorage.setItem('protoview_cloud_ws', user.username);
+            document.documentElement.classList.add('is-authenticated');
         } else {
             localStorage.removeItem(AUTH_STORAGE_KEY_USER);
             localStorage.removeItem(AUTH_STORAGE_KEY_TOKEN);
+            document.documentElement.classList.remove('is-authenticated');
         }
         updateAuthUI();
     }
@@ -90,34 +91,59 @@
     function updateAuthUI() {
         initDOMElements();
         const user = getCurrentUser();
+        const loggedIn = isLoggedIn();
+
+        // 同步根节点已登录状态类名 (控制全屏登录页 vs 主应用工作台显示)
+        if (loggedIn) {
+            document.documentElement.classList.add('is-authenticated');
+        } else {
+            document.documentElement.classList.remove('is-authenticated');
+        }
+
+        // 核心安全策略：仅管理员账号 (admin) 才能看到后台入口
+        const navBtnAdmin = document.getElementById('nav-btn-admin');
+        const isAdmin = user && (user.isAdmin || user.username.toLowerCase() === 'admin');
+        if (navBtnAdmin) {
+            navBtnAdmin.style.display = (loggedIn && isAdmin) ? 'flex' : 'none';
+        }
+
+        // 越权安全保护：若当前未登录或非管理员却停留在 admin-view，自动切回协议库
+        if ((!loggedIn || !isAdmin) && typeof window.switchToView === 'function') {
+            const adminView = document.getElementById('admin-view');
+            if (adminView && adminView.classList.contains('active')) {
+                window.switchToView('protocol-view');
+            }
+        }
 
         // 1. 侧边栏底部用户卡片更新
         if (sidebarUserCard) {
             if (user) {
                 sidebarUserCard.classList.add('logged-in');
                 if (sidebarUserName) {
-                    sidebarUserName.textContent = user.displayName || user.username;
-                    sidebarUserName.title = `登录账号: ${user.username} (${user.displayName || '用户'})`;
+                    sidebarUserName.textContent = user.username;
+                    sidebarUserName.title = `当前登录账号: ${user.username} ${isAdmin ? '(系统管理员)' : ''}`;
                 }
                 if (sidebarUserStatus) {
-                    sidebarUserStatus.innerHTML = `<i class="fa-solid fa-circle" style="color:#10b981; font-size:8px;"></i> <span>账号: ${escapeHTML(user.username)}</span>`;
+                    sidebarUserStatus.innerHTML = isAdmin 
+                        ? `<i class="fa-solid fa-crown" style="color:#f59e0b; font-size:10px;"></i> <span style="color:#f59e0b; font-weight:600;">管理员</span>`
+                        : `<i class="fa-solid fa-circle" style="color:#10b981; font-size:8px;"></i> <span>在线: ${escapeHTML(user.username)}</span>`;
                 }
                 if (btnSidebarAuthAction) {
                     btnSidebarAuthAction.innerHTML = `<i class="fa-solid fa-right-from-bracket"></i> 退出`;
-                    btnSidebarAuthAction.title = '退出当前登录账号';
+                    btnSidebarAuthAction.title = '退出当前登录账号，返回登录界面';
                 }
             } else {
                 sidebarUserCard.classList.remove('logged-in');
                 if (sidebarUserName) {
-                    sidebarUserName.textContent = '访客未登录';
-                    sidebarUserName.title = '点击登录或注册账号以使用云端独立空间';
+                    sidebarUserName.textContent = '未登录';
+                    sidebarUserName.title = '请先登录账号';
                 }
                 if (sidebarUserStatus) {
-                    sidebarUserStatus.innerHTML = `<i class="fa-solid fa-circle" style="color:var(--text-secondary); opacity:0.6; font-size:8px;"></i> <span>本地存储模式</span>`;
+                    sidebarUserStatus.innerHTML = `<i class="fa-solid fa-circle" style="color:var(--text-secondary); opacity:0.6; font-size:8px;"></i> <span>未登录</span>`;
                 }
                 if (btnSidebarAuthAction) {
                     btnSidebarAuthAction.innerHTML = `<i class="fa-solid fa-user-plus"></i> 登录/注册`;
-                    btnSidebarAuthAction.title = '登录或注册您的专属云端账号';
+                    btnSidebarAuthAction.title = '前往登录页面';
                 }
             }
         }
@@ -125,7 +151,7 @@
         // 2. 云端工作台顶部条更新
         if (wsCloudUserBadge) {
             if (user) {
-                wsCloudUserBadge.innerHTML = `<i class="fa-solid fa-user-shield" style="color:var(--accent-color);"></i> <b>${escapeHTML(user.displayName || user.username)}</b> <span style="opacity:0.75; font-size:11px;">(${escapeHTML(user.username)})</span>`;
+                wsCloudUserBadge.innerHTML = `<i class="fa-solid fa-user-shield" style="color:var(--accent-color);"></i> <b>${escapeHTML(user.username)}</b>`;
                 wsCloudUserBadge.title = `当前云端空间已严格绑定账号 [${user.username}]，其他用户无法查看或修改您的协议`;
             } else {
                 wsCloudUserBadge.innerHTML = `<i class="fa-solid fa-user-xmark" style="color:#f59e0b;"></i> <span style="color:#f59e0b;">未登录账号 (公共空间)</span>`;
@@ -142,22 +168,17 @@
     // 切换登录/注册 Tab
     function switchAuthTab(tab) {
         initDOMElements();
-        const subtitleEl = document.getElementById('auth-modal-subtitle');
         if (tab === 'register') {
             if (tabAuthLogin) tabAuthLogin.classList.remove('active');
             if (tabAuthRegister) tabAuthRegister.classList.add('active');
             if (formAuthLogin) formAuthLogin.style.display = 'none';
-            if (formAuthRegister) formAuthRegister.style.display = 'block';
-            if (authModalTitle) authModalTitle.textContent = '注册专属云端账号';
-            if (subtitleEl) subtitleEl.textContent = '注册后将自动为您开辟独立的云端协议库空间';
+            if (formAuthRegister) formAuthRegister.style.display = 'flex';
             setTimeout(() => { if (regUsername) regUsername.focus(); }, 100);
         } else {
             if (tabAuthRegister) tabAuthRegister.classList.remove('active');
             if (tabAuthLogin) tabAuthLogin.classList.add('active');
             if (formAuthRegister) formAuthRegister.style.display = 'none';
-            if (formAuthLogin) formAuthLogin.style.display = 'block';
-            if (authModalTitle) authModalTitle.textContent = '云端账号登录';
-            if (subtitleEl) subtitleEl.textContent = '登录后协议将保存在您的独立云端空间，多人使用互不干扰';
+            if (formAuthLogin) formAuthLogin.style.display = 'flex';
             setTimeout(() => { if (loginUsername) loginUsername.focus(); }, 100);
         }
     }
@@ -189,7 +210,7 @@
             if (res.ok && data && data.success) {
                 setAuthSession(data.user, data.token);
                 closeAuthModal();
-                showToast(`欢迎回来，${data.user.displayName || data.user.username}！`, 'success');
+                showToast(`欢迎回来，${data.user.username}！`, 'success');
 
                 // 自动切换至云端工作模式并刷新该账号协议
                 if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.setWorkspaceMode === 'function') {
@@ -207,13 +228,13 @@
         }
     }
 
-    // 注册请求
-    async function handleRegister(username, password, displayName) {
+    // 注册请求 (仅需用户名与密码)
+    async function handleRegister(username, password) {
         try {
             const res = await fetch('/api/auth?action=register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json;charset=utf-8' },
-                body: JSON.stringify({ username, password, displayName })
+                body: JSON.stringify({ username, password })
             });
             const data = await res.json().catch(() => null);
 
@@ -241,8 +262,8 @@
     // 退出登录
     async function handleLogout() {
         const u = getCurrentUser();
-        const uName = u ? (u.displayName || u.username) : '用户';
-        if (!confirm(`确定要退出账号「${uName}」吗？\n\n退出后，您可随时再次登录以同步您的私有云端协议。`)) {
+        const uName = u ? u.username : '用户';
+        if (!confirm(`确定要退出账号「${uName}」吗？\n\n退出后将返回系统登录界面。`)) {
             return;
         }
 
@@ -261,14 +282,11 @@
         }
 
         setAuthSession(null, null);
-        showToast('已安全退出登录', 'info');
+        showToast('已安全退出登录，请重新登录', 'info');
 
-        // 切换回本地模式并清空本地云端缓存
-        if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.setWorkspaceMode === 'function') {
-            ProtoView.WorkspaceSync.setWorkspaceMode('local', false);
-        }
-        if (window.loadProtocols) {
-            window.loadProtocols();
+        // 确保视图复位至协议库
+        if (typeof window.switchToView === 'function') {
+            window.switchToView('protocol-view');
         }
     }
 
@@ -345,7 +363,6 @@
             formAuthRegister.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const u = (regUsername ? regUsername.value : '').trim();
-                const nick = (regDisplayName ? regDisplayName.value : '').trim();
                 const p = (regPassword ? regPassword.value : '').trim();
                 const pConfirm = (regPasswordConfirm ? regPasswordConfirm.value : '').trim();
 
@@ -366,7 +383,7 @@
                     btnRegisterSubmit.disabled = true;
                     btnRegisterSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在注册...`;
                 }
-                const ok = await handleRegister(u, p, nick);
+                const ok = await handleRegister(u, p);
                 if (btnRegisterSubmit) {
                     btnRegisterSubmit.disabled = false;
                     btnRegisterSubmit.innerHTML = `<i class="fa-solid fa-user-check"></i> 立即注册并登录`;
@@ -419,6 +436,25 @@
         if (btnWsCloudUserSwitch) {
             btnWsCloudUserSwitch.addEventListener('click', () => {
                 openAuthModal(isLoggedIn() ? 'login' : 'register');
+            });
+        }
+
+        // 登录门户右上角主题切换
+        const portalThemeToggle = document.getElementById('portal-theme-toggle');
+        if (portalThemeToggle) {
+            portalThemeToggle.addEventListener('click', () => {
+                const isDark = document.body.hasAttribute('data-theme') || document.documentElement.hasAttribute('data-theme');
+                if (isDark) {
+                    document.body.removeAttribute('data-theme');
+                    document.documentElement.removeAttribute('data-theme');
+                    localStorage.setItem('theme', 'light');
+                    portalThemeToggle.innerHTML = '<i class="fa-solid fa-moon"></i>';
+                } else {
+                    document.body.setAttribute('data-theme', 'dark');
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                    portalThemeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
+                }
             });
         }
 

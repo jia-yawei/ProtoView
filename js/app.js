@@ -139,6 +139,19 @@
                 if (typeof window.setMobileSerialView === 'function' && window.innerWidth <= 768) {
                     window.setMobileSerialView('packets');
                 }
+            } else if (viewId === 'admin-view') {
+                const user = ProtoView.Auth && ProtoView.Auth.getCurrentUser ? ProtoView.Auth.getCurrentUser() : null;
+                const isAdmin = user && (user.isAdmin || user.username.toLowerCase() === 'admin');
+                if (!isAdmin) {
+                    if (ProtoView.Utils && ProtoView.Utils.showToast) {
+                        ProtoView.Utils.showToast('需要管理员账号权限 (admin) 才能访问后台管理中心', 'warning');
+                    }
+                    if (typeof window.switchToView === 'function') {
+                        window.switchToView('protocol-view');
+                    }
+                    return;
+                }
+                if (typeof window.loadAdminStats === 'function') window.loadAdminStats();
             }
         });
     }

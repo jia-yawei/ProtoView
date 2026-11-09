@@ -2,11 +2,14 @@
  * Cloudflare Pages Functions - ProtoView 用户认证与独立账号管理系统
  * 
  * 路由: /api/auth
- * 绑定: Cloudflare KV 命名空间 (变量名: PROTOVIEW_KV)
+ * 账号信息规范: 仅需用户名 (username) 与 密码 (password)
+ * 存储支持:
+ *   - 优先使用: Cloudflare D1 关系型数据库 (绑定变量名: DB 或 PROTOVIEW_DB)
+ *   - 平滑回退: Cloudflare KV 命名空间 (绑定变量名: PROTOVIEW_KV)
  * 功能:
- *   - POST ?action=register: 注册新用户并自动登录
- *   - POST ?action=login: 用户登录并返回 session token
- *   - GET  ?action=me: 验证并获取当前登录用户信息
+ *   - POST ?action=register: 仅需用户名与密码，自动注册并登录
+ *   - POST ?action=login: 用户名密码登录并返回 session token
+ *   - GET  ?action=me: 验证并获取当前登录账号
  *   - POST ?action=logout: 退出登录并销毁 session
  */
 
@@ -27,6 +30,42 @@ async function sha256(text) {
     return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// 判定是否为管理员账号 (用户名 admin 或环境变量 ADMIN_USERNAME 所指定的用户)
+function checkIsAdmin(username, env) {
+    if (!username) return false;
+    const u = username.toLowerCase();
+    const envAdmin = (env?.ADMIN_USERNAME || env?.ADMIN_USER || "admin").toLowerCase();
+    return u === "admin" || u === envAdmin;
+}
+
+// 自动初始化 D1 数据库表 (精简结构：仅用户名与密码哈希)
+let d1TablesInitialized = false;
+async function ensureD1Tables(db) {
+    if (d1TablesInitialized) return;
+    try {
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                salt TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+        `);
+        d1TablesInitialized = true;
+    } catch (e) {
+        console.warn("D1 表结构自动检查提示:", e.message);
+    }
+}
+
 export async function onRequestOptions() {
     return new Response(null, {
         status: 204,
@@ -40,11 +79,13 @@ export async function onRequestGet(context) {
     const url = new URL(request.url);
     const action = url.searchParams.get("action") || "me";
 
+    const db = env.DB || env.PROTOVIEW_DB;
     const kv = env.PROTOVIEW_KV;
-    if (!kv) {
+
+    if (!db && !kv) {
         return new Response(JSON.stringify({
             success: false,
-            error: "Cloudflare KV 尚未绑定 (PROTOVIEW_KV)。"
+            error: "Cloudflare D1 数据库 (变量名: DB) 或 KV 尚未绑定。请前往 Pages 设置 -> 函数中绑定。"
         }), { status: 503, headers });
     }
 
@@ -60,28 +101,68 @@ export async function onRequestGet(context) {
             });
         }
 
-        try {
-            const session = await kv.get("session:" + token, "json");
-            if (!session || !session.username) {
-                return new Response(JSON.stringify({ success: false, error: "登录已失效，请重新登录" }), {
-                    status: 401,
+        // 1. 优先从 D1 关系型数据库查询
+        if (db) {
+            try {
+                await ensureD1Tables(db);
+                const now = Date.now();
+                const sessionRow = await db.prepare(
+                    `SELECT s.token, s.username, s.expires_at, u.created_at
+                     FROM sessions s
+                     JOIN users u ON s.username = u.username
+                     WHERE s.token = ? AND s.expires_at > ?`
+                ).bind(token, now).first();
+
+                if (!sessionRow) {
+                    return new Response(JSON.stringify({ success: false, error: "登录已失效，请重新登录" }), {
+                        status: 401,
+                        headers
+                    });
+                }
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    storage: "D1",
+                    user: {
+                        username: sessionRow.username,
+                        createdAt: sessionRow.created_at,
+                        isAdmin: checkIsAdmin(sessionRow.username, env)
+                    }
+                }), { status: 200, headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ success: false, error: "D1 查询用户状态失败: " + e.message }), {
+                    status: 500,
                     headers
                 });
             }
+        }
 
-            return new Response(JSON.stringify({
-                success: true,
-                user: {
-                    username: session.username,
-                    displayName: session.displayName || session.username,
-                    createdAt: session.createdAt
+        // 2. 回退走 KV 查询
+        if (kv) {
+            try {
+                const session = await kv.get("session:" + token, "json");
+                if (!session || !session.username) {
+                    return new Response(JSON.stringify({ success: false, error: "登录已失效，请重新登录" }), {
+                        status: 401,
+                        headers
+                    });
                 }
-            }), { status: 200, headers });
-        } catch (e) {
-            return new Response(JSON.stringify({ success: false, error: "查询用户状态失败: " + e.message }), {
-                status: 500,
-                headers
-            });
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    storage: "KV",
+                    user: {
+                        username: session.username,
+                        createdAt: session.createdAt,
+                        isAdmin: checkIsAdmin(session.username, env)
+                    }
+                }), { status: 200, headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ success: false, error: "KV 查询用户状态失败: " + e.message }), {
+                    status: 500,
+                    headers
+                });
+            }
         }
     }
 
@@ -93,11 +174,13 @@ export async function onRequestPost(context) {
     const headers = corsHeaders();
     const url = new URL(request.url);
 
+    const db = env.DB || env.PROTOVIEW_DB;
     const kv = env.PROTOVIEW_KV;
-    if (!kv) {
+
+    if (!db && !kv) {
         return new Response(JSON.stringify({
             success: false,
-            error: "Cloudflare KV 尚未绑定 (PROTOVIEW_KV)。请前往 Cloudflare Pages 控制台设置中绑定。"
+            error: "Cloudflare D1 数据库 (变量名: DB) 或 KV 尚未绑定。请前往 Pages 设置 -> 函数中绑定。"
         }), { status: 503, headers });
     }
 
@@ -110,11 +193,10 @@ export async function onRequestPost(context) {
 
     const action = url.searchParams.get("action") || body.action;
 
-    // 1. 用户注册
+    // 1. 用户注册 (仅需用户名与密码)
     if (action === "register") {
         const rawUsername = (body.username || "").trim();
         const rawPassword = (body.password || "").trim();
-        const rawDisplayName = (body.displayName || "").trim();
 
         if (!rawUsername) {
             return new Response(JSON.stringify({ success: false, error: "用户名不能为空" }), {
@@ -140,58 +222,86 @@ export async function onRequestPost(context) {
             });
         }
 
-        try {
-            // 检查用户名是否已注册
-            const existing = await kv.get("user:" + username, "json");
-            if (existing) {
-                return new Response(JSON.stringify({ success: false, error: "该用户名已被注册，请直接登录或换一个用户名" }), {
-                    status: 409,
+        const salt = crypto.randomUUID();
+        const passwordHash = await sha256(`${rawPassword}:${salt}`);
+        const token = crypto.randomUUID();
+        const now = Date.now();
+        const expiresAt = now + 30 * 86400 * 1000; // 30 天有效期
+
+        // 方案 A: 存储至 Cloudflare D1
+        if (db) {
+            try {
+                await ensureD1Tables(db);
+                // 检查用户名是否已存在
+                const existing = await db.prepare("SELECT username FROM users WHERE username = ?").bind(username).first();
+                if (existing) {
+                    return new Response(JSON.stringify({ success: false, error: "该用户名已被注册，请直接登录" }), {
+                        status: 409,
+                        headers
+                    });
+                }
+
+                // 批量执行用户与会话写入
+                await db.batch([
+                    db.prepare(
+                        "INSERT INTO users (username, salt, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+                    ).bind(username, salt, passwordHash, now, now),
+                    db.prepare(
+                        "INSERT INTO sessions (token, username, created_at, expires_at) VALUES (?, ?, ?, ?)"
+                    ).bind(token, username, now, expiresAt)
+                ]);
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    storage: "D1",
+                    message: "注册成功！",
+                    token,
+                    user: {
+                        username,
+                        isAdmin: checkIsAdmin(username, env)
+                    }
+                }), { status: 200, headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ success: false, error: "D1 注册失败: " + e.message }), {
+                    status: 500,
                     headers
                 });
             }
+        }
 
-            // 加盐哈希密码
-            const salt = crypto.randomUUID();
-            const passwordHash = await sha256(`${rawPassword}:${salt}`);
-
-            const displayName = rawDisplayName || rawUsername;
-            const newUser = {
-                username,
-                displayName,
-                salt,
-                passwordHash,
-                createdAt: Date.now()
-            };
-
-            // 存储用户基本信息
-            await kv.put("user:" + username, JSON.stringify(newUser));
-
-            // 生成登录 token 并写入 session
-            const token = crypto.randomUUID();
-            const sessionData = {
-                username,
-                displayName,
-                createdAt: Date.now()
-            };
-            // Session 30 天有效期 (以秒为单位)
-            await kv.put("session:" + token, JSON.stringify(sessionData), {
-                expirationTtl: 30 * 86400
-            });
-
-            return new Response(JSON.stringify({
-                success: true,
-                message: "注册成功！",
-                token,
-                user: {
-                    username,
-                    displayName
+        // 方案 B: 降级存储至 KV
+        if (kv) {
+            try {
+                const existing = await kv.get("user:" + username, "json");
+                if (existing) {
+                    return new Response(JSON.stringify({ success: false, error: "该用户名已被注册，请直接登录" }), {
+                        status: 409,
+                        headers
+                    });
                 }
-            }), { status: 200, headers });
-        } catch (e) {
-            return new Response(JSON.stringify({ success: false, error: "注册失败: " + e.message }), {
-                status: 500,
-                headers
-            });
+
+                const newUser = { username, salt, passwordHash, createdAt: now };
+                await kv.put("user:" + username, JSON.stringify(newUser));
+                await kv.put("session:" + token, JSON.stringify({ username, createdAt: now }), {
+                    expirationTtl: 30 * 86400
+                });
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    storage: "KV",
+                    message: "注册成功！",
+                    token,
+                    user: {
+                        username,
+                        isAdmin: checkIsAdmin(username, env)
+                    }
+                }), { status: 200, headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ success: false, error: "KV 注册失败: " + e.message }), {
+                    status: 500,
+                    headers
+                });
+            }
         }
     }
 
@@ -208,50 +318,95 @@ export async function onRequestPost(context) {
         }
 
         const username = rawUsername.toLowerCase();
+        const token = crypto.randomUUID();
+        const now = Date.now();
+        const expiresAt = now + 30 * 86400 * 1000;
 
-        try {
-            const user = await kv.get("user:" + username, "json");
-            if (!user) {
-                return new Response(JSON.stringify({ success: false, error: "用户名不存在，请先注册" }), {
-                    status: 404,
-                    headers
-                });
-            }
-
-            // 校验密码
-            const inputHash = await sha256(`${rawPassword}:${user.salt}`);
-            if (inputHash !== user.passwordHash) {
-                return new Response(JSON.stringify({ success: false, error: "密码不正确，请重新输入" }), {
-                    status: 401,
-                    headers
-                });
-            }
-
-            // 生成新 Session Token
-            const token = crypto.randomUUID();
-            const sessionData = {
-                username: user.username,
-                displayName: user.displayName || user.username,
-                createdAt: Date.now()
-            };
-            await kv.put("session:" + token, JSON.stringify(sessionData), {
-                expirationTtl: 30 * 86400
-            });
-
-            return new Response(JSON.stringify({
-                success: true,
-                message: "登录成功！",
-                token,
-                user: {
-                    username: user.username,
-                    displayName: user.displayName || user.username
+        // 方案 A: 优先使用 D1 验证
+        if (db) {
+            try {
+                await ensureD1Tables(db);
+                const user = await db.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
+                if (!user) {
+                    return new Response(JSON.stringify({ success: false, error: "用户名不存在，请先注册" }), {
+                        status: 404,
+                        headers
+                    });
                 }
-            }), { status: 200, headers });
-        } catch (e) {
-            return new Response(JSON.stringify({ success: false, error: "登录失败: " + e.message }), {
-                status: 500,
-                headers
-            });
+
+                const inputHash = await sha256(`${rawPassword}:${user.salt}`);
+                if (inputHash !== user.password_hash) {
+                    return new Response(JSON.stringify({ success: false, error: "密码不正确，请重新输入" }), {
+                        status: 401,
+                        headers
+                    });
+                }
+
+                // 写入有效登录会话
+                await db.prepare(
+                    "INSERT INTO sessions (token, username, created_at, expires_at) VALUES (?, ?, ?, ?)"
+                ).bind(token, username, now, expiresAt).run();
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    storage: "D1",
+                    message: "登录成功！",
+                    token,
+                    user: {
+                        username: user.username,
+                        createdAt: user.created_at,
+                        isAdmin: checkIsAdmin(user.username, env)
+                    }
+                }), { status: 200, headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ success: false, error: "D1 登录失败: " + e.message }), {
+                    status: 500,
+                    headers
+                });
+            }
+        }
+
+        // 方案 B: 降级走 KV 验证
+        if (kv) {
+            try {
+                const user = await kv.get("user:" + username, "json");
+                if (!user) {
+                    return new Response(JSON.stringify({ success: false, error: "用户名不存在，请先注册" }), {
+                        status: 404,
+                        headers
+                    });
+                }
+
+                const inputHash = await sha256(`${rawPassword}:${user.salt}`);
+                if (inputHash !== user.passwordHash) {
+                    return new Response(JSON.stringify({ success: false, error: "密码不正确，请重新输入" }), {
+                        status: 401,
+                        headers
+                    });
+                }
+
+                await kv.put("session:" + token, JSON.stringify({
+                    username: user.username,
+                    createdAt: now
+                }), { expirationTtl: 30 * 86400 });
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    storage: "KV",
+                    message: "登录成功！",
+                    token,
+                    user: {
+                        username: user.username,
+                        createdAt: user.createdAt,
+                        isAdmin: checkIsAdmin(user.username, env)
+                    }
+                }), { status: 200, headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ success: false, error: "KV 登录失败: " + e.message }), {
+                    status: 500,
+                    headers
+                });
+            }
         }
     }
 
@@ -262,12 +417,19 @@ export async function onRequestPost(context) {
                       body.token;
 
         if (token) {
-            try {
-                await kv.delete("session:" + token);
-            } catch (e) {}
+            if (db) {
+                try {
+                    await db.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
+                } catch (e) {}
+            }
+            if (kv) {
+                try {
+                    await kv.delete("session:" + token);
+                } catch (e) {}
+            }
         }
 
-        return new Response(JSON.stringify({ success: true, message: "已退出登录" }), {
+        return new Response(JSON.stringify({ success: true, message: "已安全退出登录" }), {
             status: 200,
             headers
         });

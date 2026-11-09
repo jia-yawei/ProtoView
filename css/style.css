@@ -5624,6 +5624,723 @@ body.resizing-active .workbench-resizer {
     border-color: rgba(59, 130, 246, 0.35);
 }
 
+/* ========================================================
+   系统监控与后台管理中心 (System & Cloudflare Quota Admin View)
+   ======================================================== */
+.admin-dashboard-container {
+    padding: 16px 20px 32px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.admin-engine-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 20px;
+    font-size: 11.5px;
+    color: var(--text-primary);
+}
+
+.admin-engine-badge b {
+    color: var(--accent-color);
+}
+
+/* 1. 核心 KPI 四格卡片 */
+.admin-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+}
+
+@media (max-width: 1024px) {
+    .admin-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .admin-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.admin-kpi-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg, var(--bg-secondary));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
+}
+
+.kpi-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.kpi-blue {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+}
+
+.kpi-green {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+}
+
+.kpi-purple {
+    background: rgba(139, 92, 246, 0.12);
+    color: #8b5cf6;
+}
+
+.kpi-amber {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+}
+
+.kpi-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.kpi-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-bottom: 3px;
+}
+
+.kpi-val-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.kpi-value {
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.1;
+    font-family: var(--font-mono, monospace);
+}
+
+.kpi-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* 2. 通用后台卡片 */
+.admin-card {
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg, var(--bg-secondary));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+}
+
+.admin-card-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.015);
+}
+
+[data-theme="dark"] .admin-card-header {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.ach-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.quota-badge-pill {
+    font-size: 10.5px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: rgba(243, 128, 32, 0.12);
+    color: #ea580c;
+    border: 1px solid rgba(243, 128, 32, 0.25);
+    font-weight: 600;
+}
+
+[data-theme="dark"] .quota-badge-pill {
+    background: rgba(243, 128, 32, 0.2);
+    color: #fb923c;
+}
+
+/* 3. Cloudflare 配额网格 */
+.admin-quota-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    padding: 16px 18px;
+}
+
+@media (max-width: 1100px) {
+    .admin-quota-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .admin-quota-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.quota-box {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 13px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.15s ease;
+}
+
+.quota-box:hover {
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+.quota-box-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.quota-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.quota-val-text {
+    font-size: 11.5px;
+    font-family: var(--font-mono, monospace);
+    color: var(--text-secondary);
+}
+
+.quota-val-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.quota-progress-track {
+    width: 100%;
+    height: 7px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+[data-theme="dark"] .quota-progress-track {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.quota-progress-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease-out;
+}
+
+.quota-progress-bar-fill.healthy {
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+}
+
+.quota-progress-bar-fill.warning {
+    background: linear-gradient(90deg, #f59e0b, #f97316);
+}
+
+.quota-progress-bar-fill.danger {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.quota-box-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.quota-percent-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-color);
+}
+
+.quota-desc-text {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin: 2px 0;
+}
+
+.quota-status-pill {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+}
+
+.quota-status-pill.healthy {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+}
+
+/* 4. 用户名单与管理表格 */
+.admin-users-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.admin-search-wrapper i {
+    position: absolute;
+    left: 9px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    pointer-events: none;
+}
+
+.admin-search-wrapper input {
+    height: 28px;
+    padding: 0 10px 0 28px;
+    font-size: 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    width: 200px;
+    transition: all 0.15s ease;
+}
+
+.admin-search-wrapper input:focus {
+    width: 240px;
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+.admin-table-container {
+    width: 100%;
+    overflow-x: auto;
+    max-height: 520px;
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+
+.admin-table th {
+    background: rgba(0, 0, 0, 0.02);
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+[data-theme="dark"] .admin-table th {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.admin-table tbody tr:hover {
+    background: rgba(59, 130, 246, 0.03);
+}
+
+[data-theme="dark"] .admin-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.admin-user-cell {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.admin-user-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.admin-user-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.admin-badge-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    background: rgba(59, 130, 246, 0.08);
+    color: var(--accent-color);
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    margin-right: 6px;
+}
+
+.admin-badge-size {
+    display: inline-block;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--font-mono, monospace);
+}
+
+[data-theme="dark"] .admin-badge-size {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.admin-row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.btn-danger-outline {
+    background: transparent;
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-danger-outline:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+}
+
+.admin-table-empty {
+    text-align: center;
+    padding: 40px 16px !important;
+    color: var(--text-secondary);
+}
+
+.admin-table-empty i {
+    font-size: 2rem;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.admin-table-empty p {
+    font-size: 13px;
+    margin: 0;
+}
+
+/* ========================================================
+   全屏系统登录准入门户 (简约现代企业风格)
+   ======================================================== */
+.login-portal-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 99999;
+    background: var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* 核心认证状态显示/隐藏 */
+html.is-authenticated .login-portal-screen {
+    display: none !important;
+}
+
+html:not(.is-authenticated) .app-container {
+    display: none !important;
+}
+
+/* 极简卡片容器 */
+.login-portal-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--card-bg, var(--bg-secondary));
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 34px 28px 28px 28px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    box-sizing: border-box;
+}
+
+[data-theme="dark"] .login-portal-card {
+    background: #141b27;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* 头部：图标 + 标题 + 副标 */
+.login-portal-header {
+    text-align: center;
+    margin-bottom: 22px;
+}
+
+.portal-brand-badge {
+    width: 42px;
+    height: 42px;
+    margin: 0 auto 10px auto;
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+}
+
+.portal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 3px 0;
+    letter-spacing: 0.2px;
+}
+
+.portal-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0;
+    font-weight: 400;
+}
+
+/* 简约分段切换条 (Segmented Tab Bar) */
+.portal-tab-bar {
+    display: flex;
+    background: var(--bg-primary);
+    padding: 3px;
+    border-radius: 7px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.portal-tab-btn {
+    flex: 1;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.portal-tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.portal-tab-btn.active {
+    background: var(--card-bg, var(--bg-secondary));
+    color: var(--text-primary);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .portal-tab-btn.active {
+    background: #232d3d;
+    color: #ffffff;
+}
+
+/* 简约表单组 */
+.portal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.portal-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.portal-form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.portal-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.portal-icon {
+    position: absolute;
+    left: 11px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.portal-input-wrap input {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px 0 34px;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.portal-input-wrap input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* 主提交按钮 */
+.portal-submit-btn {
+    width: 100%;
+    height: 38px;
+    font-size: 13.5px;
+    font-weight: 600;
+    border-radius: 6px;
+    margin-top: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+/* 底部切换链接 */
+.portal-switch-row {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.portal-switch-row a {
+    color: var(--accent-color);
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+.portal-switch-row a:hover {
+    text-decoration: underline;
+}
+
+/* 右上角简约主题切换按钮 */
+.login-portal-theme-toggle {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.login-portal-theme-toggle:hover {
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+}
+
 
 
 
