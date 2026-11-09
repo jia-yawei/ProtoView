@@ -20,9 +20,13 @@
                 var theme = localStorage.getItem('theme');
                 if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
                 var token = localStorage.getItem('protoview_auth_token');
-                var user = localStorage.getItem('protoview_auth_user');
-                if (token && user) {
+                var userRaw = localStorage.getItem('protoview_auth_user');
+                if (token && userRaw) {
                     document.documentElement.classList.add('is-authenticated');
+                    var user = JSON.parse(userRaw);
+                    if (user && (user.isAdmin || (user.username && user.username.toLowerCase() === 'admin'))) {
+                        document.documentElement.classList.add('is-admin');
+                    }
                 }
             } catch(e) {}
         })();
@@ -124,13 +128,13 @@
                 </button>
             </div>
             <nav class="nav-menu">
-                <button class="nav-item active" data-view="protocol-view" title="协议管理">
+                <button class="nav-item active" data-view="protocol-view" id="nav-btn-protocol" title="通信协议管理">
                     <i class="fa-solid fa-book"></i>
                     <span class="sidebar-text">协议管理</span>
                 </button>
-                <button class="nav-item" data-view="admin-view" id="nav-btn-admin" style="display: none;" title="系统监控与用户管理后台">
+                <button class="nav-item" data-view="admin-view" id="nav-btn-admin" style="display: none;" title="系统管理后台">
                     <i class="fa-solid fa-gauge-high"></i>
-                    <span class="sidebar-text">系统监控后台</span>
+                    <span class="sidebar-text">系统管理后台</span>
                 </button>
             </nav>
             <!-- 用户账号状态与登录入口 -->
@@ -142,7 +146,7 @@
                     <div class="sidebar-user-info">
                         <span class="sidebar-user-name" id="sidebar-user-name">访客未登录</span>
                         <div class="sidebar-user-status" id="sidebar-user-status">
-                            <i class="fa-solid fa-circle"></i> <span>本地模式</span>
+                            <i class="fa-solid fa-circle"></i> <span>未登录</span>
                         </div>
                     </div>
                 </div>
@@ -168,6 +172,9 @@
                         <span class="view-header-desc">集中管理 ARINC 429、CAN 及串口总线通信协议</span>
                     </div>
                     <div class="view-header-actions">
+                        <button class="btn btn-secondary btn-sm" id="btn-cloud-refresh" title="从 Cloudflare 云端同步并刷新协议">
+                            <i class="fa-solid fa-arrows-rotate"></i> 刷新协议
+                        </button>
                         <button class="btn btn-secondary btn-sm" id="btn-create-product" title="新建产品型号，在产品下归类和管理多包通信协议">
                             <i class="fa-solid fa-cubes"></i> 新建产品
                         </button>
@@ -179,70 +186,6 @@
                         </button>
                     </div>
                 </header>
-
-                <!-- 工作台模式选择与目录同步条 (统一为单行高密度桌面级控制条) -->
-                <div class="workspace-container compact-workspace-bar">
-                    <div class="workspace-mode-nav compact-mode-nav">
-                        <button type="button" class="ws-mode-btn active" id="btn-mode-local" title="直接关联电脑硬盘物理文件夹，编辑自动写回磁盘 .json 文件">
-                            <i class="fa-solid fa-hard-drive"></i> 本地硬盘
-                        </button>
-                        <button type="button" class="ws-mode-btn" id="btn-mode-cloud" title="连接 Cloudflare 全球分布式云端数据库，手机和电脑实时多端同步">
-                            <i class="fa-solid fa-cloud"></i> 云端
-                            <span class="ws-mode-badge">同步</span>
-                        </button>
-                    </div>
-
-                    <!-- 1. 本地工作目录模式视图 -->
-                    <div class="workspace-dir-strip" id="workspace-local-strip">
-                        <div class="ws-left">
-                            <div class="ws-icon-box ws-mini-icon-box" id="ws-local-icon">
-                                <i class="fa-solid fa-folder-tree"></i>
-                            </div>
-                            <span class="ws-label-prefix">本地目录:</span>
-                            <span class="ws-name" id="ws-folder-name" title="未关联本地工作目录">未关联本地目录 (当前保存在浏览器内部)</span>
-                            <span class="ws-status-badge" id="ws-status-badge">浏览器内部</span>
-                        </div>
-                        <div class="ws-right">
-                            <button type="button" class="btn btn-secondary btn-xs" id="btn-set-workspace" title="选择电脑上的文件夹作为工作目录，自动读取该文件夹下的所有协议文件">
-                                <i class="fa-solid fa-folder-open"></i> <span id="btn-set-workspace-text">设置目录</span>
-                            </button>
-                            <button type="button" class="btn btn-secondary btn-xs" id="btn-refresh-workspace" style="display:none;" title="重新扫描工作目录下的协议文件">
-                                <i class="fa-solid fa-arrows-rotate"></i> 刷新
-                            </button>
-                            <button type="button" class="btn btn-primary-soft btn-xs btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
-                                <i class="fa-solid fa-arrow-right-arrow-left"></i> 硬盘与云端同步
-                            </button>
-                            <button type="button" class="btn btn-danger-outline btn-xs" id="btn-disconnect-workspace" style="display:none;" title="断开本地目录关联">
-                                <i class="fa-solid fa-link-slash"></i> 断开
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 2. Cloudflare 云端工作台模式视图 -->
-                    <div class="workspace-dir-strip workspace-cloud-strip" id="workspace-cloud-strip" style="display:none;">
-                        <div class="ws-left">
-                            <div class="ws-icon-box ws-mini-icon-box ws-cloud-icon">
-                                <i class="fa-solid fa-cloud"></i>
-                            </div>
-                            <span class="ws-label-prefix">云端空间:</span>
-                            <span class="ws-name" id="ws-cloud-name" title="云端工作空间">云端专属空间</span>
-                            <span class="ws-user-badge" id="ws-cloud-user-badge" title="当前登录的独立账号"><i class="fa-solid fa-user-shield"></i> 未登录账号</span>
-                            <span class="ws-status-badge ws-cloud-status" id="ws-cloud-status-badge">☁️ 正在连接</span>
-                        </div>
-                        <div class="ws-right">
-                            <button type="button" class="btn btn-secondary btn-xs" id="btn-cloud-refresh" title="从 Cloudflare 云端重新加载并同步我的协议">
-                                <i class="fa-solid fa-arrows-rotate"></i> 同步刷新
-                            </button>
-                            <button type="button" class="btn btn-secondary btn-xs" id="btn-ws-cloud-user-switch" title="切换账号或注册新用户">
-                                <i class="fa-solid fa-user-gear"></i> 切换/登录账号
-                            </button>
-                            <button type="button" class="btn btn-primary-soft btn-xs btn-open-sync-hub" id="btn-open-sync-hub" title="在电脑本地硬盘目录与 Cloudflare 云端之间按指定方向同步协议">
-                                <i class="fa-solid fa-arrow-right-arrow-left"></i> 硬盘与云端同步
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <input type="file" id="workspace-folder-input" webkitdirectory directory multiple style="display:none">
 
                 <!-- 产品分组快捷筛选与搜索过滤条 -->
                 <div class="product-filter-bar" id="product-filter-bar">
@@ -693,7 +636,13 @@
                         <span class="view-header-desc">实时监控 Cloudflare 免费配额消耗、用户注册规模与分布式云端存储</span>
                     </div>
                     <div class="view-header-actions">
-                        <span class="admin-engine-badge" id="admin-engine-badge"><i class="fa-solid fa-server"></i> 存储: <b>R2</b> · 数据库: <b>D1</b></span>
+                        <span class="admin-engine-badge" id="admin-engine-badge"><i class="fa-solid fa-server"></i> 存储: <b>检测中</b> · 数据库: <b>检测中</b></span>
+                        <button class="btn btn-secondary btn-sm" id="btn-open-cf-config" title="配置 Cloudflare 官方 API Token 与账户参数，开启真实流量实时采集">
+                            <i class="fa-solid fa-sliders"></i> 绑定设置与 API
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="btn-open-cf-guide" title="查看 Cloudflare Pages 数据库绑定手把手操作向导">
+                            <i class="fa-solid fa-book-bookmark"></i> 绑定向导
+                        </button>
                         <button class="btn btn-secondary btn-sm" id="btn-clean-sessions" title="一键清理 D1 数据库中已过期的废弃 Token 会话">
                             <i class="fa-solid fa-broom"></i> 清理过期会话
                         </button>
@@ -762,19 +711,159 @@
                         </div>
                     </div>
 
-                    <!-- 2. Cloudflare 官方免费额度与资源健康仪表盘 -->
+                    <!-- 2. 云端服务与数据库绑定管理控制台 -->
+                    <div class="admin-card glass-effect admin-bindings-section">
+                        <div class="admin-card-header">
+                            <div class="ach-title">
+                                <i class="fa-solid fa-network-wired" style="color:var(--accent-color);"></i>
+                                <span>云端服务与数据库绑定状态</span>
+                                <span class="quota-badge-pill" id="binding-overall-pill">检测中</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" class="btn btn-secondary btn-xs" id="btn-recheck-bindings" title="重新探测各数据库与存储桶的连通状态">
+                                    <i class="fa-solid fa-stethoscope"></i> 探测连通性
+                                </button>
+                                <button type="button" class="btn btn-primary-soft btn-xs" id="btn-open-guide-inline">
+                                    <i class="fa-solid fa-circle-question"></i> 如何绑定真实数据库?
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="admin-bindings-grid">
+                            <!-- D1 关系型数据库卡片 -->
+                            <div class="binding-item-card" id="card-binding-d1">
+                                <div class="bic-top">
+                                    <div class="bic-title-row">
+                                        <div class="bic-icon bic-icon-d1"><i class="fa-solid fa-table"></i></div>
+                                        <div>
+                                            <div class="bic-name">Cloudflare D1 关系型数据库</div>
+                                            <div class="bic-binding-var">Pages 绑定变量名: <code>DB</code></div>
+                                        </div>
+                                    </div>
+                                    <span class="binding-status-tag tag-checking" id="badge-d1-status"><i class="fa-solid fa-spinner fa-spin"></i> 检测中</span>
+                                </div>
+                                <div class="bic-body">
+                                    <div class="bic-desc" id="desc-d1-status">
+                                        存储全站工程师账号、密码安全哈希与 30 天登录会话。
+                                    </div>
+                                    <div class="bic-table-status" id="d1-tables-indicator">
+                                        <i class="fa-solid fa-circle-notch fa-spin"></i> 正在检查 users / sessions 表结构...
+                                    </div>
+                                </div>
+                                <div class="bic-actions">
+                                    <button type="button" class="btn btn-primary-soft btn-xs" id="btn-init-d1-schema" title="一键在 D1 数据库中执行建表语句 (users 和 sessions)">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> 一键初始化数据表
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-xs" id="btn-view-d1-sql" title="查看建表 SQL 语句">
+                                        <i class="fa-solid fa-code"></i> 查看 SQL
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- R2 对象存储卡片 -->
+                            <div class="binding-item-card" id="card-binding-r2">
+                                <div class="bic-top">
+                                    <div class="bic-title-row">
+                                        <div class="bic-icon bic-icon-r2"><i class="fa-solid fa-box-archive"></i></div>
+                                        <div>
+                                            <div class="bic-name">Cloudflare R2 对象存储桶</div>
+                                            <div class="bic-binding-var">Pages 绑定变量名: <code>PROTO_BUCKET</code></div>
+                                        </div>
+                                    </div>
+                                    <span class="binding-status-tag tag-checking" id="badge-r2-status"><i class="fa-solid fa-spinner fa-spin"></i> 检测中</span>
+                                </div>
+                                <div class="bic-body">
+                                    <div class="bic-desc" id="desc-r2-status">
+                                        存储 500KB+ 大 JSON 航空通信协议，无单文件体积限制。
+                                    </div>
+                                    <div class="bic-table-status">
+                                        <i class="fa-solid fa-shield-halved" style="color:#10b981;"></i> 10 GB 永久免费 · 出站流量 $0 全免
+                                    </div>
+                                </div>
+                                <div class="bic-actions">
+                                    <button type="button" class="btn btn-secondary btn-xs" id="btn-config-r2-target" title="配置目标 R2 存储桶参数">
+                                        <i class="fa-solid fa-sliders"></i> 配置桶名称
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Cloudflare 官方 API 实时采集卡片 -->
+                            <div class="binding-item-card" id="card-binding-api">
+                                <div class="bic-top">
+                                    <div class="bic-title-row">
+                                        <div class="bic-icon bic-icon-api"><i class="fa-brands fa-cloudflare"></i></div>
+                                        <div>
+                                            <div class="bic-name">Cloudflare 官方 API 连线</div>
+                                            <div class="bic-binding-var">REST & GraphQL 真实指标</div>
+                                        </div>
+                                    </div>
+                                    <span class="binding-status-tag tag-unconfigured" id="badge-cf-api-status">未配置 API</span>
+                                </div>
+                                <div class="bic-body">
+                                    <div class="bic-desc" id="desc-cf-api-status">
+                                        直接抓取 Cloudflare 官方出站流量 (Bandwidth) 与真实 HTTP 请求次数。
+                                    </div>
+                                    <div class="bic-table-status" id="cf-api-indicator">
+                                        <i class="fa-solid fa-circle-info"></i> 配置 API Token 后与官方控制台数据 100% 一致
+                                    </div>
+                                </div>
+                                <div class="bic-actions">
+                                    <button type="button" class="btn btn-primary btn-xs" id="btn-manage-cf-api">
+                                        <i class="fa-solid fa-key"></i> 配置 API 凭据
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Cloudflare 官方免费额度与资源健康仪表盘 -->
                     <div class="admin-card glass-effect admin-quota-section">
                         <div class="admin-card-header">
                             <div class="ach-title">
                                 <i class="fa-brands fa-cloudflare" style="color: #f38020; font-size: 1.25rem;"></i>
-                                <span>Cloudflare 免费额度与资源消耗监控</span>
-                                <span class="quota-badge-pill">Free Tier 自动追踪</span>
+                                <span>Cloudflare 免费额度与全网真实消耗监控</span>
+                                <span class="quota-badge-pill" id="cf-real-data-badge">实时数据追踪</span>
                             </div>
-                            <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-xs" title="跳转登录 Cloudflare 官方 Dashboard 查看实时用量图表">
-                                <i class="fa-solid fa-arrow-up-right-from-square"></i> 打开 Cloudflare 控制台
-                            </a>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" class="btn btn-secondary btn-xs" id="btn-open-cf-api-modal-top" title="配置 Cloudflare API Token 抓取实时流量与请求">
+                                    <i class="fa-solid fa-tower-broadcast"></i> 配置实时抓取
+                                </button>
+                                <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-xs" title="跳转登录 Cloudflare 官方 Dashboard 查看实时用量图表">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> 打开 Cloudflare 控制台
+                                </a>
+                            </div>
                         </div>
                         <div class="admin-quota-grid">
+                            <!-- 网站真实出站流量 (Cloudflare 官方 API 抓取) -->
+                            <div class="quota-box">
+                                <div class="quota-box-header">
+                                    <span class="quota-title"><i class="fa-solid fa-arrow-trend-up" style="color:#06b6d4;"></i> 网站出站使用流量 (Bandwidth)</span>
+                                    <span class="quota-val-text" id="quota-traffic-used">0 B / 24小时</span>
+                                </div>
+                                <div class="quota-desc-text">
+                                    真实网络出站数据传输量 (静态资源 + Functions 响应)。
+                                </div>
+                                <div class="quota-box-footer">
+                                    <span>Cloudflare CDN: <b>不限免费流量</b></span>
+                                    <span class="quota-percent-pill" id="quota-traffic-source-pill">自测估算</span>
+                                </div>
+                            </div>
+
+                            <!-- 真实 HTTP 访问请求量 (Cloudflare 官方 API 抓取) -->
+                            <div class="quota-box">
+                                <div class="quota-box-header">
+                                    <span class="quota-title"><i class="fa-solid fa-chart-line" style="color:#8b5cf6;"></i> HTTP 访问请求次数</span>
+                                    <span class="quota-val-text" id="quota-requests-count">0 次 / 今日</span>
+                                </div>
+                                <div class="quota-desc-text">
+                                    每日免费运算额度: <b>100,000 次 / 天</b> (Workers / Pages)。
+                                </div>
+                                <div class="quota-box-footer">
+                                    <span>30天累计请求: <b id="quota-requests-30d">0</b> 次</span>
+                                    <span class="quota-status-pill healthy" id="quota-requests-source-pill"><i class="fa-solid fa-circle-check"></i> 实时正常</span>
+                                </div>
+                            </div>
+
                             <!-- R2 存储容量 -->
                             <div class="quota-box">
                                 <div class="quota-box-header">
@@ -1205,216 +1294,6 @@
         </div>
     </div>
 
-    <!-- 弹窗：Cloudflare 云端工作台设置 -->
-    <div class="modal" id="cloud-settings-modal">
-        <div class="modal-content" style="max-width: 580px; width: 92vw;">
-            <div class="modal-header">
-                <h2><i class="fa-solid fa-cloud" style="color:var(--accent-color);"></i> Cloudflare 云端工作台配置</h2>
-                <button type="button" class="close-modal"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="cloud-settings-form">
-                <div class="cloud-settings-body">
-                    <div class="cloud-info-box">
-                        <i class="fa-solid fa-circle-info" style="color: var(--accent-color); font-size: 16px; margin-top: 2px; flex-shrink: 0;"></i> 
-                        <div>
-                            <strong>全球分布式多端实时同步</strong>
-                            云端工作台基于 Cloudflare 全球分布式 KV 存储，电脑与手机共享相同空间，数据实时跨设备同步。
-                        </div>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 18px;">
-                        <label for="cloud-ws-id" style="font-weight: 600; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                            <i class="fa-solid fa-folder" style="color:var(--accent-color);"></i> 云端工作空间名称 (Workspace ID):
-                        </label>
-                        <input type="text" id="cloud-ws-id" placeholder="例如: default 或 my_project" value="default" required>
-                        <small style="color: var(--text-secondary); font-size: 12px; margin-top: 6px; display: block; line-height: 1.45;">
-                            💡 不同设备（电脑和手机）填写相同的空间名称，即可查看和同步相同的协议工程。
-                        </small>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 18px;">
-                        <label for="cloud-ws-token" style="font-weight: 600; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                            <i class="fa-solid fa-key" style="color:var(--accent-color);"></i> 访问私密口令 (可选，为空则公开访问):
-                        </label>
-                        <input type="password" id="cloud-ws-token" placeholder="若在 Cloudflare 设置了 WORKSPACE_TOKEN 请在此输入">
-                        <small style="color: var(--text-secondary); font-size: 12px; margin-top: 6px; display: block; line-height: 1.45;">
-                            🔒 如果在 Cloudflare 后台设置了访问密钥，请在此填入口令以验证权限。
-                        </small>
-                    </div>
-
-                    <div id="cloud-connection-status" style="display: none;"></div>
-                </div>
-
-                <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center;">
-                    <button type="button" class="btn btn-secondary" id="btn-test-cloud-conn">
-                        <i class="fa-solid fa-bolt"></i> 测试连接
-                    </button>
-                    <div style="display: flex; gap: 8px;">
-                        <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
-                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> 保存并应用</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- 弹窗：本地硬盘与云端协议同步中心 (支持单向与双向方向选择) -->
-    <div class="modal" id="sync-hub-modal">
-        <div class="modal-content" style="max-width: 680px; width: 92vw; max-height: 90vh; display: flex; flex-direction: column;">
-            <div class="modal-header" style="padding-bottom: 0.6rem;">
-                <h2><i class="fa-solid fa-arrow-right-arrow-left" style="color:var(--accent-color);"></i> 硬盘与云端协议同步中心</h2>
-                <button type="button" class="close-modal"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 18px 24px;">
-                <!-- 两端状态总览卡片 -->
-                <div class="sync-status-grid">
-                    <div class="sync-endpoint-card" id="sync-card-local">
-                        <div class="sync-ep-header">
-                            <span class="sync-ep-icon"><i class="fa-solid fa-hard-drive"></i></span>
-                            <div class="sync-ep-info">
-                                <div class="sync-ep-title">本地硬盘目录</div>
-                                <div class="sync-ep-name" id="sync-local-name">正在检测...</div>
-                            </div>
-                        </div>
-                        <div class="sync-ep-stat">
-                            <span class="sync-count-badge" id="sync-local-count-badge">0 个协议文件</span>
-                            <button type="button" class="btn btn-secondary btn-xs" id="sync-btn-pick-dir" style="display:none;">
-                                <i class="fa-solid fa-folder-open"></i> 选择目录
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="sync-flow-indicator" id="sync-flow-indicator" title="当前同步流向">
-                        <i class="fa-solid fa-arrow-right" id="sync-flow-arrow"></i>
-                    </div>
-
-                    <div class="sync-endpoint-card" id="sync-card-cloud">
-                        <div class="sync-ep-header">
-                            <span class="sync-ep-icon sync-ep-icon-cloud"><i class="fa-solid fa-cloud"></i></span>
-                            <div class="sync-ep-info">
-                                <div class="sync-ep-title">Cloudflare 云端工作台</div>
-                                <div class="sync-ep-name" id="sync-cloud-name">工作空间: [default]</div>
-                            </div>
-                        </div>
-                        <div class="sync-ep-stat">
-                            <span class="sync-count-badge badge-cloud" id="sync-cloud-count-badge">0 个云端协议</span>
-                            <button type="button" class="btn btn-secondary btn-xs" id="sync-btn-refresh-cloud" title="重新获取云端协议数">
-                                <i class="fa-solid fa-arrows-rotate"></i> 刷新
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 同步方向选择区 -->
-                <div class="sync-section-title">
-                    <i class="fa-solid fa-compass"></i> 选择同步方向与策略
-                </div>
-
-                <div class="sync-direction-list" id="sync-direction-list">
-                    <!-- 方向 1: 硬盘 ➔ 云端 -->
-                    <label class="sync-dir-card active" data-dir="disk-to-cloud">
-                        <input type="radio" name="sync-direction" value="disk-to-cloud" checked style="display:none;">
-                        <div class="sync-dir-radio">
-                            <i class="fa-solid fa-circle-dot"></i>
-                        </div>
-                        <div class="sync-dir-body">
-                            <div class="sync-dir-top">
-                                <span class="sync-dir-name"><i class="fa-solid fa-hard-drive"></i> 本地硬盘 ➔ <i class="fa-solid fa-cloud"></i> 云端工作台</span>
-                                <span class="sync-dir-tag tag-upload">电脑传云端</span>
-                            </div>
-                            <div class="sync-dir-desc">
-                                读取电脑本地硬盘目录中的全部协议文件（.json），全量上传推送到 Cloudflare 云端工作空间中。手机端刷新即可同步看到全部最新协议。
-                            </div>
-                        </div>
-                    </label>
-
-                    <!-- 方向 2: 云端 ➔ 硬盘 -->
-                    <label class="sync-dir-card" data-dir="cloud-to-disk">
-                        <input type="radio" name="sync-direction" value="cloud-to-disk" style="display:none;">
-                        <div class="sync-dir-radio">
-                            <i class="fa-regular fa-circle"></i>
-                        </div>
-                        <div class="sync-dir-body">
-                            <div class="sync-dir-top">
-                                <span class="sync-dir-name"><i class="fa-solid fa-cloud"></i> 云端工作台 ➔ <i class="fa-solid fa-hard-drive"></i> 本地硬盘</span>
-                                <span class="sync-dir-tag tag-download">云端落盘本地</span>
-                            </div>
-                            <div class="sync-dir-desc">
-                                从 Cloudflare 云端拉取当前工作空间的所有协议，在电脑本地硬盘目录中直接写入/保存为 .json 协议文件。手机端现场修改后拉回电脑磁盘归档保存。
-                            </div>
-                        </div>
-                    </label>
-
-                    <!-- 方向 3: 双向智能合并 -->
-                    <label class="sync-dir-card" data-dir="bidirectional">
-                        <input type="radio" name="sync-direction" value="bidirectional" style="display:none;">
-                        <div class="sync-dir-radio">
-                            <i class="fa-regular fa-circle"></i>
-                        </div>
-                        <div class="sync-dir-body">
-                            <div class="sync-dir-top">
-                                <span class="sync-dir-name"><i class="fa-solid fa-arrows-rotate"></i> 双向智能合并同步</span>
-                                <span class="sync-dir-tag tag-both">两端自动合并 (推荐)</span>
-                            </div>
-                            <div class="sync-dir-desc">
-                                双向智能比对：本地有而云端无 ➔ 上传到云端；云端有而本地无 ➔ 下载保存到硬盘；两端均存在 ➔ 自动比对最后修改时间，较新版本覆盖较旧版本。
-                            </div>
-                        </div>
-                    </label>
-                </div>
-
-                <!-- 冲突与覆盖选项 -->
-                <div class="sync-options-card">
-                    <label class="sync-checkbox-label">
-                        <input type="checkbox" id="sync-opt-newer" checked>
-                        <span>遇到两端同名协议时自动保留较新版本（基于更新时间戳）</span>
-                    </label>
-                </div>
-
-                <!-- 同步执行进度与反馈展示区 -->
-                <div class="sync-progress-area" id="sync-progress-area" style="display:none;">
-                    <div class="sync-progress-bar-wrap">
-                        <div class="sync-progress-bar-inner" id="sync-progress-bar" style="width: 0%;"></div>
-                    </div>
-                    <div class="sync-progress-status" id="sync-progress-status">
-                        <i class="fa-solid fa-spinner fa-spin"></i> <span>正在准备同步...</span>
-                    </div>
-                    <div class="sync-metrics-grid" id="sync-metrics-grid" style="display:none;">
-                        <div class="sync-metric-item">
-                            <div class="sync-metric-val" id="metric-upload" style="color: #10b981;">0</div>
-                            <div class="sync-metric-lbl">已上传云端</div>
-                        </div>
-                        <div class="sync-metric-item">
-                            <div class="sync-metric-val" id="metric-download" style="color: #3b82f6;">0</div>
-                            <div class="sync-metric-lbl">已落盘本地</div>
-                        </div>
-                        <div class="sync-metric-item">
-                            <div class="sync-metric-val" id="metric-skip" style="color: var(--text-secondary);">0</div>
-                            <div class="sync-metric-lbl">已是最新(跳过)</div>
-                        </div>
-                        <div class="sync-metric-item">
-                            <div class="sync-metric-val" id="metric-fail" style="color: #ef4444;">0</div>
-                            <div class="sync-metric-lbl">失败</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-actions" style="margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                <span class="dense-hint" id="sync-bottom-hint">
-                    <i class="fa-solid fa-shield-halved" style="color:var(--accent-color);"></i> 数据在传输前将在本地自动备份，安全无损
-                </span>
-                <div style="display: flex; gap: 8px;">
-                    <button type="button" class="btn btn-secondary close-modal-btn">关闭</button>
-                    <button type="button" class="btn btn-primary" id="btn-start-sync-execute">
-                        <i class="fa-solid fa-play"></i> 立即开始同步
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- 产品名称自动联想补全数据源 -->
     <datalist id="product-datalist"></datalist>
 
@@ -1478,7 +1357,168 @@
         </div>
     </div>
 
-    <!-- 弹窗 8：后台管理访问口令 (Admin Secret Key) 设置与验证弹窗 -->
+    <!-- 弹窗 7：Cloudflare 官方 API 凭证与云端绑定参数配置弹窗 -->
+    <div class="modal" id="cf-config-modal">
+        <div class="modal-content glass-effect" style="max-width: 580px; width: 92vw;">
+            <div class="modal-header">
+                <h2><i class="fa-brands fa-cloudflare" style="color: #f38020;"></i> Cloudflare 官方 API 与云端绑定配置</h2>
+                <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="cf-config-form">
+                <div class="modal-body-scroll" style="padding: 18px 22px;">
+                    <div class="cloud-info-box" style="margin-bottom: 16px;">
+                        <i class="fa-solid fa-circle-info" style="color: var(--accent-color); font-size: 16px; margin-top: 2px; flex-shrink: 0;"></i> 
+                        <div style="font-size: 12.5px; line-height: 1.5;">
+                            <strong>官方指标与真实流量直连采集</strong><br>
+                            配置您的 Cloudflare API Token 与 Account ID 后，系统将直接调用 Cloudflare 官方 GraphQL Analytics API 与 R2 计量接口，100% 还原控制台出站流量与真实请求次数。
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="cf-cfg-token" style="font-weight: 600; font-size: 12.5px; display: flex; justify-content: space-between;">
+                            <span>Cloudflare API Token <span class="req-star" style="color:var(--danger);">*</span></span>
+                            <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" style="font-size: 11.5px; color: var(--accent-color); text-decoration: none;">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> 获取 Token
+                            </a>
+                        </label>
+                        <input type="password" id="cf-cfg-token" placeholder="以 Bearer 开头的 Cloudflare API 令牌" required autocomplete="off" style="height: 36px; font-family: monospace; font-size: 12px;">
+                        <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px; display: block;">
+                            🔑 需要具有 <b>Account Analytics (读)</b>、<b>Workers/Pages (读)</b> 或 <b>R2 (读)</b> 权限。
+                        </small>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="cf-cfg-account-id" style="font-weight: 600; font-size: 12.5px;">
+                            Cloudflare Account ID <span class="req-star" style="color:var(--danger);">*</span>
+                        </label>
+                        <input type="text" id="cf-cfg-account-id" placeholder="32 位十六进制账户 ID (例如: 1a2b3c4d...)" required autocomplete="off" style="height: 36px; font-family: monospace; font-size: 12px;">
+                        <small style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px; display: block;">
+                            可在 Cloudflare 仪表盘任一域名或 Workers 页面右侧栏底部找到 Account ID。
+                        </small>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="cf-cfg-r2-bucket" style="font-weight: 600; font-size: 12.5px;">R2 存储桶名称</label>
+                            <input type="text" id="cf-cfg-r2-bucket" placeholder="如: protoview-bucket" style="height: 36px; font-size: 12px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="cf-cfg-zone-id" style="font-weight: 600; font-size: 12.5px;">Zone ID (可选，绑定域名时填)</label>
+                            <input type="text" id="cf-cfg-zone-id" placeholder="域名 Zone ID (用于统计出站流量)" style="height: 36px; font-family: monospace; font-size: 12px;">
+                        </div>
+                    </div>
+
+                    <div id="cf-cfg-test-status" style="display: none; padding: 10px 14px; border-radius: 6px; font-size: 12.5px; margin-top: 10px;"></div>
+                </div>
+
+                <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-test-cf-token">
+                        <i class="fa-solid fa-bolt"></i> 测试连通性
+                    </button>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
+                        <button type="submit" class="btn btn-primary btn-sm" id="btn-save-cf-cfg">
+                            <i class="fa-solid fa-check"></i> 保存并开始爬取
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 弹窗 8：Cloudflare Pages 数据库绑定与初始化实战向导 -->
+    <div class="modal" id="cf-guide-modal">
+        <div class="modal-content glass-effect" style="max-width: 680px; width: 92vw; max-height: 90vh;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-book-bookmark" style="color:var(--accent-color);"></i> Cloudflare 云端真实数据库绑定向导</h2>
+                <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body-scroll" style="padding: 20px 24px; font-size: 13px; line-height: 1.6;">
+                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                    ProtoView 采用完全 Serverless 云原生架构。为了让网页拥有云端多用户隔离与存储能力，只需在 Cloudflare 控制台进行一次性轻量绑定：
+                </p>
+
+                <!-- 步骤 1 -->
+                <div class="guide-step-card">
+                    <div class="guide-step-header">
+                        <span class="guide-step-num">1</span>
+                        <strong>在 Cloudflare 仪表盘创建 D1 数据库与 R2 存储桶</strong>
+                    </div>
+                    <div class="guide-step-body">
+                        <ul>
+                            <li><b>D1 数据库</b>：打开 Cloudflare 控制台 -> <b>Storage & Databases</b> -> <b>D1</b> -> 点击「创建数据库」，名称填 <code>protoview-db</code>。</li>
+                            <li><b>R2 存储桶</b>：打开 <b>R2 对象存储</b> -> 点击「创建存储桶」，名称填 <code>protoview-bucket</code>。</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 步骤 2 -->
+                <div class="guide-step-card">
+                    <div class="guide-step-header">
+                        <span class="guide-step-num">2</span>
+                        <strong>在 Pages 项目中绑定变量 (函数设置)</strong>
+                    </div>
+                    <div class="guide-step-body">
+                        打开 <b>Workers 和 Pages</b> -> 点击您的项目 -> 切换到 <b>设置 (Settings)</b> -> <b>函数 (Functions)</b>：
+                        <ul>
+                            <li>在 <b>D1 数据库绑定</b> 处添加：变量名称严格填 <code>DB</code>，数据库选择刚创建的 <code>protoview-db</code>。</li>
+                            <li>在 <b>R2 存储桶绑定</b> 处添加：变量名称严格填 <code>PROTO_BUCKET</code>，存储桶选择 <code>protoview-bucket</code>。</li>
+                        </ul>
+                        <div class="guide-tip-box" style="margin-top: 8px;">
+                            💡 变量名必须为大写 <code>DB</code> 和 <code>PROTO_BUCKET</code>，系统后端函数将自动感知并直连。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤 3 -->
+                <div class="guide-step-card">
+                    <div class="guide-step-header">
+                        <span class="guide-step-num">3</span>
+                        <strong>一键初始化数据表 (创建 users & sessions 表)</strong>
+                    </div>
+                    <div class="guide-step-body">
+                        完成上述绑定后，直接在本管理后台点击<b>「一键初始化数据表」</b>按钮，系统即可全自动在 D1 中完成建表，无需在本地安装 Wrangler 命令行！
+                    </div>
+                </div>
+
+                <!-- SQL 脚本预览与复制 -->
+                <div style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 600; font-size: 12.5px;"><i class="fa-solid fa-code"></i> D1 建表 SQL 脚本 (d1-schema.sql)</span>
+                        <button type="button" class="btn btn-secondary btn-xs" id="btn-copy-d1-sql">
+                            <i class="fa-solid fa-copy"></i> 复制 SQL
+                        </button>
+                    </div>
+                    <pre class="guide-sql-code" id="guide-sql-preview">-- 1. 用户基本信息表 (仅保存用户名与加盐哈希密码)
+CREATE TABLE IF NOT EXISTS users (
+    username TEXT PRIMARY KEY,
+    salt TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- 2. 用户登录会话表 (30天有效期 Token)
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+);
+
+-- 3. 索引优化
+CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);</pre>
+                </div>
+            </div>
+            <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-primary close-modal-btn">我知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 9：后台管理访问口令 (Admin Secret Key) 设置与验证弹窗 -->
     <div class="modal" id="admin-key-modal">
         <div class="modal-content glass-effect" style="max-width: 440px;">
             <div class="modal-header">

@@ -127,6 +127,17 @@
         // 订阅路由切换事件以联动各控制器
         ProtoView.Events.on('view:changed', (data) => {
             const viewId = typeof data === 'string' ? data : (data && data.viewId);
+            const user = ProtoView.Auth && ProtoView.Auth.getCurrentUser ? ProtoView.Auth.getCurrentUser() : null;
+            const isAdmin = user && (user.isAdmin || user.username.toLowerCase() === 'admin');
+
+            // 权限分立：管理员账号无需通信协议管理，仅允许在 admin-view 工作
+            if (isAdmin && viewId !== 'admin-view') {
+                if (typeof window.switchToView === 'function') {
+                    window.switchToView('admin-view');
+                }
+                return;
+            }
+
             if (viewId === 'protocol-view') {
                 if (typeof window.loadProtocols === 'function') window.loadProtocols();
             } else if (viewId === 'arinc429-view') {
@@ -140,11 +151,9 @@
                     window.setMobileSerialView('packets');
                 }
             } else if (viewId === 'admin-view') {
-                const user = ProtoView.Auth && ProtoView.Auth.getCurrentUser ? ProtoView.Auth.getCurrentUser() : null;
-                const isAdmin = user && (user.isAdmin || user.username.toLowerCase() === 'admin');
                 if (!isAdmin) {
                     if (ProtoView.Utils && ProtoView.Utils.showToast) {
-                        ProtoView.Utils.showToast('需要管理员账号权限 (admin) 才能访问后台管理中心', 'warning');
+                        ProtoView.Utils.showToast('需要管理员账号权限 (admin) 才能访问管理后台', 'warning');
                     }
                     if (typeof window.switchToView === 'function') {
                         window.switchToView('protocol-view');
@@ -163,16 +172,43 @@
         initGlobalModalsAndShortcuts();
         initViewRouter();
 
-        // 1. 演示数据初始化
+        // 未登录状态：清空本地旧缓存以防泄露历史数据，登录前仅呈现登录准入门户
+        const loggedIn = ProtoView.Auth && ProtoView.Auth.isLoggedIn ? ProtoView.Auth.isLoggedIn() : false;
+        if (!loggedIn) {
+            if (window.dbHelper) {
+                await window.dbHelper.clearAllProtocols();
+                await window.dbHelper.clearAllProducts();
+            }
+            return;
+        }
+
+        // 核心权限分支：管理员账号仅需管理后台，跳过所有通信协议初始化
+        const currentUser = ProtoView.Auth && ProtoView.Auth.getCurrentUser ? ProtoView.Auth.getCurrentUser() : null;
+        const isAdmin = currentUser && (currentUser.isAdmin || currentUser.username.toLowerCase() === 'admin');
+        if (isAdmin) {
+            if (window.dbHelper) {
+                await window.dbHelper.clearAllProtocols();
+                await window.dbHelper.clearAllProducts();
+            }
+            if (typeof window.switchToView === 'function') {
+                window.switchToView('admin-view');
+            }
+            if (typeof window.loadAdminStats === 'function') {
+                await window.loadAdminStats();
+            }
+            return;
+        }
+
+        // 1. 演示数据清理 (确保纯净工作台)
         try {
             if (window.dbHelper && window.dbHelper.initDemoData) {
                 await window.dbHelper.initDemoData();
             }
         } catch (err) {
-            console.warn("ProtoView: 演示数据初始化异常:", err);
+            console.warn("ProtoView: 演示数据清理异常:", err);
         }
 
-        // 2. 本地工作目录与云端同步初始化
+        // 2. 云端协议同步初始化 (从 Cloudflare R2 / KV 拉取该用户协议)
         try {
             if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.init === 'function') {
                 await ProtoView.WorkspaceSync.init();

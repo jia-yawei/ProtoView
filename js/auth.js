@@ -20,8 +20,7 @@
         formAuthLogin, formAuthRegister,
         loginUsername, loginPassword, btnLoginSubmit,
         regUsername, regDisplayName, regPassword, regPasswordConfirm, btnRegisterSubmit,
-        sidebarUserCard, sidebarUserAvatar, sidebarUserName, sidebarUserStatus, btnSidebarAuthAction,
-        wsCloudUserBadge, btnWsCloudUserSwitch;
+        sidebarUserCard, sidebarUserAvatar, sidebarUserName, sidebarUserStatus, btnSidebarAuthAction;
 
     function initDOMElements() {
         authModal = document.getElementById('auth-modal');
@@ -45,9 +44,6 @@
         sidebarUserName = document.getElementById('sidebar-user-name');
         sidebarUserStatus = document.getElementById('sidebar-user-status');
         btnSidebarAuthAction = document.getElementById('btn-sidebar-auth-action');
-
-        wsCloudUserBadge = document.getElementById('ws-cloud-user-badge');
-        btnWsCloudUserSwitch = document.getElementById('btn-ws-cloud-user-switch');
     }
 
     // 获取当前登录用户
@@ -79,10 +75,17 @@
             // 自动将当前工作空间名称锁定为当前账号的用户名
             localStorage.setItem('protoview_cloud_ws', user.username);
             document.documentElement.classList.add('is-authenticated');
+            const isAdmin = user && (user.isAdmin || user.username.toLowerCase() === 'admin');
+            if (isAdmin) {
+                document.documentElement.classList.add('is-admin');
+            } else {
+                document.documentElement.classList.remove('is-admin');
+            }
         } else {
             localStorage.removeItem(AUTH_STORAGE_KEY_USER);
             localStorage.removeItem(AUTH_STORAGE_KEY_TOKEN);
             document.documentElement.classList.remove('is-authenticated');
+            document.documentElement.classList.remove('is-admin');
         }
         updateAuthUI();
     }
@@ -92,26 +95,55 @@
         initDOMElements();
         const user = getCurrentUser();
         const loggedIn = isLoggedIn();
+        const isAdmin = loggedIn && user && (user.isAdmin || user.username.toLowerCase() === 'admin');
 
         // 同步根节点已登录状态类名 (控制全屏登录页 vs 主应用工作台显示)
         if (loggedIn) {
             document.documentElement.classList.add('is-authenticated');
+            if (isAdmin) {
+                document.documentElement.classList.add('is-admin');
+            } else {
+                document.documentElement.classList.remove('is-admin');
+            }
         } else {
             document.documentElement.classList.remove('is-authenticated');
+            document.documentElement.classList.remove('is-admin');
         }
 
-        // 核心安全策略：仅管理员账号 (admin) 才能看到后台入口
+        // 核心角色隔离策略：
+        // 管理员账号：无需通信协议管理，仅展示系统管理后台
+        // 普通工程师：展示通信协议管理，彻底隐藏管理后台入口
+        const navBtnProtocol = document.getElementById('nav-btn-protocol');
         const navBtnAdmin = document.getElementById('nav-btn-admin');
-        const isAdmin = user && (user.isAdmin || user.username.toLowerCase() === 'admin');
-        if (navBtnAdmin) {
-            navBtnAdmin.style.display = (loggedIn && isAdmin) ? 'flex' : 'none';
-        }
 
-        // 越权安全保护：若当前未登录或非管理员却停留在 admin-view，自动切回协议库
-        if ((!loggedIn || !isAdmin) && typeof window.switchToView === 'function') {
-            const adminView = document.getElementById('admin-view');
-            if (adminView && adminView.classList.contains('active')) {
-                window.switchToView('protocol-view');
+        if (isAdmin) {
+            if (navBtnProtocol) navBtnProtocol.style.display = 'none';
+            if (navBtnAdmin) {
+                navBtnAdmin.style.display = 'flex';
+                navBtnAdmin.classList.add('active');
+            }
+            if (navBtnProtocol) navBtnProtocol.classList.remove('active');
+
+            // 管理员直接置身管理后台
+            if (typeof window.switchToView === 'function') {
+                const adminView = document.getElementById('admin-view');
+                if (!adminView || !adminView.classList.contains('active')) {
+                    window.switchToView('admin-view');
+                }
+            }
+        } else {
+            if (navBtnProtocol) {
+                navBtnProtocol.style.display = 'flex';
+            }
+            if (navBtnAdmin) {
+                navBtnAdmin.style.display = 'none';
+            }
+            // 普通用户若停留在 admin-view，自动切回协议库
+            if (typeof window.switchToView === 'function') {
+                const adminView = document.getElementById('admin-view');
+                if (adminView && adminView.classList.contains('active')) {
+                    window.switchToView('protocol-view');
+                }
             }
         }
 
@@ -125,7 +157,7 @@
                 }
                 if (sidebarUserStatus) {
                     sidebarUserStatus.innerHTML = isAdmin 
-                        ? `<i class="fa-solid fa-crown" style="color:#f59e0b; font-size:10px;"></i> <span style="color:#f59e0b; font-weight:600;">管理员</span>`
+                        ? `<i class="fa-solid fa-crown" style="color:#f59e0b; font-size:10px;"></i> <span style="color:#f59e0b; font-weight:600;">系统管理员</span>`
                         : `<i class="fa-solid fa-circle" style="color:#10b981; font-size:8px;"></i> <span>在线: ${escapeHTML(user.username)}</span>`;
                 }
                 if (btnSidebarAuthAction) {
@@ -148,18 +180,7 @@
             }
         }
 
-        // 2. 云端工作台顶部条更新
-        if (wsCloudUserBadge) {
-            if (user) {
-                wsCloudUserBadge.innerHTML = `<i class="fa-solid fa-user-shield" style="color:var(--accent-color);"></i> <b>${escapeHTML(user.username)}</b>`;
-                wsCloudUserBadge.title = `当前云端空间已严格绑定账号 [${user.username}]，其他用户无法查看或修改您的协议`;
-            } else {
-                wsCloudUserBadge.innerHTML = `<i class="fa-solid fa-user-xmark" style="color:#f59e0b;"></i> <span style="color:#f59e0b;">未登录账号 (公共空间)</span>`;
-                wsCloudUserBadge.title = '建议点击右侧按钮登录专属账号，享受完全独立的数据隔离';
-            }
-        }
-
-        // 3. 广播认证变更事件
+        // 2. 广播认证变更事件
         if (ProtoView.Events) {
             ProtoView.Events.emit('auth:changed', user);
         }
@@ -212,9 +233,27 @@
                 closeAuthModal();
                 showToast(`欢迎回来，${data.user.username}！`, 'success');
 
-                // 自动切换至云端工作模式并刷新该账号协议
-                if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.setWorkspaceMode === 'function') {
-                    ProtoView.WorkspaceSync.setWorkspaceMode('cloud', true);
+                const isAdmin = data.user.isAdmin || data.user.username.toLowerCase() === 'admin';
+                if (isAdmin) {
+                    // 管理员直接进入系统管理后台，无需任何通信协议
+                    if (window.dbHelper) {
+                        await window.dbHelper.clearAllProtocols();
+                        await window.dbHelper.clearAllProducts();
+                    }
+                    if (typeof window.switchToView === 'function') {
+                        window.switchToView('admin-view');
+                    }
+                    if (typeof window.loadAdminStats === 'function') {
+                        window.loadAdminStats();
+                    }
+                } else {
+                    // 普通工程师：进入协议管理，从云端拉取该账号专属协议
+                    if (typeof window.switchToView === 'function') {
+                        window.switchToView('protocol-view');
+                    }
+                    if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
+                        await ProtoView.WorkspaceSync.syncCloudProtocols(false);
+                    }
                 }
                 return true;
             } else {
@@ -243,9 +282,26 @@
                 closeAuthModal();
                 showToast(`账号 [${data.user.username}] 注册成功并已自动登录！`, 'success');
 
-                // 自动激活云端工作模式
-                if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.setWorkspaceMode === 'function') {
-                    ProtoView.WorkspaceSync.setWorkspaceMode('cloud', true);
+                const isAdmin = data.user.isAdmin || data.user.username.toLowerCase() === 'admin';
+                if (isAdmin) {
+                    if (window.dbHelper) {
+                        await window.dbHelper.clearAllProtocols();
+                        await window.dbHelper.clearAllProducts();
+                    }
+                    if (typeof window.switchToView === 'function') {
+                        window.switchToView('admin-view');
+                    }
+                    if (typeof window.loadAdminStats === 'function') {
+                        window.loadAdminStats();
+                    }
+                } else {
+                    if (typeof window.switchToView === 'function') {
+                        window.switchToView('protocol-view');
+                    }
+                    // 新注册用户：清空本地旧缓存，拉取云端专属协议（新账号必为空），呈现纯净空状态
+                    if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
+                        await ProtoView.WorkspaceSync.syncCloudProtocols(false);
+                    }
                 }
                 return true;
             } else {
@@ -282,6 +338,13 @@
         }
 
         setAuthSession(null, null);
+        if (window.dbHelper) {
+            await window.dbHelper.clearAllProtocols();
+            await window.dbHelper.clearAllProducts();
+        }
+        if (typeof window.loadProtocols === 'function') {
+            await window.loadProtocols();
+        }
         showToast('已安全退出登录，请重新登录', 'info');
 
         // 确保视图复位至协议库
@@ -432,12 +495,6 @@
             });
         }
 
-        // 云端栏上的用户切换按钮
-        if (btnWsCloudUserSwitch) {
-            btnWsCloudUserSwitch.addEventListener('click', () => {
-                openAuthModal(isLoggedIn() ? 'login' : 'register');
-            });
-        }
 
         // 登录门户右上角主题切换
         const portalThemeToggle = document.getElementById('portal-theme-toggle');

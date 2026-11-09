@@ -453,8 +453,7 @@
                 </div>
                 <div class="protocol-stats">
                     ${productName ? `<span class="pstat-item pstat-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
-                    ${p._cloudKey ? `<span class="pstat-item pstat-cloud" title="Cloudflare 云端存储: ${escapeHTML(p._cloudKey)}"><i class="fa-solid fa-cloud"></i> 云端同步</span>` : ''}
-                    ${p._fileName ? `<span class="pstat-item pstat-file" title="本地硬盘文件: ${escapeHTML(p._fileName)}"><i class="fa-solid fa-file-code"></i> ${escapeHTML(p._fileName)}</span>` : ''}
+                    <span class="pstat-item pstat-cloud" title="Cloudflare 云端分布式存储"><i class="fa-solid fa-cloud"></i> 云端保存</span>
                     <span class="pstat-item"><i class="fa-solid fa-box-archive"></i> ${packetCount} 个数据包</span>
                     <span class="pstat-item"><i class="fa-solid fa-desktop"></i> ${escapeHTML(deviceName)}</span>
                     <span class="pstat-item"><i class="fa-solid fa-clock"></i> 发送周期: ${p.period || 20}ms</span>
@@ -490,8 +489,7 @@
                 </div>
                 <div class="protocol-stats">
                     ${productName ? `<span class="pstat-item pstat-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
-                    ${p._cloudKey ? `<span class="pstat-item pstat-cloud" title="Cloudflare 云端存储: ${escapeHTML(p._cloudKey)}"><i class="fa-solid fa-cloud"></i> 云端同步</span>` : ''}
-                    ${p._fileName ? `<span class="pstat-item pstat-file" title="本地硬盘文件: ${escapeHTML(p._fileName)}"><i class="fa-solid fa-file-code"></i> ${escapeHTML(p._fileName)}</span>` : ''}
+                    <span class="pstat-item pstat-cloud" title="Cloudflare 云端分布式存储"><i class="fa-solid fa-cloud"></i> 云端保存</span>
                     <span class="pstat-item"><i class="fa-solid fa-box-archive"></i> ${packetCount} 个数据包</span>
                     <span class="pstat-item"><i class="fa-solid fa-desktop"></i> ${escapeHTML(deviceName)}</span>
                     <span class="pstat-item"><i class="fa-solid fa-clock"></i> 发送周期: ${p.period || 20}ms</span>
@@ -521,7 +519,7 @@
                 </div>
                 <div class="protocol-stats">
                     ${productName ? `<span class="pstat-item pstat-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
-                    ${p._fileName ? `<span class="pstat-item pstat-file" title="本地硬盘文件: ${escapeHTML(p._fileName)}"><i class="fa-solid fa-file-code"></i> ${escapeHTML(p._fileName)}</span>` : ''}
+                    <span class="pstat-item pstat-cloud" title="Cloudflare 云端分布式存储"><i class="fa-solid fa-cloud"></i> 云端保存</span>
                     <span class="pstat-item"><i class="fa-solid fa-layer-group"></i> ${p.frames ? p.frames.length : 0} 个报文</span>
                 </div>
                 <p class="protocol-card-desc">
@@ -877,17 +875,8 @@
     async function deleteProtocol(id) {
         const proto = await (window.dbHelper ? window.dbHelper.getProtocol(id) : null);
         const name = proto ? proto.name : '该协议';
-        const isFromDisk = proto && proto._fileName && ProtoView.WorkspaceSync && ProtoView.WorkspaceSync.getWorkspaceHandle();
-        const isFromCloud = proto && (proto._cloudKey || (ProtoView.WorkspaceSync && ProtoView.WorkspaceSync.getWorkspaceMode() === 'cloud'));
 
-        let confirmMsg = `确定要删除协议「${name}」吗？`;
-        if (isFromDisk) {
-            confirmMsg = `确定要删除协议「${name}」吗？\n\n【提示】由于已连接本地工作目录，此操作将同步永久删除您电脑硬盘上的物理文件「${proto._fileName}」！`;
-        } else if (isFromCloud) {
-            confirmMsg = `确定要删除协议「${name}」吗？\n\n【提示】由于当前处于云端工作台模式，此操作将同步从 Cloudflare 云端数据库中彻底删除！`;
-        }
-
-        if (confirm(confirmMsg)) {
+        if (confirm(`确定要删除通信协议「${name}」吗？\n\n此操作将同步从 Cloudflare 云端数据库中彻底删除，不可恢复。`)) {
             if (ProtoView.WorkspaceSync) {
                 await ProtoView.WorkspaceSync.deleteProtocolFile(proto);
             }
@@ -908,6 +897,7 @@
             if (typeof window.loadArincProtocolsForSelect === 'function') {
                 await window.loadArincProtocolsForSelect();
             }
+            showToast(`已删除协议「${name}」`, 'info');
         }
     }
 

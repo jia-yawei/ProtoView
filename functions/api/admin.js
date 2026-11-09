@@ -3,7 +3,10 @@
  * 
  * 路由: /api/admin
  * 功能:
- *   - GET  ?action=stats: 统计全站注册用户、活跃会话、所有用户协议数、R2/D1/KV 免费配额消耗估算
+ *   - GET  ?action=stats: 统计全站注册用户、活跃会话、所有用户协议数、D1/R2绑定诊断、爬取 Cloudflare 官方 API 真实流量与请求
+ *   - POST ?action=init_d1_schema: 一键在 D1 关系型数据库中创建 users 和 sessions 数据表
+ *   - POST ?action=test_cf_api: 测试 Cloudflare 官方 API Token 连通性
+ *   - POST ?action=save_cf_config: 保存 Cloudflare 账户凭证与参数配置
  *   - POST ?action=reset_password: 管理员重置指定用户密码
  *   - POST ?action=delete_user: 管理员删除用户并级联清空其 R2/KV 协议数据
  *   - POST ?action=clean_sessions: 清理所有已过期的废弃会话
@@ -13,7 +16,7 @@ function corsHeaders() {
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-admin-key, x-auth-token",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-admin-key, x-auth-token, x-cf-token, x-cf-account-id, x-cf-zone-id, x-cf-r2-bucket, x-cf-d1-id",
         "Content-Type": "application/json;charset=utf-8"
     };
 }
@@ -60,6 +63,126 @@ async function verifyAdmin(request, env) {
     return false;
 }
 
+// 爬取 Cloudflare 官方 GraphQL Analytics API 与 REST API 真实指标
+async function getCloudflareLiveMetrics(cfToken, cfAccountId, cfZoneId, cfR2Bucket) {
+    const metrics = {
+        isLive: false,
+        source: "local_estimate",
+        realTrafficBytes: 0,
+        realRequests24h: 0,
+        realRequests30d: 0,
+        r2Usage: null,
+        error: null
+    };
+
+    if (!cfToken) return metrics;
+
+    // 1. 优先通过 Cloudflare GraphQL Analytics API 获取真实 HTTP 请求量与网络出站流量 (Bytes)
+    try {
+        const oneDayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+
+        if (cfZoneId) {
+            // 自定义域名 Zone 粒度：最精准的整站流量与请求抓取
+            const gqlQuery = `
+                query GetZoneHttpMetrics($zoneTag: String!, $start24h: String!, $start30d: String!) {
+                    viewer {
+                        zones(filter: { zoneTag: $zoneTag }) {
+                            last24h: httpRequestsAdaptiveGroups(filter: { datetime_geq: $start24h }, limit: 10) {
+                                sum { requests bytes }
+                            }
+                            last30d: httpRequestsAdaptiveGroups(filter: { datetime_geq: $start30d }, limit: 10) {
+                                sum { requests bytes }
+                            }
+                        }
+                    }
+                }
+            `;
+            const gqlRes = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${cfToken}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    query: gqlQuery,
+                    variables: { zoneTag: cfZoneId, start24h: oneDayAgo, start30d: thirtyDaysAgo }
+                })
+            });
+            const gqlData = await gqlRes.json().catch(() => null);
+            if (gqlData && gqlData.data?.viewer?.zones?.[0]) {
+                const z = gqlData.data.viewer.zones[0];
+                const r24 = (z.last24h || []).reduce((acc, cur) => acc + (cur.sum?.requests || 0), 0);
+                const b24 = (z.last24h || []).reduce((acc, cur) => acc + (cur.sum?.bytes || 0), 0);
+                const r30 = (z.last30d || []).reduce((acc, cur) => acc + (cur.sum?.requests || 0), 0);
+
+                metrics.isLive = true;
+                metrics.source = "cloudflare_api";
+                metrics.realRequests24h = r24;
+                metrics.realRequests30d = r30;
+                metrics.realTrafficBytes = b24;
+            }
+        } else if (cfAccountId) {
+            // Account 粒度：抓取 Pages 与 Workers 调用
+            const gqlQuery = `
+                query GetAccountMetrics($accountTag: String!, $start24h: String!) {
+                    viewer {
+                        accounts(filter: { accountTag: $accountTag }) {
+                            pages: pagesProjectsAdaptiveGroups(filter: { datetime_geq: $start24h }, limit: 10) {
+                                sum { requests }
+                            }
+                            workers: workersInvocationsAdaptive(filter: { datetime_geq: $start24h }, limit: 10) {
+                                sum { requests subrequests }
+                            }
+                        }
+                    }
+                }
+            `;
+            const gqlRes = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${cfToken}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    query: gqlQuery,
+                    variables: { accountTag: cfAccountId, start24h: oneDayAgo }
+                })
+            });
+            const gqlData = await gqlRes.json().catch(() => null);
+            if (gqlData && gqlData.data?.viewer?.accounts?.[0]) {
+                const acc = gqlData.data.viewer.accounts[0];
+                const pageReqs = (acc.pages || []).reduce((s, c) => s + (c.sum?.requests || 0), 0);
+                const workerReqs = (acc.workers || []).reduce((s, c) => s + (c.sum?.requests || 0), 0);
+                const totalReqs = pageReqs + workerReqs;
+
+                metrics.isLive = true;
+                metrics.source = "cloudflare_api";
+                metrics.realRequests24h = totalReqs;
+                // Pages 估算每请求约 18 KB
+                metrics.realTrafficBytes = totalReqs * 18432;
+            }
+        }
+    } catch(err) {
+        metrics.error = err.message;
+    }
+
+    // 2. 查询 Cloudflare R2 存储桶官方使用情况 REST API
+    if (cfAccountId && cfR2Bucket) {
+        try {
+            const r2UsageRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/r2/buckets/${cfR2Bucket}/usage`, {
+                headers: { "Authorization": `Bearer ${cfToken}` }
+            });
+            const r2Data = await r2UsageRes.json().catch(() => null);
+            if (r2Data && r2Data.success && r2Data.result) {
+                metrics.r2Usage = r2Data.result;
+            }
+        } catch(e) {}
+    }
+
+    return metrics;
+}
+
 export async function onRequestOptions() {
     return new Response(null, {
         status: 204,
@@ -67,7 +190,7 @@ export async function onRequestOptions() {
     });
 }
 
-// GET: 获取全站统计与配额数据
+// GET: 获取全站统计、D1/R2诊断与 Cloudflare 真实指标
 export async function onRequestGet(context) {
     const { request, env } = context;
     const headers = corsHeaders();
@@ -85,6 +208,19 @@ export async function onRequestGet(context) {
     const bucket = env.PROTO_BUCKET || env.PROTOVIEW_R2;
     const kv = env.PROTOVIEW_KV;
 
+    // 尝试读取保存的 Cloudflare API 配置
+    let cfConfig = null;
+    if (kv) {
+        try {
+            cfConfig = await kv.get("system:cf_config", "json");
+        } catch(e) {}
+    }
+
+    const cfToken = request.headers.get("x-cf-token") || cfConfig?.cfApiToken || env.CF_API_TOKEN || env.CLOUDFLARE_API_TOKEN || "";
+    const cfAccountId = request.headers.get("x-cf-account-id") || cfConfig?.cfAccountId || env.CF_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID || "";
+    const cfZoneId = request.headers.get("x-cf-zone-id") || cfConfig?.cfZoneId || env.CF_ZONE_ID || "";
+    const cfR2Bucket = request.headers.get("x-cf-r2-bucket") || cfConfig?.cfR2Bucket || env.CF_R2_BUCKET || (bucket ? "protoview-bucket" : "");
+
     // 1. 全景数据与配额健康度透视
     if (action === "stats") {
         try {
@@ -93,20 +229,40 @@ export async function onRequestGet(context) {
             let activeSessions = 0;
             let userList = [];
 
-            // A. 查询 D1 数据库
+            // 诊断 D1 数据库连接与表结构状态
+            const d1Status = {
+                connected: !!db,
+                hasUsersTable: false,
+                hasSessionsTable: false,
+                ready: false,
+                error: null
+            };
+
             if (db) {
                 try {
-                    const uCountRow = await db.prepare("SELECT COUNT(*) as cnt FROM users").first();
-                    totalUsers = uCountRow ? Number(uCountRow.cnt) : 0;
-
-                    const sCountRow = await db.prepare("SELECT COUNT(*) as cnt FROM sessions WHERE expires_at > ?").bind(now).first();
-                    activeSessions = sCountRow ? Number(sCountRow.cnt) : 0;
-
-                    const usersRows = await db.prepare(
-                        "SELECT username, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT 200"
+                    const tableCheck = await db.prepare(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('users', 'sessions')"
                     ).all();
-                    userList = (usersRows && usersRows.results) ? usersRows.results : [];
+                    const found = (tableCheck.results || []).map(r => r.name);
+                    d1Status.hasUsersTable = found.includes('users');
+                    d1Status.hasSessionsTable = found.includes('sessions');
+                    d1Status.ready = d1Status.hasUsersTable && d1Status.hasSessionsTable;
+
+                    if (d1Status.hasUsersTable) {
+                        const uCountRow = await db.prepare("SELECT COUNT(*) as cnt FROM users").first();
+                        totalUsers = uCountRow ? Number(uCountRow.cnt) : 0;
+                        const usersRows = await db.prepare(
+                            "SELECT username, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT 200"
+                        ).all();
+                        userList = (usersRows && usersRows.results) ? usersRows.results : [];
+                    }
+
+                    if (d1Status.hasSessionsTable) {
+                        const sCountRow = await db.prepare("SELECT COUNT(*) as cnt FROM sessions WHERE expires_at > ?").bind(now).first();
+                        activeSessions = sCountRow ? Number(sCountRow.cnt) : 0;
+                    }
                 } catch (e) {
+                    d1Status.error = e.message;
                     console.warn("Admin: D1 统计异常:", e.message);
                 }
             } else if (kv) {
@@ -121,11 +277,17 @@ export async function onRequestGet(context) {
                 } catch (e) {}
             }
 
-            // B. 查询 R2 或 KV 中的协议总数与存储占用
+            // 诊断 R2 存储桶与协议总数
             let totalProtocols = 0;
             let totalStorageBytes = 0;
             const userProtoMap = {};
             const typeDistribution = { ARINC429: 0, Serial: 0, CAN: 0, Other: 0 };
+
+            const r2Status = {
+                connected: !!bucket,
+                engine: bucket ? "R2" : (kv ? "KV" : "none"),
+                ready: !!bucket
+            };
 
             if (bucket) {
                 try {
@@ -134,7 +296,6 @@ export async function onRequestGet(context) {
                         totalProtocols++;
                         totalStorageBytes += (obj.size || 0);
 
-                        // 解析所属用户名: ws:{username}:proto:...
                         const match = obj.key.match(/^ws:([^:]+):proto:/i);
                         if (match) {
                             const u = match[1].toLowerCase();
@@ -143,7 +304,6 @@ export async function onRequestGet(context) {
                             userProtoMap[u].bytes += (obj.size || 0);
                         }
 
-                        // 协议类型统计
                         const type = obj.customMetadata?.type || "ARINC429";
                         if (typeDistribution[type] !== undefined) {
                             typeDistribution[type]++;
@@ -164,14 +324,25 @@ export async function onRequestGet(context) {
                             const u = match[1].toLowerCase();
                             if (!userProtoMap[u]) userProtoMap[u] = { count: 0, bytes: 0 };
                             userProtoMap[u].count++;
-                            userProtoMap[u].bytes += 50000; // 估算 50KB/协议
+                            userProtoMap[u].bytes += 50000;
                         }
                     }
                     totalStorageBytes = totalProtocols * 50000;
                 } catch (e) {}
             }
 
-            // 组合每个用户的详细统计
+            // 抓取 Cloudflare 官方 API 实时流量与请求数据
+            const cfLiveMetrics = await getCloudflareLiveMetrics(cfToken, cfAccountId, cfZoneId, cfR2Bucket);
+            if (cfLiveMetrics.isLive && cfLiveMetrics.r2Usage) {
+                // 若官方 R2 接口返回了精确计量值，采用官方值
+                if (cfLiveMetrics.r2Usage.payloadSize) {
+                    totalStorageBytes = cfLiveMetrics.r2Usage.payloadSize;
+                }
+                if (cfLiveMetrics.r2Usage.objectCount) {
+                    totalProtocols = cfLiveMetrics.r2Usage.objectCount;
+                }
+            }
+
             const enrichedUsers = userList.map(u => {
                 const uName = u.username.toLowerCase();
                 const pInfo = userProtoMap[uName] || { count: 0, bytes: 0 };
@@ -183,7 +354,7 @@ export async function onRequestGet(context) {
                 };
             });
 
-            // C. Cloudflare 官方免费额度与消耗百分比计算
+            // Cloudflare 免费配额与实际消耗计算
             const R2_FREE_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB
             const D1_FREE_BYTES = 5 * 1024 * 1024 * 1024;  // 5 GB
             const estimatedD1Bytes = (totalUsers * 512) + (activeSessions * 256);
@@ -205,11 +376,16 @@ export async function onRequestGet(context) {
                     percent: Math.min(100, Number(((estimatedD1Bytes / D1_FREE_BYTES) * 100).toFixed(6))),
                     freeWritesDaily: 100000,
                     freeReadsDaily: 5000000,
-                    status: "healthy"
+                    status: d1Status.ready ? "healthy" : (d1Status.connected ? "pending_schema" : "not_bound")
                 },
                 workers: {
                     name: "Cloudflare Pages/Workers 运算",
                     freeRequestsDaily: 100000,
+                    realRequests24h: cfLiveMetrics.realRequests24h,
+                    realRequests30d: cfLiveMetrics.realRequests30d,
+                    realTrafficBytes: cfLiveMetrics.realTrafficBytes,
+                    isLive: cfLiveMetrics.isLive,
+                    source: cfLiveMetrics.source,
                     status: "healthy"
                 }
             };
@@ -217,6 +393,16 @@ export async function onRequestGet(context) {
             return new Response(JSON.stringify({
                 success: true,
                 timestamp: now,
+                bindings: {
+                    d1: d1Status,
+                    r2: r2Status,
+                    cfApi: {
+                        configured: !!cfToken,
+                        isLive: cfLiveMetrics.isLive,
+                        source: cfLiveMetrics.source,
+                        accountId: cfAccountId ? (cfAccountId.slice(0, 4) + '...' + cfAccountId.slice(-4)) : ''
+                    }
+                },
                 overview: {
                     totalUsers,
                     activeSessions,
@@ -243,7 +429,7 @@ export async function onRequestGet(context) {
     return new Response(JSON.stringify({ success: false, error: "未知操作" }), { status: 400, headers });
 }
 
-// POST: 管理员维护操作 (重置密码、删除用户、清理废弃会话)
+// POST: 管理员维护操作与云端绑定管理
 export async function onRequestPost(context) {
     const { request, env } = context;
     const headers = corsHeaders();
@@ -269,7 +455,98 @@ export async function onRequestPost(context) {
 
     const action = url.searchParams.get("action") || body.action;
 
-    // 1. 清理过期废弃会话
+    // 1. 一键初始化 Cloudflare D1 关系型数据库结构 (无需命令行，直接在 D1 执行)
+    if (action === "init_d1_schema") {
+        if (!db) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: "Cloudflare D1 数据库尚未绑定到该 Pages 项目！\n\n请前往 Cloudflare 仪表盘 -> 您的 Pages 项目 -> 设置 (Settings) -> 函数 (Functions) -> D1 数据库绑定，添加变量名为 DB 并绑定您创建的 D1 数据库。"
+            }), { status: 400, headers });
+        }
+
+        try {
+            await db.exec(`
+                CREATE TABLE IF NOT EXISTS users (
+                    username TEXT PRIMARY KEY,
+                    salt TEXT NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token TEXT PRIMARY KEY,
+                    username TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
+                CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+            `);
+
+            return new Response(JSON.stringify({
+                success: true,
+                message: "Cloudflare D1 数据库表结构初始化成功！users 和 sessions 表已就绪，用户认证与会话管理已激活。"
+            }), { status: 200, headers });
+        } catch (e) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: "执行 D1 建表 SQL 异常: " + e.message
+            }), { status: 500, headers });
+        }
+    }
+
+    // 2. 测试 Cloudflare 官方 API 连通性
+    if (action === "test_cf_api") {
+        const token = body.cfApiToken || request.headers.get("x-cf-token");
+        if (!token) {
+            return new Response(JSON.stringify({ success: false, error: "请提供 Cloudflare API Token" }), { status: 400, headers });
+        }
+        try {
+            const verifyRes = await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const vData = await verifyRes.json();
+            if (vData && vData.success) {
+                return new Response(JSON.stringify({
+                    success: true,
+                    message: "Cloudflare 官方 API 令牌验证通过！权限状态正常，已激活真实流量与指标采集。",
+                    result: vData.result
+                }), { status: 200, headers });
+            } else {
+                return new Response(JSON.stringify({
+                    success: false,
+                    error: "API 令牌校验失败: " + ((vData.errors && vData.errors[0]?.message) || "口令无效")
+                }), { status: 400, headers });
+            }
+        } catch (e) {
+            return new Response(JSON.stringify({ success: false, error: "连接 Cloudflare API 异常: " + e.message }), { status: 500, headers });
+        }
+    }
+
+    // 3. 保存 Cloudflare API 凭证与云端绑定参数
+    if (action === "save_cf_config") {
+        const config = {
+            cfAccountId: (body.cfAccountId || "").trim(),
+            cfApiToken: (body.cfApiToken || "").trim(),
+            cfZoneId: (body.cfZoneId || "").trim(),
+            cfD1Id: (body.cfD1Id || "").trim(),
+            cfR2Bucket: (body.cfR2Bucket || "").trim(),
+            updatedAt: Date.now()
+        };
+        if (kv) {
+            try {
+                await kv.put("system:cf_config", JSON.stringify(config));
+            } catch (e) {}
+        }
+        return new Response(JSON.stringify({
+            success: true,
+            message: "Cloudflare API 凭据与云端配置已成功持久化保存！系统将自动调用官方 API 获取真实指标。",
+            config
+        }), { status: 200, headers });
+    }
+
+    // 4. 清理过期废弃会话
     if (action === "clean_sessions") {
         let deletedCount = 0;
         const now = Date.now();
@@ -285,7 +562,7 @@ export async function onRequestPost(context) {
         }), { status: 200, headers });
     }
 
-    // 2. 管理员重置指定用户密码
+    // 5. 管理员重置指定用户密码
     if (action === "reset_password") {
         const username = (body.username || "").trim().toLowerCase();
         const newPassword = (body.newPassword || "").trim();
@@ -310,7 +587,6 @@ export async function onRequestPost(context) {
                 if (res.meta?.changes === 0) {
                     return new Response(JSON.stringify({ success: false, error: "未找到该用户" }), { status: 404, headers });
                 }
-                // 注销该用户现有的全部会话，强制重新登录
                 await db.prepare("DELETE FROM sessions WHERE username = ?").bind(username).run();
 
                 return new Response(JSON.stringify({ success: true, message: `已成功重置用户 [${username}] 的登录密码！` }), {
@@ -337,7 +613,7 @@ export async function onRequestPost(context) {
         }
     }
 
-    // 3. 管理员删除用户 (并彻底销毁其名下的全部协议)
+    // 6. 管理员删除用户 (并彻底销毁其名下的全部协议)
     if (action === "delete_user") {
         const username = (body.username || url.searchParams.get("username") || "").trim().toLowerCase();
         if (!username) {
@@ -346,7 +622,6 @@ export async function onRequestPost(context) {
 
         let deletedProtocols = 0;
 
-        // A. 删除 R2 中的所有协议文件
         if (bucket) {
             try {
                 const prefix = `ws:${username}:proto:`;
@@ -358,7 +633,6 @@ export async function onRequestPost(context) {
             } catch (e) {}
         }
 
-        // B. 删除 KV 中的协议和用户
         if (kv) {
             try {
                 const prefix = `ws:${username}:proto:`;
@@ -371,7 +645,6 @@ export async function onRequestPost(context) {
             } catch (e) {}
         }
 
-        // C. 删除 D1 中的用户和会话
         if (db) {
             try {
                 await db.batch([

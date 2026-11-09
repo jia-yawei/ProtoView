@@ -1675,22 +1675,34 @@
         }
     }
 
-    // 导入 JSON 协议文件
+    // 导入 JSON 协议文件 (支持云端自动持久化与多类型兼容)
     function importArincJson(file) {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = async (event) => {
             try {
                 const parsed = JSON.parse(event.target.result);
-                if (!parsed || (!parsed.words && !parsed.packets)) {
-                    alert("导入失败：该文件不是有效的 ARINC 429 协议 JSON 格式！");
+                if (!parsed || (!parsed.words && !parsed.packets && !parsed.frames)) {
+                    alert("导入失败：该文件不是有效的协议 JSON 格式！");
                     return;
                 }
                 const name = parsed.name || file.name.replace(/\.[^/.]+$/, "");
                 delete parsed.id;
                 parsed.name = name;
-                parsed._fileName = file.name;
-                parsed._fromWorkspace = false;
+
+                if (parsed.type === 'Serial') {
+                    if (ProtoView.WorkspaceSync) {
+                        await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(parsed);
+                    }
+                    const newId = await window.dbHelper.saveProtocol(parsed);
+                    if (typeof window.loadProtocols === 'function') await window.loadProtocols();
+                    if (typeof window.switchToView === 'function') window.switchToView('serial-view');
+                    if (typeof window.loadSerialProtocolIntoEditor === 'function') {
+                        await window.loadSerialProtocolIntoEditor(newId);
+                    }
+                    alert(`成功导入串口通信协议「${name}」并同步至云端！`);
+                    return;
+                }
 
                 if (!parsed.packets || !Array.isArray(parsed.packets) || parsed.packets.length === 0) {
                     const initialDir = parsed.direction === 'Rx' ? 'Rx' : 'Tx';
@@ -1706,6 +1718,9 @@
                     ];
                 }
 
+                if (ProtoView.WorkspaceSync) {
+                    await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(parsed);
+                }
                 const newId = await window.dbHelper.saveProtocol(parsed);
                 parsed.id = newId;
                 currentArincProtocol = parsed;
@@ -1715,7 +1730,7 @@
                 if (typeof window.loadProtocols === 'function') await window.loadProtocols();
                 await loadArincProtocolIntoEditor(newId);
                 const totalWords = parsed.packets.reduce((sum, pkt) => sum + (pkt.words ? pkt.words.length : 0), 0);
-                alert(`成功导入 429 协议「${name}」！包含 ${parsed.packets.length} 个数据包，共 ${totalWords} 个标号字。`);
+                alert(`成功导入 429 协议「${name}」并同步至云端！包含 ${parsed.packets.length} 个数据包，共 ${totalWords} 个标号字。`);
             } catch (err) {
                 alert("解析 JSON 失败: " + err.message);
             }

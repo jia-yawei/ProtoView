@@ -145,20 +145,48 @@ const dbHelper = {
         }
     },
 
-    // 删除协议
+    // 删除协议 (兼容数值 ID 与字符串 ID)
     async deleteProtocol(id) {
+        if (id === null || id === undefined) return;
         const numId = Number(id);
-        if (useDexie && db) {
+        if (useDexie && db && db.protocols) {
             try {
-                await db.protocols.delete(numId);
-                return;
+                if (!isNaN(numId)) {
+                    await db.protocols.delete(numId);
+                }
+                await db.protocols.delete(id);
             } catch (e) {
                 console.warn("Dexie 删除协议失败:", e);
             }
         }
         let list = getLSProtocols();
-        list = list.filter(p => p.id !== numId);
+        list = list.filter(p => p.id !== id && String(p.id) !== String(id) && (isNaN(numId) || Number(p.id) !== numId));
         saveLSProtocols(list);
+    },
+
+    // 清空本地缓存的所有协议 (用于多账号隔离与新用户初始纯净状态)
+    async clearAllProtocols() {
+        if (useDexie && db && db.protocols) {
+            try {
+                await db.protocols.clear();
+            } catch(e) {
+                console.warn("Dexie 清空协议异常:", e);
+            }
+        }
+        localStorage.removeItem(LS_KEY_PROTOCOLS);
+        localStorage.removeItem(LS_KEY_ID);
+    },
+
+    // 清空本地缓存的所有产品
+    async clearAllProducts() {
+        if (useDexie && db && db.products) {
+            try {
+                await db.products.clear();
+            } catch(e) {
+                console.warn("Dexie 清空产品异常:", e);
+            }
+        }
+        localStorage.removeItem(LS_KEY_PRODUCTS);
     },
 
     // ---------------------- 产品管理接口 ----------------------
