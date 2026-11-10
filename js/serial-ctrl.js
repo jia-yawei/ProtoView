@@ -1155,8 +1155,9 @@
         currentSerialProtocol.updatedAt = new Date().toISOString();
 
         // 本地工作目录与云端同步处理
+        let cloudRes = { ok: true };
         if (ProtoView.WorkspaceSync) {
-            await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(currentSerialProtocol);
+            cloudRes = await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(currentSerialProtocol);
         }
 
         const id = await window.dbHelper.saveProtocol(currentSerialProtocol);
@@ -1164,12 +1165,18 @@
 
         if (btnSerialSave) {
             const origHTML = btnSerialSave.innerHTML;
-            btnSerialSave.innerHTML = `<i class="fa-solid fa-check"></i> 保存成功!`;
-            btnSerialSave.style.backgroundColor = 'var(--success)';
+            if (cloudRes.ok) {
+                btnSerialSave.innerHTML = `<i class="fa-solid fa-check"></i> 云端已同步!`;
+                btnSerialSave.style.backgroundColor = 'var(--success)';
+            } else {
+                btnSerialSave.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 仅本地保存`;
+                btnSerialSave.style.backgroundColor = 'var(--warning)';
+                showToast(`本地已保存，但云端同步失败: ${cloudRes.error}`, 'warning');
+            }
             setTimeout(() => {
                 btnSerialSave.innerHTML = origHTML;
                 btnSerialSave.style.backgroundColor = '';
-            }, 1400);
+            }, 1800);
         }
 
         updateSerialToolbarProtocolInfo();

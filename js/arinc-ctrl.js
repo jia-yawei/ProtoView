@@ -598,8 +598,9 @@
         }
 
         // 保存至本地磁盘和云端
+        let cloudRes = { ok: true };
         if (ProtoView.WorkspaceSync) {
-            await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(currentArincProtocol);
+            cloudRes = await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(currentArincProtocol);
         }
 
         const id = await window.dbHelper.saveProtocol(currentArincProtocol);
@@ -607,12 +608,18 @@
 
         if (btnArincSave) {
             const originalHTML = btnArincSave.innerHTML;
-            btnArincSave.innerHTML = '<i class="fa-solid fa-check"></i> 保存成功!';
-            btnArincSave.style.backgroundColor = 'var(--success)';
+            if (cloudRes.ok) {
+                btnArincSave.innerHTML = '<i class="fa-solid fa-check"></i> 云端已同步!';
+                btnArincSave.style.backgroundColor = 'var(--success)';
+            } else {
+                btnArincSave.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 仅本地保存';
+                btnArincSave.style.backgroundColor = 'var(--warning)';
+                showToast(`本地已保存，但云端同步失败: ${cloudRes.error}`, 'warning');
+            }
             setTimeout(() => {
                 btnArincSave.innerHTML = originalHTML;
                 btnArincSave.style.backgroundColor = '';
-            }, 1400);
+            }, 1800);
         }
 
         updateToolbarProtocolInfo();
@@ -1690,9 +1697,18 @@
                 delete parsed.id;
                 parsed.name = name;
 
+                // 1. 若导入协议包含产品归属，同时在本地及云端注册该产品型号
+                if (parsed.product && window.dbHelper) {
+                    await window.dbHelper.saveProduct({ name: parsed.product });
+                    if (ProtoView.WorkspaceSync && ProtoView.WorkspaceSync.syncProductsToCloud) {
+                        await ProtoView.WorkspaceSync.syncProductsToCloud();
+                    }
+                }
+
                 if (parsed.type === 'Serial') {
+                    let cloudRes = { ok: true };
                     if (ProtoView.WorkspaceSync) {
-                        await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(parsed);
+                        cloudRes = await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(parsed);
                     }
                     const newId = await window.dbHelper.saveProtocol(parsed);
                     if (typeof window.loadProtocols === 'function') await window.loadProtocols();
@@ -1700,7 +1716,11 @@
                     if (typeof window.loadSerialProtocolIntoEditor === 'function') {
                         await window.loadSerialProtocolIntoEditor(newId);
                     }
-                    alert(`成功导入串口通信协议「${name}」并同步至云端！`);
+                    if (cloudRes.ok) {
+                        showToast(`成功导入串口通信协议「${name}」并同步至云端！`, 'success');
+                    } else {
+                        alert(`【提示】协议「${name}」已在本地工作台成功打开，但同步至云端受阻：\n${cloudRes.error}\n\n请在管理后台检查数据库/存储绑定。`);
+                    }
                     return;
                 }
 
@@ -1718,8 +1738,9 @@
                     ];
                 }
 
+                let cloudRes = { ok: true };
                 if (ProtoView.WorkspaceSync) {
-                    await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(parsed);
+                    cloudRes = await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(parsed);
                 }
                 const newId = await window.dbHelper.saveProtocol(parsed);
                 parsed.id = newId;
@@ -1730,7 +1751,11 @@
                 if (typeof window.loadProtocols === 'function') await window.loadProtocols();
                 await loadArincProtocolIntoEditor(newId);
                 const totalWords = parsed.packets.reduce((sum, pkt) => sum + (pkt.words ? pkt.words.length : 0), 0);
-                alert(`成功导入 429 协议「${name}」并同步至云端！包含 ${parsed.packets.length} 个数据包，共 ${totalWords} 个标号字。`);
+                if (cloudRes.ok) {
+                    showToast(`成功导入 429 协议「${name}」并同步至云端！包含 ${parsed.packets.length} 个数据包，共 ${totalWords} 个标号字。`, 'success');
+                } else {
+                    alert(`【提示】协议「${name}」已在本地工作台成功打开，但同步至云端受阻：\n${cloudRes.error}\n\n请在系统管理后台检查云端数据库/存储桶连接。`);
+                }
             } catch (err) {
                 alert("解析 JSON 失败: " + err.message);
             }

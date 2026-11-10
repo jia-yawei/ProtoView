@@ -29,6 +29,33 @@ async function sha256(text) {
     return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// 自动探测 Cloudflare 环境中的 R2 存储桶、D1 数据库与 KV 命名空间
+function getBindings(env) {
+    if (!env) return { bucket: null, db: null, kv: null };
+
+    let bucket = env.PROTO_BUCKET || env.PROTOVIEW_R2 || env.R2 || env.BUCKET || env.R2_BUCKET || env.PROTO_R2 || env.PROTOVIEW_BUCKET || env.STORAGE || null;
+    let db = env.DB || env.PROTOVIEW_DB || env.D1 || env.DATABASE || null;
+    let kv = env.PROTOVIEW_KV || env.KV || null;
+
+    if (!bucket || !db || !kv) {
+        for (const k of Object.keys(env)) {
+            const v = env[k];
+            if (!v || typeof v !== 'object') continue;
+            if (!bucket && typeof v.put === 'function' && typeof v.get === 'function' && typeof v.list === 'function' && typeof v.prepare !== 'function') {
+                bucket = v;
+            }
+            if (!db && typeof v.prepare === 'function' && typeof v.batch === 'function') {
+                db = v;
+            }
+            if (!kv && typeof v.get === 'function' && typeof v.put === 'function' && typeof v.list === 'function' && typeof v.prepare !== 'function') {
+                if (v !== bucket) kv = v;
+            }
+        }
+    }
+
+    return { bucket, db, kv };
+}
+
 // 管理员鉴权：支持 x-admin-key 验证，或自动验证当前登录的管理员 Token
 async function verifyAdmin(request, env) {
     const targetKey = env.ADMIN_KEY || env.ADMIN_SECRET || env.ADMIN_SECRET_KEY || "admin888";
@@ -39,7 +66,7 @@ async function verifyAdmin(request, env) {
     const token = request.headers.get("x-auth-token") ||
                   (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     if (token) {
-        const db = env.DB || env.PROTOVIEW_DB;
+        const { db, kv } = getBindings(env);
         const now = Date.now();
         const adminName = (env.ADMIN_USERNAME || "admin").toLowerCase();
         if (db) {
@@ -50,7 +77,6 @@ async function verifyAdmin(request, env) {
                 }
             } catch (e) {}
         }
-        const kv = env.PROTOVIEW_KV;
         if (kv) {
             try {
                 const session = await kv.get("session:" + token, "json");
@@ -204,9 +230,7 @@ export async function onRequestGet(context) {
         });
     }
 
-    const db = env.DB || env.PROTOVIEW_DB;
-    const bucket = env.PROTO_BUCKET || env.PROTOVIEW_R2;
-    const kv = env.PROTOVIEW_KV;
+    const { bucket, db, kv } = getBindings(env);
 
     // 尝试读取保存的 Cloudflare API 配置
     let cfConfig = null;
@@ -234,6 +258,8 @@ export async function onRequestGet(context) {
                 connected: !!db,
                 hasUsersTable: false,
                 hasSessionsTable: false,
+                hasProtocolsTable: false,
+                hasUserProductsTable: false,
                 ready: false,
                 error: null
             };
@@ -241,11 +267,13 @@ export async function onRequestGet(context) {
             if (db) {
                 try {
                     const tableCheck = await db.prepare(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('users', 'sessions')"
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('users', 'sessions', 'protocols', 'user_products')"
                     ).all();
                     const found = (tableCheck.results || []).map(r => r.name);
                     d1Status.hasUsersTable = found.includes('users');
                     d1Status.hasSessionsTable = found.includes('sessions');
+                    d1Status.hasProtocolsTable = found.includes('protocols');
+                    d1Status.hasUserProductsTable = found.includes('user_products');
                     d1Status.ready = d1Status.hasUsersTable && d1Status.hasSessionsTable;
 
                     if (d1Status.hasUsersTable) {
@@ -277,7 +305,7 @@ export async function onRequestGet(context) {
                 } catch (e) {}
             }
 
-            // 诊断 R2 存储桶与协议总数
+            // 诊断 R2 / D1 / KV 存储桶与协议总数
             let totalProtocols = 0;
             let totalStorageBytes = 0;
             const userProtoMap = {};
@@ -285,8 +313,8 @@ export async function onRequestGet(context) {
 
             const r2Status = {
                 connected: !!bucket,
-                engine: bucket ? "R2" : (kv ? "KV" : "none"),
-                ready: !!bucket
+                engine: bucket ? "R2" : (db ? "D1" : (kv ? "KV" : "none")),
+                ready: !!bucket || !!db
             };
 
             if (bucket) {
@@ -313,6 +341,33 @@ export async function onRequestGet(context) {
                     }
                 } catch (e) {
                     console.warn("Admin: R2 统计异常:", e.message);
+                }
+            }
+
+            // 若 R2 统计到的协议数为 0，且 D1 存在 protocols 表，则从 D1 统计协议
+            if (totalProtocols === 0 && db && d1Status.hasProtocolsTable) {
+                try {
+                    const d1ProtoRows = await db.prepare("SELECT username, type, LENGTH(data) as size FROM protocols").all();
+                    for (const row of (d1ProtoRows.results || [])) {
+                        totalProtocols++;
+                        totalStorageBytes += (row.size || 0);
+                        const u = (row.username || "").toLowerCase();
+                        if (!userProtoMap[u]) userProtoMap[u] = { count: 0, bytes: 0 };
+                        userProtoMap[u].count++;
+                        userProtoMap[u].bytes += (row.size || 0);
+
+                        const type = row.type || "ARINC429";
+                        if (typeDistribution[type] !== undefined) {
+                            typeDistribution[type]++;
+                        } else {
+                            typeDistribution.Other++;
+                        }
+                    }
+                    if (totalProtocols > 0) {
+                        r2Status.engine = "D1";
+                    }
+                } catch (e) {
+                    console.warn("D1 协议统计异常:", e.message);
                 }
             } else if (kv) {
                 try {
@@ -490,9 +545,7 @@ export async function onRequestPost(context) {
         });
     }
 
-    const db = env.DB || env.PROTOVIEW_DB;
-    const bucket = env.PROTO_BUCKET || env.PROTOVIEW_R2;
-    const kv = env.PROTOVIEW_KV;
+    const { bucket, db, kv } = getBindings(env);
 
     let body = {};
     try {
@@ -519,17 +572,22 @@ export async function onRequestPost(context) {
             // 2. 创建 sessions 登录会话表 (30天会话 Token)
             await db.prepare(`CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`).run();
 
-            // 3. 创建索引以优化高频会话与用户名查询
+            // 3. 创建 protocols 协议表 (全量持久化通信协议 JSON，免 R2 强依赖)
+            await db.prepare(`CREATE TABLE IF NOT EXISTS protocols (key TEXT PRIMARY KEY, username TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'ARINC429', product TEXT DEFAULT '', data TEXT NOT NULL, updated_at INTEGER NOT NULL)`).run();
+
+            // 4. 创建 user_products 产品表 (独立持久化产品/设备型号及 CSCI 说明)
+            await db.prepare(`CREATE TABLE IF NOT EXISTS user_products (username TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)`).run();
+
+            // 5. 创建索引优化高频查询
             try {
                 await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username)`).run();
-            } catch (ie) {}
-            try {
                 await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`).run();
+                await db.prepare(`CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username)`).run();
             } catch (ie) {}
 
             return new Response(JSON.stringify({
                 success: true,
-                message: "Cloudflare D1 数据库表结构初始化成功！users 和 sessions 表已就绪，用户认证与会话管理已激活。"
+                message: "Cloudflare D1 数据库表结构初始化成功！users、sessions、protocols 及 user_products 数据表已全部就绪，账号、协议与产品型号云端存储已全量激活。"
             }), { status: 200, headers });
         } catch (e) {
             return new Response(JSON.stringify({
@@ -709,13 +767,15 @@ export async function onRequestPost(context) {
             }
         }
 
-        // 6.3 从 Cloudflare D1 数据库彻底删除该用户的会话 (sessions) 与账号主记录 (users)
+        // 6.3 从 Cloudflare D1 数据库彻底删除该用户的会话、账号、协议与产品型号
         let d1Deleted = false;
         if (db) {
             try {
                 await db.batch([
                     db.prepare("DELETE FROM sessions WHERE username = ?").bind(username),
-                    db.prepare("DELETE FROM users WHERE username = ?").bind(username)
+                    db.prepare("DELETE FROM users WHERE username = ?").bind(username),
+                    db.prepare("DELETE FROM protocols WHERE username = ?").bind(username),
+                    db.prepare("DELETE FROM user_products WHERE username = ?").bind(username)
                 ]);
                 d1Deleted = true;
             } catch (e) {

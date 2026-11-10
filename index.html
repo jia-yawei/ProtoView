@@ -1452,9 +1452,28 @@ CREATE TABLE IF NOT EXISTS sessions (
     FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
 );
 
--- 3. 索引优化
+-- 3. 通信协议云端存储表 (支持 D1 独立持久化，免 R2 强依赖)
+CREATE TABLE IF NOT EXISTS protocols (
+    key TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'ARINC429',
+    product TEXT DEFAULT '',
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- 4. 产品与设备型号元数据表
+CREATE TABLE IF NOT EXISTS user_products (
+    username TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- 5. 索引优化
 CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);</pre>
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
                 </div>
             </div>
             <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">

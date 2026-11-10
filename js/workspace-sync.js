@@ -151,9 +151,9 @@
         }
     }
 
-    // ----------------- 保存协议至云端 (支持 R2 500KB+ 大协议文件与 KV 容灾) -----------------
+    // ----------------- 保存协议至云端 (支持 R2 / D1 / KV 三引擎容灾) -----------------
     async function saveProtocolToWorkspaceAndCloud(proto) {
-        if (!proto) return;
+        if (!proto) return { ok: false, error: '协议对象为空' };
         try {
             const cloudRes = await cloudApiCall('/api/protocols', 'POST', proto);
             if (cloudRes.ok && cloudRes.data && cloudRes.data.success) {
@@ -162,17 +162,21 @@
                 if (proto.id && window.dbHelper) {
                     await window.dbHelper.saveProtocol(proto);
                 }
+                return { ok: true, data: cloudRes.data };
             } else {
-                console.warn('保存至云端接口响应异常:', cloudRes.data?.error || cloudRes.error);
+                const errMsg = cloudRes.data?.error || cloudRes.error || `HTTP ${cloudRes.status}`;
+                console.error('保存至云端接口响应异常:', errMsg);
+                return { ok: false, error: errMsg };
             }
         } catch (cloudErr) {
-            console.warn('ProtoView: 同步保存至云端失败:', cloudErr);
+            console.error('ProtoView: 同步保存至云端失败:', cloudErr);
+            return { ok: false, error: cloudErr.message };
         }
     }
 
     // ----------------- 从云端彻底删除物理协议 -----------------
     async function deleteProtocolFile(proto) {
-        if (!proto) return;
+        if (!proto) return { ok: false };
         const key = proto._cloudKey || (proto.key ? proto.key : null);
         if (key) {
             try {
@@ -184,16 +188,25 @@
         if (proto.id && window.dbHelper) {
             await window.dbHelper.deleteProtocol(proto.id);
         }
+        return { ok: true };
     }
 
     // ----------------- 同步全量产品型号到云端 (支持独立保存空产品) -----------------
     async function syncProductsToCloud() {
-        if (!window.dbHelper) return;
+        if (!window.dbHelper) return { ok: false, error: '本地存储不可用' };
         try {
             const products = await window.dbHelper.getAllProducts();
-            await cloudApiCall('/api/products', 'POST', { products: products || [] });
+            const res = await cloudApiCall('/api/products', 'POST', { products: products || [] });
+            if (res.ok && res.data && res.data.success) {
+                return { ok: true, data: res.data };
+            } else {
+                const errMsg = res.data?.error || res.error || `HTTP ${res.status}`;
+                console.error('ProtoView: 同步产品型号到云端异常:', errMsg);
+                return { ok: false, error: errMsg };
+            }
         } catch (e) {
-            console.warn('ProtoView: 同步产品型号到云端异常:', e);
+            console.error('ProtoView: 同步产品型号到云端异常:', e);
+            return { ok: false, error: e.message };
         }
     }
 

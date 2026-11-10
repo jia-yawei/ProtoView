@@ -38,16 +38,42 @@ function checkIsAdmin(username, env) {
     return u === "admin" || u === envAdmin;
 }
 
-// 自动初始化 D1 数据库表 (精简结构：仅用户名与密码哈希)
+// 自动探测 Cloudflare 环境中的 D1 数据库与 KV 命名空间
+function getBindings(env) {
+    if (!env) return { db: null, kv: null };
+
+    let db = env.DB || env.PROTOVIEW_DB || env.D1 || env.DATABASE || null;
+    let kv = env.PROTOVIEW_KV || env.KV || null;
+
+    if (!db || !kv) {
+        for (const k of Object.keys(env)) {
+            const v = env[k];
+            if (!v || typeof v !== 'object') continue;
+            if (!db && typeof v.prepare === 'function' && typeof v.batch === 'function') {
+                db = v;
+            }
+            if (!kv && typeof v.get === 'function' && typeof v.put === 'function' && typeof v.list === 'function' && typeof v.prepare !== 'function') {
+                kv = v;
+            }
+        }
+    }
+
+    return { db, kv };
+}
+
+// 自动初始化 D1 数据库表 (账号、会话、协议及产品全量表)
 let d1TablesInitialized = false;
 async function ensureD1Tables(db) {
-    if (d1TablesInitialized) return;
+    if (d1TablesInitialized || !db) return;
     try {
         await db.prepare(`CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, salt TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`).run();
         await db.prepare(`CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`).run();
+        await db.prepare(`CREATE TABLE IF NOT EXISTS protocols (key TEXT PRIMARY KEY, username TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'ARINC429', product TEXT DEFAULT '', data TEXT NOT NULL, updated_at INTEGER NOT NULL)`).run();
+        await db.prepare(`CREATE TABLE IF NOT EXISTS user_products (username TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)`).run();
         try {
             await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username)`).run();
             await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`).run();
+            await db.prepare(`CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username)`).run();
         } catch (ie) {}
         d1TablesInitialized = true;
     } catch (e) {
@@ -68,8 +94,7 @@ export async function onRequestGet(context) {
     const url = new URL(request.url);
     const action = url.searchParams.get("action") || "me";
 
-    const db = env.DB || env.PROTOVIEW_DB;
-    const kv = env.PROTOVIEW_KV;
+    const { db, kv } = getBindings(env);
 
     if (!db && !kv) {
         return new Response(JSON.stringify({
@@ -163,8 +188,7 @@ export async function onRequestPost(context) {
     const headers = corsHeaders();
     const url = new URL(request.url);
 
-    const db = env.DB || env.PROTOVIEW_DB;
-    const kv = env.PROTOVIEW_KV;
+    const { db, kv } = getBindings(env);
 
     if (!db && !kv) {
         return new Response(JSON.stringify({

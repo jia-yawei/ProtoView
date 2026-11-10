@@ -1357,6 +1357,9 @@
                     const product = (protoFormProduct ? protoFormProduct.value.trim() : '');
                     if (product) {
                         await window.dbHelper.saveProduct({ name: product });
+                        if (ProtoView.WorkspaceSync && ProtoView.WorkspaceSync.syncProductsToCloud) {
+                            await ProtoView.WorkspaceSync.syncProductsToCloud();
+                        }
                     }
                     const device = (protoFormDevice ? protoFormDevice.value.trim() : '') || (product ? `${product}系统` : '机载航电系统');
                     const period = parseInt(protoFormPeriod ? protoFormPeriod.value : 20) || 20;
@@ -1469,12 +1472,12 @@
                                 ]
                             };
 
+                            const id = await window.dbHelper.saveProtocol(newProto);
+                            newProto.id = id;
+
                             if (ProtoView.WorkspaceSync) {
                                 await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(newProto);
                             }
-
-                            const id = await window.dbHelper.saveProtocol(newProto);
-                            newProto.id = id;
 
                             if (protocolConfigModal) protocolConfigModal.classList.remove('active');
                             await loadProtocols();
@@ -1505,12 +1508,12 @@
                                 frames: []
                             };
 
+                            const id = await window.dbHelper.saveProtocol(newProto);
+                            newProto.id = id;
+
                             if (ProtoView.WorkspaceSync) {
                                 await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(newProto);
                             }
-
-                            const id = await window.dbHelper.saveProtocol(newProto);
-                            newProto.id = id;
 
                             if (protocolConfigModal) protocolConfigModal.classList.remove('active');
                             await loadProtocols();
@@ -1550,12 +1553,12 @@
                             words: []
                         };
 
+                        const id = await window.dbHelper.saveProtocol(newProto);
+                        newProto.id = id;
+
                         if (ProtoView.WorkspaceSync) {
                             await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(newProto);
                         }
-
-                        const id = await window.dbHelper.saveProtocol(newProto);
-                        newProto.id = id;
 
                         if (protocolConfigModal) protocolConfigModal.classList.remove('active');
 

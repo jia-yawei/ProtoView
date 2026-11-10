@@ -1,11 +1,11 @@
 /**
- * Cloudflare Pages Functions - ProtoView 云端协议存储网关 (支持多用户隔离与鉴权)
+ * Cloudflare Pages Functions - ProtoView 云端协议存储网关 (支持多用户隔离与三引擎高可用)
  * 
  * 路由: /api/protocols
- * 存储引擎:
- *   - 协议大文件存储: 优先使用 Cloudflare R2 (绑定变量名: PROTO_BUCKET 或 PROTOVIEW_R2)，无体积限制、10GB免费空间
- *   - 平滑回退: Cloudflare KV (绑定变量名: PROTOVIEW_KV)
- *   - 用户认证源: 优先 Cloudflare D1 (绑定变量名: DB)，回退 KV
+ * 存储引擎 (自动探测与冗余容灾):
+ *   - 引擎 1 (主选): Cloudflare R2 对象存储 (PROTO_BUCKET / R2 / BUCKET 等)，大协议 JSON 存储
+ *   - 引擎 2 (主选/全自动回退): Cloudflare D1 关系数据库 (DB / D1)，无 R2 桶时依然 100% 自动持久化
+ *   - 引擎 3 (边缘缓存容灾): Cloudflare KV (PROTOVIEW_KV / KV)
  * 安全机制:
  *   - 自动解析 x-auth-token 关联当前登录用户
  *   - 严格按用户专属前缀物理隔离：ws:{username}:proto:{protocol_name}
@@ -21,6 +21,56 @@ function corsHeaders() {
     };
 }
 
+// 自动探测 Cloudflare 环境中的 R2 存储桶、D1 数据库与 KV 命名空间
+function getBindings(env) {
+    if (!env) return { bucket: null, db: null, kv: null };
+
+    let bucket = env.PROTO_BUCKET || env.PROTOVIEW_R2 || env.R2 || env.BUCKET || env.R2_BUCKET || env.PROTO_R2 || env.PROTOVIEW_BUCKET || env.STORAGE || null;
+    let db = env.DB || env.PROTOVIEW_DB || env.D1 || env.DATABASE || null;
+    let kv = env.PROTOVIEW_KV || env.KV || null;
+
+    if (!bucket || !db || !kv) {
+        for (const k of Object.keys(env)) {
+            const v = env[k];
+            if (!v || typeof v !== 'object') continue;
+            if (!bucket && typeof v.put === 'function' && typeof v.get === 'function' && typeof v.list === 'function' && typeof v.prepare !== 'function') {
+                bucket = v;
+            }
+            if (!db && typeof v.prepare === 'function' && typeof v.batch === 'function') {
+                db = v;
+            }
+            if (!kv && typeof v.get === 'function' && typeof v.put === 'function' && typeof v.list === 'function' && typeof v.prepare !== 'function') {
+                if (v !== bucket) kv = v;
+            }
+        }
+    }
+
+    return { bucket, db, kv };
+}
+
+// 确保 D1 数据库具有 protocols 表 (支持仅绑定 D1 时即可独立保存协议)
+let d1ProtocolsTableReady = false;
+async function ensureD1ProtocolsTable(db) {
+    if (d1ProtocolsTableReady || !db) return;
+    try {
+        await db.prepare(`CREATE TABLE IF NOT EXISTS protocols (
+            key TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT 'ARINC429',
+            product TEXT DEFAULT '',
+            data TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        )`).run();
+        try {
+            await db.prepare(`CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username)`).run();
+        } catch (ie) {}
+        d1ProtocolsTableReady = true;
+    } catch (e) {
+        console.warn("D1 protocols 表初始化提示:", e.message);
+    }
+}
+
 // 验证会话 Token 并解析出登录用户 (支持 D1 和 KV 双引擎鉴权)
 async function getAuthenticatedUser(request, env) {
     const token = request.headers.get("x-auth-token") ||
@@ -28,8 +78,9 @@ async function getAuthenticatedUser(request, env) {
                   new URL(request.url).searchParams.get("authToken");
     if (!token) return null;
 
+    const { db, kv } = getBindings(env);
+
     // 1. 优先从 D1 查询有效会话
-    const db = env.DB || env.PROTOVIEW_DB;
     if (db) {
         try {
             const now = Date.now();
@@ -52,7 +103,6 @@ async function getAuthenticatedUser(request, env) {
     }
 
     // 2. 回退走 KV 查询
-    const kv = env.PROTOVIEW_KV;
     if (kv) {
         try {
             const session = await kv.get("session:" + token, "json");
@@ -67,8 +117,8 @@ async function getAuthenticatedUser(request, env) {
 
 // 兼容全局管理口令 (若配置了 WORKSPACE_TOKEN)
 function verifyAuth(request, env) {
-    const serverToken = env.WORKSPACE_TOKEN;
-    if (!serverToken) return true; // 未设全局口令则开放
+    const serverToken = env?.WORKSPACE_TOKEN;
+    if (!serverToken) return true;
 
     const clientToken = request.headers.get("x-workspace-token") || new URL(request.url).searchParams.get("token");
     return clientToken === serverToken;
@@ -85,18 +135,20 @@ export async function onRequestOptions() {
 export async function onRequestGet(context) {
     const { request, env } = context;
     const headers = corsHeaders();
+    const { bucket, db, kv } = getBindings(env);
 
-    const bucket = env.PROTO_BUCKET || env.PROTOVIEW_R2;
-    const kv = env.PROTOVIEW_KV;
-
-    if (!bucket && !kv) {
+    if (!bucket && !db && !kv) {
         return new Response(JSON.stringify({
             success: false,
-            error: "Cloudflare R2 存储桶 (变量名: PROTO_BUCKET) 或 KV 尚未绑定。请前往 Pages 设置 -> 函数中绑定。"
+            error: "Cloudflare 后端存储服务未绑定。请在 Pages 控制台「设置 -> 函数」中绑定 D1 数据库 (变量名: DB) 或 R2 存储桶 (变量名: PROTO_BUCKET)。"
         }), {
             status: 503,
             headers
         });
+    }
+
+    if (db) {
+        await ensureD1ProtocolsTable(db);
     }
 
     const authUser = await getAuthenticatedUser(request, env);
@@ -120,7 +172,6 @@ export async function onRequestGet(context) {
 
     // 1. 读取单个具体协议详情
     if (key) {
-        // 安全拦截：若为登录用户，禁止非法读取其他用户的协议 key
         if (authUser && authUser.username) {
             const expectedPrefix = `ws:${authUser.username.toLowerCase()}:proto:`;
             if (!key.toLowerCase().startsWith(expectedPrefix)) {
@@ -131,7 +182,7 @@ export async function onRequestGet(context) {
             }
         }
 
-        // 优先从 R2 对象存储获取 (支持 500KB~大文件)
+        // 1.1 优先从 R2 对象存储获取
         if (bucket) {
             try {
                 const object = await bucket.get(key);
@@ -147,11 +198,30 @@ export async function onRequestGet(context) {
                     });
                 }
             } catch (e) {
-                console.warn("R2 读取尝试异常，转入 KV:", e.message);
+                console.warn("R2 读取异常，转入 D1/KV:", e.message);
             }
         }
 
-        // 回退从 KV 读取
+        // 1.2 从 D1 数据库获取
+        if (db) {
+            try {
+                const row = await db.prepare("SELECT data FROM protocols WHERE key = ?").bind(key).first();
+                if (row && row.data) {
+                    return new Response(row.data, {
+                        status: 200,
+                        headers: {
+                            ...headers,
+                            "Content-Type": "application/json;charset=utf-8",
+                            "x-storage-engine": "D1"
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn("D1 读取协议异常:", e.message);
+            }
+        }
+
+        // 1.3 回退从 KV 读取
         if (kv) {
             try {
                 const data = await kv.get(key, "text");
@@ -165,26 +235,30 @@ export async function onRequestGet(context) {
                         }
                     });
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.warn("KV 读取协议异常:", e.message);
+            }
         }
 
-        return new Response(JSON.stringify({ success: false, error: "未在云端找到该协议文件" }), {
+        return new Response(JSON.stringify({ success: false, error: "未找到该协议或协议已被删除" }), {
             status: 404,
             headers
         });
     }
 
-    // 2. 列出当前空间的所有协议列表 (列表不读取大包体，仅返回元数据，极速响应)
+    // 2. 列举当前空间下的所有协议
     const prefix = `ws:${workspace}:proto:`;
     const protocols = [];
+    let detectedEngine = "none";
 
-    // 方案 A: 优先列举 Cloudflare R2 对象存储
+    // 2.1 优先列举 R2 存储桶
     if (bucket) {
         try {
             const listed = await bucket.list({ prefix });
             for (const item of (listed.objects || [])) {
                 const meta = item.customMetadata || {};
                 const safeName = item.key.replace(prefix, "");
+
                 protocols.push({
                     key: item.key,
                     name: meta.name || decodeURIComponent(safeName),
@@ -204,22 +278,73 @@ export async function onRequestGet(context) {
                 });
             }
 
-            return new Response(JSON.stringify({
-                success: true,
-                workspace: workspace,
-                count: protocols.length,
-                storageEngine: "R2",
-                protocols: protocols
-            }), {
-                status: 200,
-                headers
-            });
+            if (protocols.length > 0 || !db) {
+                return new Response(JSON.stringify({
+                    success: true,
+                    workspace: workspace,
+                    count: protocols.length,
+                    storageEngine: "R2",
+                    protocols: protocols
+                }), {
+                    status: 200,
+                    headers
+                });
+            }
         } catch (e) {
-            console.warn("R2 列举失败，降级尝试 KV:", e.message);
+            console.warn("R2 列举失败，降级尝试 D1/KV:", e.message);
         }
     }
 
-    // 方案 B: 降级列举 KV
+    // 2.2 从 D1 数据库列举 (当 R2 为空或未绑定时提供无缝存储)
+    if (db) {
+        try {
+            const rows = await db.prepare(
+                `SELECT key, name, type, product, data, updated_at FROM protocols WHERE username = ? ORDER BY updated_at DESC`
+            ).bind(workspace).all();
+
+            for (const row of (rows.results || [])) {
+                let parsed = null;
+                try {
+                    parsed = JSON.parse(row.data);
+                } catch (e) {}
+
+                protocols.push({
+                    key: row.key,
+                    name: row.name,
+                    product: row.product || (parsed?.product) || '',
+                    type: row.type || (parsed?.type) || 'ARINC429',
+                    mode: parsed?.mode || 'classic',
+                    device: parsed?.device || parsed?.source || '',
+                    direction: parsed?.direction || 'Tx',
+                    period: Number(parsed?.period || 20),
+                    speed: parsed?.speed || '100kbps',
+                    wordCount: Number((parsed?.words ? parsed.words.length : (parsed?.packets ? parsed.packets.length : 0)) || 0),
+                    size: (row.data ? row.data.length : 0),
+                    updateTime: row.updated_at || Date.now(),
+                    _cloudKey: row.key,
+                    _cloudWorkspace: workspace,
+                    _storageEngine: "D1"
+                });
+            }
+
+            if (protocols.length > 0 || !kv) {
+                return new Response(JSON.stringify({
+                    success: true,
+                    workspace: workspace,
+                    count: protocols.length,
+                    storageEngine: "D1",
+                    protocols: protocols
+                }), {
+                    status: 200,
+                    headers
+                });
+            }
+        } catch (e) {
+            console.warn("D1 列举协议异常:", e.message);
+        }
+    }
+
+    // 2.3 降级列举 KV
     if (kv) {
         try {
             const listRes = await kv.list({ prefix });
@@ -285,25 +410,33 @@ export async function onRequestGet(context) {
         }
     }
 
-    return new Response(JSON.stringify({ success: false, error: "无可用的存储服务" }), { status: 500, headers });
+    return new Response(JSON.stringify({
+        success: true,
+        workspace: workspace,
+        count: 0,
+        storageEngine: "none",
+        protocols: []
+    }), { status: 200, headers });
 }
 
-// POST: 保存通信协议 (支持 500KB+ 大 JSON 协议无损写入 R2 对象存储)
+// POST: 保存通信协议 (R2/D1/KV 三重冗余持久化)
 export async function onRequestPost(context) {
     const { request, env } = context;
     const headers = corsHeaders();
+    const { bucket, db, kv } = getBindings(env);
 
-    const bucket = env.PROTO_BUCKET || env.PROTOVIEW_R2;
-    const kv = env.PROTOVIEW_KV;
-
-    if (!bucket && !kv) {
+    if (!bucket && !db && !kv) {
         return new Response(JSON.stringify({
             success: false,
-            error: "Cloudflare R2 存储桶 (PROTO_BUCKET) 或 KV 尚未绑定。"
+            error: "Cloudflare 后端存储服务未绑定。请在 Pages 设置中绑定 D1 数据库 (变量名: DB) 或 R2 存储桶 (变量名: PROTO_BUCKET)。"
         }), {
             status: 503,
             headers
         });
+    }
+
+    if (db) {
+        await ensureD1ProtocolsTable(db);
     }
 
     const authUser = await getAuthenticatedUser(request, env);
@@ -330,7 +463,6 @@ export async function onRequestPost(context) {
             });
         }
 
-        // 规范化 Key 名称，严格锁定在当前登录用户的专属前缀下
         const safeName = (body.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
         const key = `ws:${workspace}:proto:${safeName}`;
 
@@ -339,7 +471,6 @@ export async function onRequestPost(context) {
         body._cloudOwner = authUser ? authUser.username : workspace;
         body._cloudUpdated = Date.now();
 
-        // 提取卡片快速列举所需的元数据
         const metadata = {
             name: body.name,
             product: body.product || '',
@@ -349,48 +480,66 @@ export async function onRequestPost(context) {
             direction: body.direction || 'Tx',
             period: String(body.period || 20),
             speed: body.speed || '100kbps',
-            wordCount: String(body.words ? body.words.length : (body.frames ? body.frames.length : 0)),
+            wordCount: String(body.words ? body.words.length : (body.packets ? body.packets.length : 0)),
             updateTime: String(body._cloudUpdated)
         };
 
         const payloadStr = JSON.stringify(body);
+        let primaryEngine = "none";
 
-        // 1. 优先存入 Cloudflare R2 对象存储 (无 100KB 截断限制，专为 500KB+ 大协议设计)
+        // 1. 优先存入 Cloudflare R2 对象存储 (支持 500KB+ 大文件)
         if (bucket) {
-            await bucket.put(key, payloadStr, {
-                httpMetadata: { contentType: "application/json;charset=utf-8" },
-                customMetadata: metadata
-            });
-
-            return new Response(JSON.stringify({
-                success: true,
-                storageEngine: "R2",
-                key: key,
-                workspace: workspace,
-                size: payloadStr.length,
-                metadata: metadata
-            }), {
-                status: 200,
-                headers
-            });
+            try {
+                await bucket.put(key, payloadStr, {
+                    httpMetadata: { contentType: "application/json;charset=utf-8" },
+                    customMetadata: metadata
+                });
+                primaryEngine = "R2";
+            } catch (r2Err) {
+                console.warn("R2 写入失败，转由 D1/KV 接管:", r2Err.message);
+            }
         }
 
-        // 2. 降级存入 Cloudflare KV
+        // 2. 同步写入 Cloudflare D1 数据库 (作为强力冗余或无 R2 时的绝对持久化)
+        if (db) {
+            try {
+                await db.prepare(
+                    `INSERT OR REPLACE INTO protocols (key, username, name, type, product, data, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+                ).bind(key, workspace, body.name, body.type || 'ARINC429', body.product || '', payloadStr, Date.now()).run();
+                if (primaryEngine === "none") primaryEngine = "D1";
+            } catch (d1Err) {
+                console.warn("D1 协议写入异常:", d1Err.message);
+            }
+        }
+
+        // 3. 同步写入 Cloudflare KV (边缘容灾)
         if (kv) {
-            await kv.put(key, payloadStr, { metadata });
-
-            return new Response(JSON.stringify({
-                success: true,
-                storageEngine: "KV",
-                key: key,
-                workspace: workspace,
-                size: payloadStr.length,
-                metadata: metadata
-            }), {
-                status: 200,
-                headers
-            });
+            try {
+                await kv.put(key, payloadStr, { metadata });
+                if (primaryEngine === "none") primaryEngine = "KV";
+            } catch (kvErr) {
+                console.warn("KV 协议写入异常:", kvErr.message);
+            }
         }
+
+        if (primaryEngine === "none") {
+            return new Response(JSON.stringify({
+                success: false,
+                error: "云端存储写入失败：R2、D1 与 KV 均未成功执行保存，请检查 Pages 后端绑定状态。"
+            }), { status: 500, headers });
+        }
+
+        return new Response(JSON.stringify({
+            success: true,
+            storageEngine: primaryEngine,
+            key: key,
+            workspace: workspace,
+            size: payloadStr.length,
+            metadata: metadata
+        }), {
+            status: 200,
+            headers
+        });
     } catch (e) {
         return new Response(JSON.stringify({ success: false, error: "保存至云端失败: " + e.message }), {
             status: 500,
@@ -399,15 +548,13 @@ export async function onRequestPost(context) {
     }
 }
 
-// DELETE: 从云端工作台删除协议 (只能删除自己账号下的协议)
+// DELETE: 从云端工作台删除协议
 export async function onRequestDelete(context) {
     const { request, env } = context;
     const headers = corsHeaders();
+    const { bucket, db, kv } = getBindings(env);
 
-    const bucket = env.PROTO_BUCKET || env.PROTOVIEW_R2;
-    const kv = env.PROTOVIEW_KV;
-
-    if (!bucket && !kv) {
+    if (!bucket && !db && !kv) {
         return new Response(JSON.stringify({ success: false, error: "存储服务未绑定" }), {
             status: 503,
             headers
@@ -442,18 +589,14 @@ export async function onRequestDelete(context) {
         }
     }
 
-    let deleted = false;
     if (bucket) {
-        try {
-            await bucket.delete(key);
-            deleted = true;
-        } catch (e) {}
+        try { await bucket.delete(key); } catch (e) {}
+    }
+    if (db) {
+        try { await db.prepare("DELETE FROM protocols WHERE key = ?").bind(key).run(); } catch (e) {}
     }
     if (kv) {
-        try {
-            await kv.delete(key);
-            deleted = true;
-        } catch (e) {}
+        try { await kv.delete(key); } catch (e) {}
     }
 
     return new Response(JSON.stringify({ success: true, deletedKey: key }), {
