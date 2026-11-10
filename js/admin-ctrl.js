@@ -358,32 +358,30 @@
             }
         }
 
-        // 3. Cloudflare 官方 API 连线状态
+        // 3. Cloudflare 官方 API 连线状态 (未配置时自动隐藏，专注 R2 与 D1)
         const cfApi = bindings.cfApi || {};
         if (cfApi.configured && cfApi.isLive) {
             if (badgeCfApiStatus) {
+                badgeCfApiStatus.style.display = 'inline-flex';
                 badgeCfApiStatus.className = 'acsb-pill tag-healthy';
                 badgeCfApiStatus.innerHTML = '<i class="fa-brands fa-cloudflare"></i> 官方遥测: <b>直连中</b>';
             }
         } else if (cfApi.configured && !cfApi.isLive) {
             if (badgeCfApiStatus) {
+                badgeCfApiStatus.style.display = 'inline-flex';
                 badgeCfApiStatus.className = 'acsb-pill tag-warning';
                 badgeCfApiStatus.innerHTML = '<i class="fa-brands fa-cloudflare"></i> 官方 API: <b>受限</b>';
             }
         } else {
             if (badgeCfApiStatus) {
-                badgeCfApiStatus.className = 'acsb-pill tag-unconfigured';
-                badgeCfApiStatus.innerHTML = '<i class="fa-brands fa-cloudflare"></i> 官方 API: <b>未配置</b>';
+                badgeCfApiStatus.style.display = 'none';
             }
         }
 
         // 4. 总览指示药丸
         if (bindingOverallPill) {
-            if (allHealthy && cfApi.isLive) {
-                bindingOverallPill.textContent = '全套服务极佳';
-                bindingOverallPill.className = 'quota-badge-pill healthy';
-            } else if (d1.ready && r2.connected) {
-                bindingOverallPill.textContent = '核心云端就绪';
+            if (d1.ready && r2.connected) {
+                bindingOverallPill.textContent = 'R2 & D1 云端就绪';
                 bindingOverallPill.className = 'quota-badge-pill healthy';
             } else if (d1.connected || r2.connected) {
                 bindingOverallPill.textContent = '部分服务需建表/绑定';
@@ -437,13 +435,8 @@
         }
 
         if (cfRealDataBadge) {
-            if (workersQuota.isLive) {
-                cfRealDataBadge.textContent = '官方指标直连中';
-                cfRealDataBadge.className = 'quota-badge-pill healthy';
-            } else {
-                cfRealDataBadge.textContent = '待配置官方采集';
-                cfRealDataBadge.className = 'quota-badge-pill';
-            }
+            cfRealDataBadge.textContent = 'R2 & D1 实时直连';
+            cfRealDataBadge.className = 'quota-badge-pill healthy';
         }
     }
 

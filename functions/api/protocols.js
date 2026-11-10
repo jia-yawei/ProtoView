@@ -166,8 +166,14 @@ export async function onRequestGet(context) {
     // 1. 读取单个具体协议详情
     if (key) {
         if (authUser && authUser.username) {
-            const expectedPrefix = `ws:${authUser.username.toLowerCase()}:proto:`;
-            if (!key.toLowerCase().startsWith(expectedPrefix)) {
+            const uName = authUser.username.toLowerCase();
+            const expectedPrefix = `ws:${uName}:proto:`;
+            const isAuthorized = (uName === "admin" || authUser.isAdmin) ||
+                                 key.toLowerCase().startsWith(expectedPrefix) ||
+                                 key.toLowerCase().startsWith("ws:default:proto:") ||
+                                 key.toLowerCase().startsWith(`ws:${encodeURIComponent(uName)}:proto:`) ||
+                                 !key.includes(":proto:");
+            if (!isAuthorized) {
                 return new Response(JSON.stringify({ success: false, error: "无权访问此协议 (非当前登录账号所有)" }), {
                     status: 403,
                     headers
@@ -175,10 +181,16 @@ export async function onRequestGet(context) {
             }
         }
 
-        // 1.1 优先从 R2 对象存储获取
+        // 1.1 优先从 R2 对象存储获取 (兼容各种编码 key)
         if (bucket) {
             try {
-                const object = await bucket.get(key);
+                let object = await bucket.get(key);
+                if (!object) {
+                    try { object = await bucket.get(decodeURIComponent(key)); } catch(e) {}
+                }
+                if (!object) {
+                    try { object = await bucket.get(encodeURI(key)); } catch(e) {}
+                }
                 if (object) {
                     const data = await object.text();
                     return new Response(data, {
@@ -198,7 +210,10 @@ export async function onRequestGet(context) {
         // 1.2 从 D1 数据库获取
         if (db) {
             try {
-                const row = await db.prepare("SELECT data FROM protocols WHERE key = ?").bind(key).first();
+                let row = await db.prepare("SELECT data FROM protocols WHERE key = ?").bind(key).first();
+                if (!row) {
+                    try { row = await db.prepare("SELECT data FROM protocols WHERE key = ?").bind(decodeURIComponent(key)).first(); } catch(e) {}
+                }
                 if (row && row.data) {
                     return new Response(row.data, {
                         status: 200,
@@ -217,7 +232,10 @@ export async function onRequestGet(context) {
         // 1.3 回退从 KV 读取
         if (kv) {
             try {
-                const data = await kv.get(key, "text");
+                let data = await kv.get(key, "text");
+                if (!data) {
+                    try { data = await kv.get(decodeURIComponent(key), "text"); } catch(e) {}
+                }
                 if (data) {
                     return new Response(data, {
                         status: 200,
@@ -239,35 +257,84 @@ export async function onRequestGet(context) {
         });
     }
 
-    // 2. 列举当前空间下的所有协议
-    const prefix = `ws:${workspace}:proto:`;
+    // 2. 列举当前空间下的所有协议 (一体化直接携带完整协议内容，告别繁重易错的二次网络拉取)
     const protocols = [];
-    let detectedEngine = "none";
+    const seenKeys = new Set();
 
     // 2.1 优先列举 R2 存储桶
     if (bucket) {
         try {
+            let matchedObjects = [];
+            const prefix = `ws:${workspace}:proto:`;
             const listed = await bucket.list({ prefix });
-            for (const item of (listed.objects || [])) {
+            matchedObjects = listed.objects || [];
+
+            // 智能容错 1：若当前空间列表为空且包含非 ASCII 字符，尝试 URL 编码前缀
+            if (matchedObjects.length === 0 && encodeURIComponent(workspace) !== workspace) {
+                const encPrefix = `ws:${encodeURIComponent(workspace)}:proto:`;
+                const encListed = await bucket.list({ prefix: encPrefix });
+                if (encListed.objects && encListed.objects.length > 0) {
+                    matchedObjects = encListed.objects;
+                }
+            }
+
+            // 智能容错 2：若当前用户名下为 0，且非 default 空间，智能挂载 default 空间协议 (未登录时随手创建的协议)
+            if (matchedObjects.length === 0 && workspace !== "default") {
+                const defListed = await bucket.list({ prefix: "ws:default:proto:" });
+                if (defListed.objects && defListed.objects.length > 0) {
+                    matchedObjects = defListed.objects;
+                }
+            }
+
+            // 智能容错 3：管理员账号直通全站 R2 协议扫描
+            if (matchedObjects.length === 0 && (workspace === "admin" || authUser?.isAdmin)) {
+                const allListed = await bucket.list({ prefix: "ws:" });
+                matchedObjects = (allListed.objects || []).filter(o => o.key.includes(":proto:"));
+            }
+
+            // 智能容错 4：直接上传至 R2 根目录的 .json 协议文件识别
+            if (matchedObjects.length === 0) {
+                const rootListed = await bucket.list({ limit: 100 });
+                matchedObjects = (rootListed.objects || []).filter(o => o.key.endsWith(".json") || o.key.startsWith("proto:"));
+            }
+
+            for (const item of matchedObjects) {
+                if (seenKeys.has(item.key)) continue;
+                seenKeys.add(item.key);
+
                 const meta = item.customMetadata || {};
-                const safeName = item.key.replace(prefix, "");
+                let parsedData = null;
+                try {
+                    const obj = await bucket.get(item.key);
+                    if (obj) {
+                        const txt = await obj.text();
+                        parsedData = JSON.parse(txt);
+                    }
+                } catch(e) {}
+
+                let name = meta.name ? decodeURIComponent(meta.name) : (parsedData?.name || "");
+                if (!name) {
+                    const parts = item.key.split(":");
+                    name = decodeURIComponent(parts[parts.length - 1].replace(/\.json$/i, ""));
+                }
 
                 protocols.push({
                     key: item.key,
-                    name: meta.name || decodeURIComponent(safeName),
-                    product: meta.product || '',
-                    type: meta.type || 'ARINC429',
-                    mode: meta.mode || 'classic',
-                    device: meta.device || '',
-                    direction: meta.direction || 'Tx',
-                    period: Number(meta.period || 20),
-                    speed: meta.speed || '100kbps',
-                    wordCount: Number(meta.wordCount || 0),
-                    size: item.size,
-                    updateTime: meta.updateTime ? Number(meta.updateTime) : (item.uploaded ? new Date(item.uploaded).getTime() : Date.now()),
+                    name: name,
+                    product: meta.product ? decodeURIComponent(meta.product) : (parsedData?.product || ""),
+                    type: meta.type || parsedData?.type || "ARINC429",
+                    mode: meta.mode || parsedData?.mode || "classic",
+                    device: meta.device ? decodeURIComponent(meta.device) : (parsedData?.device || parsedData?.source || ""),
+                    direction: meta.direction || parsedData?.direction || "Tx",
+                    period: Number(parsedData?.period || meta.period || 20),
+                    speed: meta.speed || parsedData?.speed || "100kbps",
+                    wordCount: Number((parsedData?.words ? parsedData.words.length : (parsedData?.packets ? parsedData.packets.length : 0)) || meta.wordCount || 0),
+                    size: item.size || 0,
+                    updateTime: parsedData?._cloudUpdated || (meta.updateTime ? Number(meta.updateTime) : (item.uploaded ? new Date(item.uploaded).getTime() : Date.now())),
                     _cloudKey: item.key,
                     _cloudWorkspace: workspace,
-                    _storageEngine: "R2"
+                    _storageEngine: "R2",
+                    data: parsedData
                 });
             }
 
@@ -291,9 +358,15 @@ export async function onRequestGet(context) {
     // 2.2 从 D1 数据库列举 (当 R2 为空或未绑定时提供无缝存储)
     if (db) {
         try {
-            const rows = await db.prepare("SELECT key, name, type, product, data, updated_at FROM protocols WHERE username = ? ORDER BY updated_at DESC").bind(workspace).all();
+            let rows = await db.prepare("SELECT key, name, type, product, data, updated_at FROM protocols WHERE username = ? ORDER BY updated_at DESC").bind(workspace).all();
+            if ((!rows || !rows.results || rows.results.length === 0) && workspace !== "default") {
+                rows = await db.prepare("SELECT key, name, type, product, data, updated_at FROM protocols WHERE username = 'default' ORDER BY updated_at DESC").all();
+            }
 
             for (const row of (rows.results || [])) {
+                if (seenKeys.has(row.key)) continue;
+                seenKeys.add(row.key);
+
                 let parsed = null;
                 try {
                     parsed = JSON.parse(row.data);
@@ -314,7 +387,8 @@ export async function onRequestGet(context) {
                     updateTime: row.updated_at || Date.now(),
                     _cloudKey: row.key,
                     _cloudWorkspace: workspace,
-                    _storageEngine: "D1"
+                    _storageEngine: "D1",
+                    data: parsed
                 });
             }
 
@@ -477,6 +551,13 @@ export async function onRequestPost(context) {
             updateTime: String(body._cloudUpdated)
         };
 
+        // R2 customMetadata 必须严格遵守 HTTP 标头编码，非 ASCII 字符必须 URI 编码，避免 R2 写入异常
+        const safeMetadata = {};
+        for (const [mk, mv] of Object.entries(metadata)) {
+            const strVal = String(mv || '');
+            safeMetadata[mk] = /^[\x20-\x7E]*$/.test(strVal) ? strVal : encodeURIComponent(strVal);
+        }
+
         const payloadStr = JSON.stringify(body);
         let primaryEngine = "none";
 
@@ -485,7 +566,7 @@ export async function onRequestPost(context) {
             try {
                 await bucket.put(key, payloadStr, {
                     httpMetadata: { contentType: "application/json;charset=utf-8" },
-                    customMetadata: metadata
+                    customMetadata: safeMetadata
                 });
                 primaryEngine = "R2";
             } catch (r2Err) {

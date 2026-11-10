@@ -235,11 +235,6 @@
 
                 const isAdmin = data.user.isAdmin || data.user.username.toLowerCase() === 'admin';
                 if (isAdmin) {
-                    // 管理员直接进入系统管理后台，无需任何通信协议
-                    if (window.dbHelper) {
-                        await window.dbHelper.clearAllProtocols();
-                        await window.dbHelper.clearAllProducts();
-                    }
                     if (typeof window.switchToView === 'function') {
                         window.switchToView('admin-view');
                     }
@@ -247,13 +242,13 @@
                         window.loadAdminStats();
                     }
                 } else {
-                    // 普通工程师：进入协议管理，从云端拉取该账号专属协议
                     if (typeof window.switchToView === 'function') {
                         window.switchToView('protocol-view');
                     }
-                    if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
-                        await ProtoView.WorkspaceSync.syncCloudProtocols(false);
-                    }
+                }
+                // 所有账号（包括管理员）登录后，均从云端拉取该账号专属的产品与通信协议
+                if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
+                    await ProtoView.WorkspaceSync.syncCloudProtocols(false);
                 }
                 return true;
             } else {
@@ -284,10 +279,6 @@
 
                 const isAdmin = data.user.isAdmin || data.user.username.toLowerCase() === 'admin';
                 if (isAdmin) {
-                    if (window.dbHelper) {
-                        await window.dbHelper.clearAllProtocols();
-                        await window.dbHelper.clearAllProducts();
-                    }
                     if (typeof window.switchToView === 'function') {
                         window.switchToView('admin-view');
                     }
@@ -298,10 +289,10 @@
                     if (typeof window.switchToView === 'function') {
                         window.switchToView('protocol-view');
                     }
-                    // 新注册用户：清空本地旧缓存，拉取云端专属协议（新账号必为空），呈现纯净空状态
-                    if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
-                        await ProtoView.WorkspaceSync.syncCloudProtocols(false);
-                    }
+                }
+                // 新注册用户拉取云端专属产品与协议
+                if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
+                    await ProtoView.WorkspaceSync.syncCloudProtocols(false);
                 }
                 return true;
             } else {

@@ -105,29 +105,39 @@
                 const list = res.data.protocols || [];
                 if (window.dbHelper && list.length > 0) {
                     for (const item of list) {
-                        if (item._cloudKey) {
-                            const detailRes = await cloudApiCall(`/api/protocols?key=${encodeURIComponent(item._cloudKey)}`, 'GET');
-                            if (detailRes.ok && detailRes.data) {
-                                let proto = detailRes.data;
-                                if (typeof proto === 'string') {
-                                    try { proto = JSON.parse(proto); } catch(e) {}
-                                }
-                                if (proto && typeof proto === 'object') {
-                                    proto._fromCloud = true;
-                                    proto._cloudKey = item._cloudKey;
-                                    if (!proto.name) proto.name = item.name || '未命名协议';
-                                    if (!proto.type) proto.type = item.type || 'ARINC429';
+                        // 优先直接使用后端一体化返回的完整协议数据 (免除逐个发起二次 HTTP 请求)
+                        let proto = item.data || null;
 
-                                    if (proto.product) {
-                                        const existingP = await window.dbHelper.getProduct(proto.product);
-                                        if (!existingP) {
-                                            await window.dbHelper.saveProduct({ name: proto.product });
-                                        }
-                                    }
-                                    await window.dbHelper.saveProtocol(proto);
-                                    loadedCount++;
+                        // 容灾兼容：若未直接附带 data，发起按 key 详情查询
+                        if (!proto || (!proto.words && !proto.packets && !proto.frames)) {
+                            const cloudKey = item._cloudKey || item.key;
+                            if (cloudKey) {
+                                const detailRes = await cloudApiCall(`/api/protocols?key=${encodeURIComponent(cloudKey)}`, 'GET');
+                                if (detailRes.ok && detailRes.data) {
+                                    proto = detailRes.data;
                                 }
                             }
+                        }
+
+                        if (typeof proto === 'string') {
+                            try { proto = JSON.parse(proto); } catch(e) {}
+                        }
+
+                        if (proto && typeof proto === 'object' && (proto.words || proto.packets || proto.frames || proto.name)) {
+                            proto._fromCloud = true;
+                            proto._cloudKey = item._cloudKey || item.key;
+                            if (!proto.name) proto.name = item.name || '未命名协议';
+                            if (!proto.type) proto.type = item.type || 'ARINC429';
+
+                            // 确保协议归属的产品也在本地产品库注册
+                            if (proto.product && window.dbHelper.getProduct && window.dbHelper.saveProduct) {
+                                const existingP = await window.dbHelper.getProduct(proto.product);
+                                if (!existingP) {
+                                    await window.dbHelper.saveProduct({ name: proto.product });
+                                }
+                            }
+                            await window.dbHelper.saveProtocol(proto);
+                            loadedCount++;
                         }
                     }
                 }
