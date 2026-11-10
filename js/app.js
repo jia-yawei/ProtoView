@@ -12,21 +12,27 @@
     function initTheme() {
         const themeToggle = document.getElementById('theme-toggle');
         const body = document.body;
+        const docEl = document.documentElement;
         if (!themeToggle) return;
 
         const savedTheme = localStorage.getItem('theme') || 'light';
         if (savedTheme === 'dark') {
             body.setAttribute('data-theme', 'dark');
+            docEl.setAttribute('data-theme', 'dark');
             themeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
         }
 
-        themeToggle.addEventListener('click', () => {
-            if (body.hasAttribute('data-theme')) {
+        themeToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isDark = body.hasAttribute('data-theme') || docEl.hasAttribute('data-theme');
+            if (isDark) {
                 body.removeAttribute('data-theme');
+                docEl.removeAttribute('data-theme');
                 localStorage.setItem('theme', 'light');
                 themeToggle.innerHTML = '<i class="fa-solid fa-moon"></i>';
             } else {
                 body.setAttribute('data-theme', 'dark');
+                docEl.setAttribute('data-theme', 'dark');
                 localStorage.setItem('theme', 'dark');
                 themeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
             }

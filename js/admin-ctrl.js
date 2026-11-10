@@ -24,7 +24,7 @@
     let adminView, btnRefreshAdmin, btnCleanSessions, btnConfigAdminKey,
         btnOpenCfConfig, btnOpenCfGuide, btnRecheckBindings, btnOpenGuideInline,
         adminSearchUser, userTableBody, userCountBadge,
-        statTotalUsers, statActiveSessions, statTotalProtocols, statStorageBytes,
+        statTotalUsers, statActiveSessions, statTotalProtocols, statTotalProducts, statStorageBytes,
         // 绑定诊断卡片
         bindingOverallPill,
         badgeD1Status, descD1Status, d1TablesIndicator, btnInitD1Schema, btnViewD1Sql,
@@ -138,6 +138,7 @@
         statTotalUsers = document.getElementById('admin-stat-users');
         statActiveSessions = document.getElementById('admin-stat-sessions');
         statTotalProtocols = document.getElementById('admin-stat-protocols');
+        statTotalProducts = document.getElementById('admin-stat-products');
         statStorageBytes = document.getElementById('admin-stat-storage');
 
         // 额度进度条
@@ -254,13 +255,25 @@
         }
     }
 
-    // 渲染顶部 4 个核心 KPI 仪表卡
+    // 渲染业务资产 4 个核心 KPI 仪表卡与类型分布
     function renderOverviewKPIs(overview) {
         if (!overview) return;
         if (statTotalUsers) statTotalUsers.textContent = overview.totalUsers || 0;
         if (statActiveSessions) statActiveSessions.textContent = overview.activeSessions || 0;
         if (statTotalProtocols) statTotalProtocols.textContent = overview.totalProtocols || 0;
+        if (statTotalProducts) statTotalProducts.textContent = overview.totalProducts || 0;
         if (statStorageBytes) statStorageBytes.textContent = formatBytes(overview.totalStorageBytes || 0);
+
+        // 渲染协议类型分布小徽章
+        const pillsContainer = document.getElementById('admin-proto-type-pills');
+        if (pillsContainer && overview.typeDistribution) {
+            const td = overview.typeDistribution;
+            pillsContainer.innerHTML = `
+                <span class="pstat-item"><i class="fa-solid fa-plane" style="color:var(--accent-color);"></i> 429: <b>${td.ARINC429 || 0}</b></span>
+                <span class="pstat-item"><i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> 串口: <b>${td.Serial || 0}</b></span>
+                <span class="pstat-item"><i class="fa-solid fa-network-wired" style="color:#10b981;"></i> CAN: <b>${td.CAN || 0}</b></span>
+            `;
+        }
 
         // 引擎指示徽章
         const engineBadge = document.getElementById('admin-engine-badge');
@@ -432,6 +445,26 @@
                 quotaRequestsSourcePill.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> 自测估算';
                 quotaRequestsSourcePill.className = 'quota-status-pill';
             }
+        }
+
+        // 3. 遥测状态指示药丸
+        const telemetryBadge = document.getElementById('cf-telemetry-badge');
+        if (telemetryBadge) {
+            if (workersQuota.isLive) {
+                telemetryBadge.textContent = '官方实时连线';
+                telemetryBadge.className = 'quota-badge-pill healthy';
+            } else {
+                telemetryBadge.textContent = '运行估算模式';
+                telemetryBadge.className = 'quota-badge-pill';
+            }
+        }
+
+        // 4. 边缘运算卡片数值
+        const workersOps = document.getElementById('quota-workers-ops');
+        if (workersOps) {
+            const r24 = workersQuota.realRequests24h || 0;
+            const pct = Math.min(100, (r24 / 100000) * 100);
+            workersOps.textContent = `${r24.toLocaleString()} / 10 万次 (${pct < 0.01 ? '<0.01' : pct.toFixed(2)}%)`;
         }
 
         if (cfRealDataBadge) {

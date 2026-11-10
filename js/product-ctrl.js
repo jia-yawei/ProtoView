@@ -553,6 +553,12 @@
         ]);
         await refreshProductDatalist();
 
+        // 实时更新侧边栏协议数量徽章
+        const sidebarProtoBadge = document.getElementById('sidebar-proto-count-badge');
+        if (sidebarProtoBadge) {
+            sidebarProtoBadge.textContent = (protocols || []).length;
+        }
+
         const productMap = new Map();
         (products || []).forEach(p => {
             if (p && p.name) {

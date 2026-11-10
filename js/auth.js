@@ -151,18 +151,31 @@
         if (sidebarUserCard) {
             if (user) {
                 sidebarUserCard.classList.add('logged-in');
+                const displayName = (user.displayName || user.username || '').trim();
                 if (sidebarUserName) {
-                    sidebarUserName.textContent = user.username;
+                    sidebarUserName.textContent = displayName || user.username;
                     sidebarUserName.title = `当前登录账号: ${user.username} ${isAdmin ? '(系统管理员)' : ''}`;
+                }
+                if (sidebarUserAvatar) {
+                    const char = (displayName || user.username || 'U').charAt(0).toUpperCase();
+                    sidebarUserAvatar.innerHTML = `
+                        <span class="avatar-char">${escapeHTML(char)}</span>
+                        <span class="avatar-online-dot" title="在线状态"></span>
+                    `;
+                    if (isAdmin) {
+                        sidebarUserAvatar.classList.add('avatar-admin');
+                    } else {
+                        sidebarUserAvatar.classList.remove('avatar-admin');
+                    }
                 }
                 if (sidebarUserStatus) {
                     sidebarUserStatus.innerHTML = isAdmin 
                         ? `<i class="fa-solid fa-crown" style="color:#f59e0b; font-size:10px;"></i> <span style="color:#f59e0b; font-weight:600;">系统管理员</span>`
-                        : `<i class="fa-solid fa-circle" style="color:#10b981; font-size:8px;"></i> <span>在线: ${escapeHTML(user.username)}</span>`;
+                        : `<i class="fa-solid fa-circle" style="color:#10b981; font-size:7px;"></i> <span style="color:var(--text-secondary);">在线 · 已同步</span>`;
                 }
                 if (btnSidebarAuthAction) {
-                    btnSidebarAuthAction.innerHTML = `<i class="fa-solid fa-right-from-bracket"></i> 退出`;
-                    btnSidebarAuthAction.title = '退出当前登录账号，返回登录界面';
+                    btnSidebarAuthAction.innerHTML = `<i class="fa-solid fa-right-from-bracket"></i>`;
+                    btnSidebarAuthAction.title = '退出登录';
                 }
             } else {
                 sidebarUserCard.classList.remove('logged-in');
@@ -170,11 +183,15 @@
                     sidebarUserName.textContent = '未登录';
                     sidebarUserName.title = '请先登录账号';
                 }
+                if (sidebarUserAvatar) {
+                    sidebarUserAvatar.innerHTML = `<i class="fa-solid fa-user"></i>`;
+                    sidebarUserAvatar.classList.remove('avatar-admin');
+                }
                 if (sidebarUserStatus) {
-                    sidebarUserStatus.innerHTML = `<i class="fa-solid fa-circle" style="color:var(--text-secondary); opacity:0.6; font-size:8px;"></i> <span>未登录</span>`;
+                    sidebarUserStatus.innerHTML = `<i class="fa-solid fa-circle" style="color:var(--text-secondary); opacity:0.6; font-size:7px;"></i> <span>未登录</span>`;
                 }
                 if (btnSidebarAuthAction) {
-                    btnSidebarAuthAction.innerHTML = `<i class="fa-solid fa-user-plus"></i> 登录/注册`;
+                    btnSidebarAuthAction.innerHTML = `<i class="fa-solid fa-arrow-right-to-bracket"></i>`;
                     btnSidebarAuthAction.title = '前往登录页面';
                 }
             }
@@ -482,9 +499,15 @@
             });
         }
         if (sidebarUserCard) {
-            sidebarUserCard.addEventListener('click', () => {
+            sidebarUserCard.addEventListener('click', (e) => {
+                // 若点击目标或其祖先为主题切换按钮或退出按钮，则不触发账号切换弹窗
+                if (e.target && (e.target.closest('#theme-toggle') || e.target.closest('#btn-sidebar-auth-action'))) {
+                    return;
+                }
                 if (isLoggedIn()) {
-                    if (confirm(`当前登录账号: ${getCurrentUser().displayName} (${getCurrentUser().username})\n\n需要切换账号吗？`)) {
+                    const u = getCurrentUser();
+                    const name = u ? (u.displayName || u.username) : '';
+                    if (confirm(`当前登录账号: ${name}\n\n需要切换账号吗？`)) {
                         openAuthModal('login');
                     }
                 } else {

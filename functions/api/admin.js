@@ -392,6 +392,43 @@ export async function onRequestGet(context) {
                 } catch (e) {}
             }
 
+            // 统计产品型号总数
+            let totalProducts = 0;
+            const uniqueProductNames = new Set();
+            if (db && d1Status.hasUserProductsTable) {
+                try {
+                    const prodRows = await db.prepare("SELECT data FROM user_products").all();
+                    for (const row of (prodRows.results || [])) {
+                        const list = JSON.parse(row.data || "[]");
+                        list.forEach(p => { if (p && p.name) uniqueProductNames.add(p.name); });
+                    }
+                } catch(e) {}
+            }
+            if (db && d1Status.hasProtocolsTable) {
+                try {
+                    const protoPNames = await db.prepare("SELECT DISTINCT product FROM protocols WHERE product IS NOT NULL AND product != ''").all();
+                    for (const r of (protoPNames.results || [])) {
+                        if (r.product) uniqueProductNames.add(r.product);
+                    }
+                } catch(e) {}
+            }
+            if (bucket) {
+                try {
+                    const metaListed = await bucket.list({ prefix: "ws:" });
+                    for (const o of (metaListed.objects || [])) {
+                        if (o.key.includes(":meta:products")) {
+                            const pObj = await bucket.get(o.key);
+                            if (pObj) {
+                                const pText = await pObj.text();
+                                const pList = JSON.parse(pText || "[]");
+                                pList.forEach(p => { if (p && p.name) uniqueProductNames.add(p.name); });
+                            }
+                        }
+                    }
+                } catch(e) {}
+            }
+            totalProducts = uniqueProductNames.size;
+
             // 抓取 Cloudflare 官方 API 实时流量与请求数据
             const cfLiveMetrics = await getCloudflareLiveMetrics(cfToken, cfAccountId, cfZoneId, cfR2Bucket);
             if (cfLiveMetrics.isLive && cfLiveMetrics.r2Usage) {
@@ -516,6 +553,7 @@ export async function onRequestGet(context) {
                     totalUsers,
                     activeSessions,
                     totalProtocols,
+                    totalProducts,
                     totalStorageBytes,
                     typeDistribution,
                     storageEngine: bucket ? "R2" : "KV",
