@@ -9,6 +9,14 @@
     const ProtoView = global.ProtoView || {};
 
     // ----------------- 通用 Cloudflare API 请求封装 -----------------
+    // 安全编码请求头，防止中文用户名或特殊字符导致浏览器 fetch 抛出 non ISO-8859-1 code point 异常
+    function safeHeaderValue(val) {
+        if (val === null || val === undefined) return '';
+        const str = String(val).trim();
+        if (!str) return '';
+        return /^[\x20-\x7E]*$/.test(str) ? str : encodeURIComponent(str);
+    }
+
     async function cloudApiCall(endpoint, method = 'GET', data = null) {
         const token = localStorage.getItem('protoview_auth_token') || '';
         const wsToken = localStorage.getItem('protoview_cloud_token') || '';
@@ -24,9 +32,9 @@
         const headers = {
             'Content-Type': 'application/json;charset=utf-8'
         };
-        if (token) headers['x-auth-token'] = token;
-        if (wsToken) headers['x-workspace-token'] = wsToken;
-        if (username) headers['x-workspace-id'] = username;
+        if (token) headers['x-auth-token'] = safeHeaderValue(token);
+        if (wsToken) headers['x-workspace-token'] = safeHeaderValue(wsToken);
+        if (username) headers['x-workspace-id'] = safeHeaderValue(username);
 
         const options = {
             method: method,

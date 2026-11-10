@@ -315,6 +315,13 @@
         }
     }
 
+    function safeHeaderValue(val) {
+        if (val === null || val === undefined) return '';
+        const str = String(val).trim();
+        if (!str) return '';
+        return /^[\x20-\x7E]*$/.test(str) ? str : encodeURIComponent(str);
+    }
+
     // 退出登录
     async function handleLogout() {
         const u = getCurrentUser();
@@ -330,7 +337,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json;charset=utf-8',
-                        'x-auth-token': token
+                        'x-auth-token': safeHeaderValue(token)
                     },
                     body: JSON.stringify({ token })
                 }).catch(() => {});
@@ -364,7 +371,7 @@
         try {
             const res = await fetch('/api/auth?action=me', {
                 method: 'GET',
-                headers: { 'x-auth-token': token }
+                headers: { 'x-auth-token': safeHeaderValue(token) }
             });
             const data = await res.json().catch(() => null);
 

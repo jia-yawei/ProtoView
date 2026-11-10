@@ -104,9 +104,10 @@ export async function onRequestGet(context) {
     }
 
     if (action === "me") {
-        const token = request.headers.get("x-auth-token") ||
-                      (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
-                      url.searchParams.get("token");
+        let token = request.headers.get("x-auth-token") ||
+                    (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
+                    url.searchParams.get("token") || "";
+        try { token = decodeURIComponent(token); } catch(e) {}
 
         if (!token) {
             return new Response(JSON.stringify({ success: false, error: "未提供登录凭证" }), {
@@ -423,9 +424,10 @@ export async function onRequestPost(context) {
 
     // 3. 退出登录
     if (action === "logout") {
-        const token = request.headers.get("x-auth-token") ||
-                      (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
-                      body.token;
+        let token = request.headers.get("x-auth-token") ||
+                    (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
+                    body.token || "";
+        try { token = decodeURIComponent(token); } catch(e) {}
 
         if (token) {
             if (db) {

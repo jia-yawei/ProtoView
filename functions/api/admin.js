@@ -59,12 +59,14 @@ function getBindings(env) {
 // 管理员鉴权：支持 x-admin-key 验证，或自动验证当前登录的管理员 Token
 async function verifyAdmin(request, env) {
     const targetKey = env.ADMIN_KEY || env.ADMIN_SECRET || env.ADMIN_SECRET_KEY || "admin888";
-    const clientKey = request.headers.get("x-admin-key") || new URL(request.url).searchParams.get("adminKey");
+    let clientKey = request.headers.get("x-admin-key") || new URL(request.url).searchParams.get("adminKey") || "";
+    try { clientKey = decodeURIComponent(clientKey); } catch(e) {}
     if (clientKey && clientKey === targetKey) return true;
 
     // 支持以 admin 账号登录的 Session Token 免密直通
-    const token = request.headers.get("x-auth-token") ||
-                  (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    let token = request.headers.get("x-auth-token") ||
+                (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    try { token = decodeURIComponent(token); } catch(e) {}
     if (token) {
         const { db, kv } = getBindings(env);
         const now = Date.now();
@@ -240,10 +242,14 @@ export async function onRequestGet(context) {
         } catch(e) {}
     }
 
-    const cfToken = request.headers.get("x-cf-token") || cfConfig?.cfApiToken || env.CF_API_TOKEN || env.CLOUDFLARE_API_TOKEN || "";
-    const cfAccountId = request.headers.get("x-cf-account-id") || cfConfig?.cfAccountId || env.CF_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID || "";
-    const cfZoneId = request.headers.get("x-cf-zone-id") || cfConfig?.cfZoneId || env.CF_ZONE_ID || "";
-    const cfR2Bucket = request.headers.get("x-cf-r2-bucket") || cfConfig?.cfR2Bucket || env.CF_R2_BUCKET || (bucket ? "protoview-bucket" : "");
+    let cfToken = request.headers.get("x-cf-token") || cfConfig?.cfApiToken || env.CF_API_TOKEN || env.CLOUDFLARE_API_TOKEN || "";
+    let cfAccountId = request.headers.get("x-cf-account-id") || cfConfig?.cfAccountId || env.CF_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID || "";
+    let cfZoneId = request.headers.get("x-cf-zone-id") || cfConfig?.cfZoneId || env.CF_ZONE_ID || "";
+    let cfR2Bucket = request.headers.get("x-cf-r2-bucket") || cfConfig?.cfR2Bucket || env.CF_R2_BUCKET || (bucket ? "protoview-bucket" : "");
+    try { cfToken = decodeURIComponent(cfToken); } catch(e) {}
+    try { cfAccountId = decodeURIComponent(cfAccountId); } catch(e) {}
+    try { cfZoneId = decodeURIComponent(cfZoneId); } catch(e) {}
+    try { cfR2Bucket = decodeURIComponent(cfR2Bucket); } catch(e) {}
 
     // 1. 全景数据与配额健康度透视
     if (action === "stats") {

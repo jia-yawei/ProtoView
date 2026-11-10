@@ -65,17 +65,24 @@
         localStorage.setItem(CF_CONFIG_KEY, JSON.stringify(cfg || {}));
     }
 
+    function safeHeaderValue(val) {
+        if (val === null || val === undefined) return '';
+        const str = String(val).trim();
+        if (!str) return '';
+        return /^[\x20-\x7E]*$/.test(str) ? str : encodeURIComponent(str);
+    }
+
     function getAdminHeaders() {
         const token = ProtoView.Auth && ProtoView.Auth.getToken ? ProtoView.Auth.getToken() : '';
         const cf = getCfConfig();
         const headers = {
-            'x-admin-key': getAdminKey(),
-            'x-auth-token': token
+            'x-admin-key': safeHeaderValue(getAdminKey()),
+            'x-auth-token': safeHeaderValue(token)
         };
-        if (cf.cfApiToken) headers['x-cf-token'] = cf.cfApiToken;
-        if (cf.cfAccountId) headers['x-cf-account-id'] = cf.cfAccountId;
-        if (cf.cfZoneId) headers['x-cf-zone-id'] = cf.cfZoneId;
-        if (cf.cfR2Bucket) headers['x-cf-r2-bucket'] = cf.cfR2Bucket;
+        if (cf.cfApiToken) headers['x-cf-token'] = safeHeaderValue(cf.cfApiToken);
+        if (cf.cfAccountId) headers['x-cf-account-id'] = safeHeaderValue(cf.cfAccountId);
+        if (cf.cfZoneId) headers['x-cf-zone-id'] = safeHeaderValue(cf.cfZoneId);
+        if (cf.cfR2Bucket) headers['x-cf-r2-bucket'] = safeHeaderValue(cf.cfR2Bucket);
         return headers;
     }
 

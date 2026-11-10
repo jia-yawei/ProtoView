@@ -65,9 +65,10 @@ async function ensureD1ProtocolsTable(db) {
 
 // 验证会话 Token 并解析出登录用户 (支持 D1 和 KV 双引擎鉴权)
 async function getAuthenticatedUser(request, env) {
-    const token = request.headers.get("x-auth-token") ||
-                  (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
-                  new URL(request.url).searchParams.get("authToken");
+    let token = request.headers.get("x-auth-token") ||
+                (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
+                new URL(request.url).searchParams.get("authToken") || "";
+    try { token = decodeURIComponent(token); } catch(e) {}
     if (!token) return null;
 
     const { db, kv } = getBindings(env);
@@ -109,7 +110,8 @@ function verifyAuth(request, env) {
     const serverToken = env?.WORKSPACE_TOKEN;
     if (!serverToken) return true;
 
-    const clientToken = request.headers.get("x-workspace-token") || new URL(request.url).searchParams.get("token");
+    let clientToken = request.headers.get("x-workspace-token") || new URL(request.url).searchParams.get("token") || "";
+    try { clientToken = decodeURIComponent(clientToken); } catch(e) {}
     return clientToken === serverToken;
 }
 
@@ -156,7 +158,9 @@ export async function onRequestGet(context) {
                 headers
             });
         }
-        workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "default").trim().toLowerCase();
+        let rawWs = url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "default";
+        try { rawWs = decodeURIComponent(rawWs); } catch(e) {}
+        workspace = rawWs.trim().toLowerCase();
     }
 
     // 1. 读取单个具体协议详情
@@ -438,7 +442,9 @@ export async function onRequestPost(context) {
             });
         }
         const url = new URL(request.url);
-        workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "default").trim().toLowerCase();
+        let rawWs = url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "default";
+        try { rawWs = decodeURIComponent(rawWs); } catch(e) {}
+        workspace = rawWs.trim().toLowerCase();
     }
 
     try {

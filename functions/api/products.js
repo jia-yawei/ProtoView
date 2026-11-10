@@ -62,9 +62,10 @@ async function ensureD1ProductsTable(db) {
 
 // 验证会话 Token 并解析出登录用户 (支持 D1 和 KV 双引擎鉴权)
 async function getAuthenticatedUser(request, env) {
-    const token = request.headers.get("x-auth-token") ||
-                  (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
-                  new URL(request.url).searchParams.get("authToken");
+    let token = request.headers.get("x-auth-token") ||
+                (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "") ||
+                new URL(request.url).searchParams.get("authToken") || "";
+    try { token = decodeURIComponent(token); } catch(e) {}
     if (!token) return null;
 
     const { db, kv } = getBindings(env);
@@ -130,7 +131,9 @@ export async function onRequestGet(context) {
     if (authUser && authUser.username) {
         workspace = authUser.username.toLowerCase();
     } else {
-        workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "").trim().toLowerCase();
+        let rawWs = url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "";
+        try { rawWs = decodeURIComponent(rawWs); } catch(e) {}
+        workspace = rawWs.trim().toLowerCase();
         if (!workspace) {
             return new Response(JSON.stringify({ success: false, error: "请先登录账号后再读取云端产品列表" }), {
                 status: 401,
@@ -226,7 +229,9 @@ export async function onRequestPost(context) {
     if (authUser && authUser.username) {
         workspace = authUser.username.toLowerCase();
     } else {
-        workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "").trim().toLowerCase();
+        let rawWs = url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "";
+        try { rawWs = decodeURIComponent(rawWs); } catch(e) {}
+        workspace = rawWs.trim().toLowerCase();
         if (!workspace) {
             return new Response(JSON.stringify({ success: false, error: "请先登录账号后再保存产品信息到云端" }), {
                 status: 401,
@@ -365,7 +370,9 @@ export async function onRequestDelete(context) {
     if (authUser && authUser.username) {
         workspace = authUser.username.toLowerCase();
     } else {
-        workspace = (url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "").trim().toLowerCase();
+        let rawWs = url.searchParams.get("workspace") || request.headers.get("x-workspace-id") || "";
+        try { rawWs = decodeURIComponent(rawWs); } catch(e) {}
+        workspace = rawWs.trim().toLowerCase();
     }
 
     const productName = url.searchParams.get("name") || "";
