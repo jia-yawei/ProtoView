@@ -262,9 +262,8 @@
 
                     <!-- 顶部右侧：数据包切换、导出与一键切换编辑工作台 -->
                     <div class="viewer-tb-actions">
-                        <select id="viewer-packet-select" class="dense-select-xs" style="display:none;" title="切换数据包"></select>
-                        <button type="button" class="dense-btn" id="btn-viewer-export-md" title="导出为标准 Markdown 格式规范文档"><i class="fa-solid fa-file-arrow-down"></i> 导出规范</button>
-                        <button type="button" class="dense-btn" id="btn-viewer-print" title="打印或导出 PDF 规格书卡片"><i class="fa-solid fa-print"></i> 打印卡片</button>
+                        <select id="viewer-packet-select" class="dense-select-xs" style="display:none; min-width: 135px; max-width: 200px; font-weight: 700;" title="切换数据包"></select>
+                        <button type="button" class="dense-btn" id="btn-viewer-export" onclick="window.openProtocolExportModal && window.openProtocolExportModal()" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 导出</button>
                         <button type="button" class="dense-btn dense-btn-primary" id="btn-viewer-edit-workbench" title="切换到编辑工作台以修改协议定义与标号字"><i class="fa-solid fa-pen-ruler"></i> 进入编辑工作台</button>
                     </div>
                 </header>
@@ -320,7 +319,7 @@
                         <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px;" title="429 数据包切换">
                             <i class="fa-solid fa-box-archive"></i>
                         </span>
-                        <select id="arinc-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 110px; max-width: 165px;" title="切换当前编辑的 429 数据包"></select>
+                        <select id="arinc-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 135px; max-width: 200px;" title="切换当前编辑的 429 数据包"></select>
                         <button type="button" class="dense-btn dense-btn-xs" id="btn-add-arinc-packet" title="添加新数据包"><i class="fa-solid fa-plus"></i> 新包</button>
                         <button type="button" class="dense-btn dense-btn-xs" id="btn-duplicate-arinc-packet" title="克隆当前数据包及其标号字"><i class="fa-solid fa-copy"></i></button>
                         <button type="button" class="dense-btn dense-btn-danger dense-btn-xs" id="btn-delete-arinc-packet" title="删除当前数据包"><i class="fa-solid fa-trash"></i></button>
@@ -347,11 +346,11 @@
                     </div>
 
                     <div class="dense-tb-actions">
-                        <button type="button" class="dense-btn" id="btn-arinc-switch-viewer" onclick="window.openProtocolViewer && window.openProtocolViewer(window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Arinc && window.ProtoView.Controllers.Arinc.getCurrentProtocol() ? window.ProtoView.Controllers.Arinc.getCurrentProtocol().id : '')" title="切换至只读查阅模式：清晰查看位域拓扑与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
+                        <button type="button" class="dense-btn" id="btn-arinc-switch-viewer" onclick="window.openProtocolViewer && window.openProtocolViewer(window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Arinc && window.ProtoView.Controllers.Arinc.getCurrentProtocol ? window.ProtoView.Controllers.Arinc.getCurrentProtocol() : null)" title="切换至只读查阅模式：清晰查看位域拓扑与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
                         <button type="button" class="dense-btn" id="btn-arinc-check" title="对当前协议进行静态合规与健康度全面体检"><i class="fa-solid fa-stethoscope" style="color:var(--accent-color);"></i> 检查</button>
                         <button type="button" class="dense-btn" id="btn-view-arinc-props" title="查看或修改当前协议属性"><i class="fa-solid fa-sliders"></i> 属性</button>
                         <input type="file" id="arinc-file-input" accept=".json" style="display:none">
-                        <button type="button" class="dense-btn" id="btn-arinc-export" title="导出为电脑本地 .json 协议文件"><i class="fa-solid fa-download"></i> 导出</button>
+                        <button type="button" class="dense-btn" id="btn-arinc-export" onclick="window.openProtocolExportModal && window.openProtocolExportModal()" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 导出</button>
                         <button type="button" class="dense-btn dense-btn-primary" id="btn-arinc-save" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                     </div>
                 </header>
@@ -575,7 +574,7 @@
                         <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px;" title="串口数据包切换">
                             <i class="fa-solid fa-box-archive"></i>
                         </span>
-                        <select id="serial-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 110px; max-width: 165px;" title="切换当前编辑的数据包"></select>
+                        <select id="serial-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 135px; max-width: 200px;" title="切换当前编辑的数据包"></select>
                         <button type="button" class="dense-btn dense-btn-xs" id="btn-add-serial-packet" title="添加新数据包"><i class="fa-solid fa-plus"></i> 新包</button>
                         <button type="button" class="dense-btn dense-btn-xs" id="btn-duplicate-serial-packet" title="克隆当前数据包"><i class="fa-solid fa-copy"></i></button>
                         <button type="button" class="dense-btn dense-btn-danger dense-btn-xs" id="btn-delete-serial-packet" title="删除当前数据包"><i class="fa-solid fa-trash"></i></button>
@@ -602,9 +601,9 @@
                     </div>
 
                     <div class="dense-tb-actions">
-                        <button type="button" class="dense-btn" id="btn-serial-switch-viewer" onclick="window.openProtocolViewer && window.openProtocolViewer(window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Serial && window.ProtoView.Controllers.Serial.getCurrentProtocol() ? window.ProtoView.Controllers.Serial.getCurrentProtocol().id : '')" title="切换至只读查阅模式：清晰查看数据包字节与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
+                        <button type="button" class="dense-btn" id="btn-serial-switch-viewer" onclick="window.openProtocolViewer && window.openProtocolViewer(window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Serial && window.ProtoView.Controllers.Serial.getCurrentProtocol ? window.ProtoView.Controllers.Serial.getCurrentProtocol() : null)" title="切换至只读查阅模式：清晰查看数据包字节与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
                         <button type="button" class="dense-btn" id="btn-view-serial-props" title="查看或修改串口物理参数 (接口类型、波特率、校验、周期等)"><i class="fa-solid fa-sliders"></i> 属性</button>
-                        <button type="button" class="dense-btn" id="btn-serial-export-json" title="导出为电脑本地 .json 协议文件"><i class="fa-solid fa-download"></i> 导出</button>
+                        <button type="button" class="dense-btn" id="btn-serial-export" onclick="window.openProtocolExportModal && window.openProtocolExportModal()" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 导出</button>
                         <button type="button" class="dense-btn dense-btn-primary" id="btn-serial-save" onclick="window.saveCurrentSerialProtocol && window.saveCurrentSerialProtocol()" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                     </div>
                 </header>
@@ -1069,7 +1068,7 @@
                         </div>
                         <div class="form-group">
                             <label for="proto-form-name">协议名称 <span class="req-star">*</span></label>
-                            <input type="text" id="proto-form-name" required placeholder="如：某型航电总线协议 / BMS通信协议" value="新建 ARINC 429 协议">
+                            <input type="text" id="proto-form-name" required placeholder="如：某型航电总线协议 / BMS通信协议" value="新建 ARINC429 通信协议">
                         </div>
                         <div class="form-group">
                             <label for="proto-form-product"><i class="fa-solid fa-cube" style="color:var(--accent-color);"></i> 所属产品 / 设备型号</label>
@@ -1083,8 +1082,11 @@
                                 </span>
                             </div>
                             <select id="proto-form-type" required>
-                                <option value="ARINC429" selected>ARINC 429 (航空通信总线 - 32位数据字)</option>
-                                <option value="Serial">串口 (RS485 / RS422 / UART)</option>
+                                <option value="ARINC429" selected>ARINC429 (航空通信总线)</option>
+                                <option value="RS422">RS422 (差分全双工串行接口)</option>
+                                <option value="RS485">RS485 (差分半双工串行总线)</option>
+                                <option value="RS232">RS232 (全双工串行通信接口)</option>
+                                <option value="UART">UART (通用异步收发器接口)</option>
                                 <option value="CAN">CAN (控制器局域网总线)</option>
                             </select>
                         </div>
@@ -1108,19 +1110,6 @@
                         <!-- 分组 2A：ARINC 429 专有参数 -->
                         <div class="modal-section-divider section-type-arinc">
                             <i class="fa-solid fa-plane-departure" style="color: var(--accent-color);"></i> ARINC 429 航空总线电气与模式参数
-                        </div>
-                        <div class="form-group section-type-arinc">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                                <label for="proto-arinc-subtype" style="margin-bottom: 0;">航空总线标准规范 / 标签 <span class="req-star">*</span></label>
-                                <span id="proto-arinc-subtype-lock-badge" class="proto-lock-badge" style="display: none;">
-                                    <i class="fa-solid fa-lock"></i> 已锁定
-                                </span>
-                            </div>
-                            <select id="proto-arinc-subtype">
-                                <option value="ARINC429 (HB6096)" selected>ARINC429 (HB6096 航空标准)</option>
-                                <option value="ARINC429">ARINC429 (通用航电规范)</option>
-                                <option value="HB6096">HB6096 (航空工业标准)</option>
-                            </select>
                         </div>
                         <div class="form-group section-type-arinc">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
@@ -1150,22 +1139,9 @@
                             </select>
                         </div>
 
-                        <!-- 分组 2B：串口 Serial 专有参数 -->
+                        <!-- 分组 2B：串行接口 (RS422 / RS485 / RS232 / UART) 专有参数 -->
                         <div class="modal-section-divider section-type-serial" style="display: none;">
                             <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 串口物理电气与通信参数
-                        </div>
-                        <div class="form-group section-type-serial" style="display: none;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                                <label for="proto-serial-subtype" style="margin-bottom: 0;">串口物理接口 <span class="req-star">*</span></label>
-                                <span id="proto-serial-subtype-lock-badge" class="proto-lock-badge" style="display: none;">
-                                    <i class="fa-solid fa-lock"></i> 已锁定
-                                </span>
-                            </div>
-                            <select id="proto-serial-subtype">
-                                <option value="RS485" selected>RS485 (半双工差分总线)</option>
-                                <option value="RS422">RS422 (全双工差分)</option>
-                                <option value="UART">UART / RS232 (点对点串口)</option>
-                            </select>
                         </div>
                         <div class="form-group section-type-serial" style="display: none;">
                             <label for="proto-serial-baud">通信波特率 <span class="req-star">*</span></label>
@@ -1300,48 +1276,111 @@
         </div>
     </div>
 
-    <!-- 弹窗：导出航电 IC 接口卡片 / Markdown (支持一键打印/PDF/离线HTML) -->
-    <div class="modal" id="arinc-export-md-modal">
-        <div class="modal-content" style="max-width: 1060px; width: 94vw; height: 90vh; display: flex; flex-direction: column;">
-            <div class="modal-header">
-                <h2><i class="fa-solid fa-file-contract" style="color:var(--accent-color);"></i> 航电 IC 接口卡片导出 / 打印</h2>
+    <!-- 弹窗：通信协议规格书与工程数据导出中心 (全视角统一：支持导出 JSON 配置、PDF 规格书、Markdown、独立离线 HTML) -->
+    <div class="modal" id="protocol-export-modal">
+        <div class="modal-content" style="max-width: 1100px; width: 95vw; height: 92vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="padding: 12px 20px;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                    <h2 style="margin: 0; font-size: 1.15rem; white-space: nowrap;"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 协议规格书与数据导出中心</h2>
+                    <span id="export-modal-proto-badge" class="viewer-type-pill pill-arinc">ARINC 429</span>
+                    <span id="export-modal-proto-name" style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <div class="btn-group" style="display: flex; background: var(--bg-hover); border-radius: 4px; padding: 2px;">
-                        <button type="button" class="dense-btn dense-btn-active" id="tab-btn-export-view-preview" style="font-size: 12px; padding: 3px 10px;"><i class="fa-solid fa-eye"></i> 视图预览</button>
+                        <button type="button" class="dense-btn dense-btn-active" id="tab-btn-export-view-preview" style="font-size: 12px; padding: 3px 10px;"><i class="fa-solid fa-eye"></i> 规格书预览</button>
                         <button type="button" class="dense-btn" id="tab-btn-export-view-code" style="font-size: 12px; padding: 3px 10px;"><i class="fa-solid fa-code"></i> Markdown源码</button>
+                        <button type="button" class="dense-btn" id="tab-btn-export-view-json" style="font-size: 12px; padding: 3px 10px;"><i class="fa-solid fa-brackets-curly"></i> JSON配置</button>
                     </div>
-                    <button type="button" class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+                    <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
             
-            <div class="export-modal-body">
-                <div class="codegen-top-strip">
-                    <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
-                        <i class="fa-solid fa-circle-info" style="color: var(--accent-color);"></i>
-                        <span>已根据航空航电标准生成 IC 控制卡片，包含 1~32 位分配表与完整状态字典，支持打印、存为 PDF 或导出为 .md / .html。</span>
+            <div class="export-modal-body" style="padding: 14px 20px; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
+                <!-- 顶层四大导出模式卡片组 (阅读模式与编辑模式均统一由此直接自由选择导出) -->
+                <div class="export-options-grid">
+                    <!-- 1. 配置文件 (.json) -->
+                    <div class="export-opt-card" id="export-card-json" title="导出协议完整 JSON 配置文件，支持离线永久备份与系统随时重新导入还原">
+                        <div class="eoc-header">
+                            <div class="eoc-icon eoc-json"><i class="fa-solid fa-file-code"></i></div>
+                            <div>
+                                <div class="eoc-title">配置文件 (.json)</div>
+                                <div class="eoc-badge">系统配置与备份</div>
+                            </div>
+                        </div>
+                        <div class="eoc-desc">完整包含所有数据包、字段与工程参数，永久本地保存，可随时重新导入还原。</div>
+                        <div class="eoc-actions">
+                            <button type="button" class="btn btn-sm btn-primary" id="btn-download-json" style="width: 100%;"><i class="fa-solid fa-download"></i> 导出 JSON 文件</button>
+                        </div>
                     </div>
-                    <div class="codegen-actions">
-                        <button type="button" class="dense-btn dense-btn-primary" id="btn-print-preview-html" title="打开独立排版网页进行打印或另存为 PDF"><i class="fa-solid fa-print"></i> 打印 / 另存为 PDF</button>
-                        <button type="button" class="dense-btn" id="btn-download-html-spec" title="下载标准独立 HTML 规范卡片"><i class="fa-solid fa-file-code"></i> 下载 HTML 卡片</button>
-                        <button type="button" class="dense-btn" id="btn-download-md" title="下载 .md 文件到本地"><i class="fa-solid fa-download"></i> 下载 .md 文件</button>
-                        <button type="button" class="dense-btn" id="btn-copy-md" title="一键复制 Markdown 到剪贴板"><i class="fa-regular fa-copy"></i> 复制 Markdown</button>
-                        <button type="button" class="dense-btn" id="btn-download-json" title="导出 JSON 协议备份文件"><i class="fa-solid fa-file-export"></i> 备份 JSON</button>
+
+                    <!-- 2. PDF 规格书 (打印 / 存为 PDF) -->
+                    <div class="export-opt-card" id="export-card-pdf" title="打开工业级独立排版视窗，可直接连接打印机或另存为 PDF 接口卡片">
+                        <div class="eoc-header">
+                            <div class="eoc-icon eoc-pdf"><i class="fa-solid fa-file-pdf"></i></div>
+                            <div>
+                                <div class="eoc-title">PDF 规格书 (.pdf)</div>
+                                <div class="eoc-badge">交付与打印归档</div>
+                            </div>
+                        </div>
+                        <div class="eoc-desc">航电/工业级 ICD 控制卡片标准排版，完美适配 A4 纸张，一键存为 PDF 或打印。</div>
+                        <div class="eoc-actions">
+                            <button type="button" class="btn btn-sm btn-primary" id="btn-print-preview-html" style="width: 100%;"><i class="fa-solid fa-print"></i> 打印 / 另存为 PDF</button>
+                        </div>
+                    </div>
+
+                    <!-- 3. Markdown 规范说明书 (.md) -->
+                    <div class="export-opt-card" id="export-card-md" title="导出标准 GitHub Flavored Markdown (GFM) 格式规范说明书，用于 Git 仓库与文档中心">
+                        <div class="eoc-header">
+                            <div class="eoc-icon eoc-md"><i class="fa-brands fa-markdown"></i></div>
+                            <div>
+                                <div class="eoc-title">Markdown 规范 (.md)</div>
+                                <div class="eoc-badge">技术文档与Git</div>
+                            </div>
+                        </div>
+                        <div class="eoc-desc">高可读性表格与字典说明，适合直接提交至代码仓库，支持下载与一键复制。</div>
+                        <div class="eoc-actions" style="display: flex; gap: 6px;">
+                            <button type="button" class="btn btn-sm btn-secondary" id="btn-copy-md" title="复制 Markdown 源码" style="flex: 1;"><i class="fa-regular fa-copy"></i> 复制</button>
+                            <button type="button" class="btn btn-sm btn-primary" id="btn-download-md" style="flex: 1.4;"><i class="fa-solid fa-download"></i> 导出 .md</button>
+                        </div>
+                    </div>
+
+                    <!-- 4. 独立 HTML 规格卡片 (.html) -->
+                    <div class="export-opt-card" id="export-card-html" title="导出自包含独立离线 HTML 网页卡片，无需网络与任何外部依赖，双击即览">
+                        <div class="eoc-header">
+                            <div class="eoc-icon eoc-html"><i class="fa-solid fa-globe"></i></div>
+                            <div>
+                                <div class="eoc-title">独立 HTML 卡片 (.html)</div>
+                                <div class="eoc-badge">离线免安装浏览</div>
+                            </div>
+                        </div>
+                        <div class="eoc-desc">内置自包含高质感样式与打印工具栏，任何电脑双击即览，便于跨部门交付。</div>
+                        <div class="eoc-actions">
+                            <button type="button" class="btn btn-sm btn-primary" id="btn-download-html-spec" style="width: 100%;"><i class="fa-solid fa-download"></i> 导出 HTML 卡片</button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 可视化表格预览模式 -->
-                <div id="export-preview-container" style="flex: 1; min-height: 0; margin-top: 0.5rem; overflow-y: auto; background: #fff; padding: 24px; border-radius: 6px; border: 1px solid var(--border-color); color: #000;">
-                    <div id="export-rendered-preview"></div>
-                </div>
+                <!-- 底部视窗：所选视角的实时内容渲染区 -->
+                <div class="export-preview-wrapper" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 8px;">
+                    <!-- 1. 可视化规格书渲染预览 (所见即所得，与 PDF / HTML 保持 100% 一致) -->
+                    <div id="export-preview-container" style="flex: 1; min-height: 0; overflow-y: auto; background: #fff; padding: 24px; color: #000;">
+                        <div id="export-rendered-preview"></div>
+                    </div>
 
-                <!-- 源码模式 -->
-                <div id="export-code-container" class="codegen-editor-container" style="flex: 1; min-height: 0; margin-top: 0.5rem; overflow: hidden; display: none;">
-                    <pre class="codegen-pre" style="margin: 0; height: 100%;"><code id="export-md-code-block" class="codegen-code" style="font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;"></code></pre>
+                    <!-- 2. Markdown 源码视图 -->
+                    <div id="export-code-container" class="codegen-editor-container" style="flex: 1; min-height: 0; overflow: hidden; display: none;">
+                        <pre class="codegen-pre" style="margin: 0; height: 100%;"><code id="export-md-code-block" class="codegen-code" style="font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;"></code></pre>
+                    </div>
+
+                    <!-- 3. JSON 配置文件源码视图 -->
+                    <div id="export-json-container" class="codegen-editor-container" style="flex: 1; min-height: 0; overflow: hidden; display: none;">
+                        <pre class="codegen-pre" style="margin: 0; height: 100%;"><code id="export-json-code-block" class="codegen-code" style="font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;"></code></pre>
+                    </div>
                 </div>
             </div>
 
-            <div class="modal-actions" style="padding: 12px 24px; display: flex; justify-content: space-between; align-items: center;">
-                <span class="dense-hint" id="export-md-hint"><i class="fa-solid fa-circle-check" style="color:var(--success);"></i> 格式与航电工程接口卡片对齐，可直接用于工程评审或交付</span>
+            <div class="modal-actions" style="padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color);">
+                <span class="dense-hint" id="export-md-hint"><i class="fa-solid fa-circle-check" style="color:var(--success);"></i> 统一导出中心已就绪：支持 JSON 配置文件、PDF 交付卡片、Markdown 规范与独立 HTML</span>
                 <button type="button" class="btn btn-secondary close-modal-btn">关闭</button>
             </div>
         </div>
@@ -1683,6 +1722,7 @@ CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
     <script src="js/serial-ctrl.js"></script>
     <script src="js/admin-ctrl.js"></script>
     <script src="js/viewer-ctrl.js"></script>
+    <script src="js/export-ctrl.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

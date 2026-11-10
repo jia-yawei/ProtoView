@@ -312,7 +312,8 @@
                 const isRx = pkt.direction === 'Rx';
                 const pktPeriod = pkt.period !== undefined ? pkt.period : (currentArincProtocol.period || 20);
                 const periodText = isRx ? '' : ` ${pktPeriod}ms`;
-                opt.textContent = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'} (${pkt.words ? pkt.words.length : 0}个字)`;
+                opt.textContent = pkt.name || '未命名数据包';
+                opt.title = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'} (${pkt.words ? pkt.words.length : 0}个字)`;
                 if (idx === currentArincPacketIndex) {
                     opt.selected = true;
                 }
@@ -426,7 +427,7 @@
         if (toolbarProtoTitle) {
             // 精简显示：仅展示协议名称，去除冗余前缀
             toolbarProtoTitle.innerHTML = `<i class="fa-solid fa-plane-departure" style="color:var(--accent-color);"></i> ${escapeHTML(p.name || '429 协议')}`;
-            toolbarProtoTitle.title = (p.product ? `所属产品: ${p.product}\n` : '') + `协议名称: ${p.name || 'ARINC 429 协议'}\n标准规范: ${p.subType || 'ARINC429 (HB6096)'}\n划分架构: ${p.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式'}\n速率: ${p.speed || '100kbps'} | 校验: ${p.parity === 'odd' ? '奇校验' : (p.parity === 'even' ? '偶校验' : '无校验')}\n周期: ${p.period || 20}ms | 方向: ${p.direction || 'Tx'}`;
+            toolbarProtoTitle.title = (p.product ? `所属产品: ${p.product}\n` : '') + `协议名称: ${p.name || 'ARINC429 协议'}\n标准规范: ARINC429\n划分架构: ${p.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式'}\n速率: ${p.speed || '100kbps'} | 校验: ${p.parity === 'odd' ? '奇校验' : (p.parity === 'even' ? '偶校验' : '无校验')}\n周期: ${p.period || 20}ms | 方向: ${p.direction || 'Tx'}`;
         }
         if (badgeProtoMode) {
             badgeProtoMode.textContent = p.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式';
@@ -2123,6 +2124,15 @@
             });
         }
 
+        const btnArincSwitchViewer = document.getElementById('btn-arinc-switch-viewer');
+        if (btnArincSwitchViewer) {
+            btnArincSwitchViewer.addEventListener('click', () => {
+                if (typeof window.openProtocolViewer === 'function') {
+                    window.openProtocolViewer(currentArincProtocol);
+                }
+            });
+        }
+
         if (btnArincNew) {
             btnArincNew.addEventListener('click', () => {
                 if (typeof window.openCreate429Modal === 'function') window.openCreate429Modal();
@@ -2228,7 +2238,8 @@
                     const isRx = pkt.direction === 'Rx';
                     const pktPeriod = pkt.period !== undefined ? pkt.period : (currentArincProtocol ? currentArincProtocol.period : 20);
                     const periodText = isRx ? '' : ` ${pktPeriod}ms`;
-                    arincPacketSelect.options[currentArincPacketIndex].textContent = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'} (${pkt.words ? pkt.words.length : 0}个字)`;
+                    arincPacketSelect.options[currentArincPacketIndex].textContent = pkt.name || '未命名数据包';
+                    arincPacketSelect.options[currentArincPacketIndex].title = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'} (${pkt.words ? pkt.words.length : 0}个字)`;
                 }
             });
         }
@@ -2487,7 +2498,14 @@
         }
 
         if (btnArincExport) {
-            btnArincExport.addEventListener('click', () => exportArincJson());
+            btnArincExport.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (window.openProtocolExportModal) {
+                    window.openProtocolExportModal(currentArincProtocol);
+                } else {
+                    exportArincJson();
+                }
+            });
         }
 
         if (btnCopyMd) {

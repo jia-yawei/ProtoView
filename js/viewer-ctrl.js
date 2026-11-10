@@ -38,8 +38,8 @@
     let btnViewerBack, viewerTitle, viewerProductBadge, viewerTypeBadge, btnViewerEditWorkbench;
     let viewerFieldSearch, btnClearViewerSearch, viewerMatchCount;
     let viewerPacketSelect, btnViewerLayoutSingle, btnViewerLayoutContinuous;
-    let viewerWordsCatalog, viewerActiveWordHeader, viewerBitBarContainer;
-    let viewerFieldsList, viewerSdiSsmCard, btnViewerExportMd, btnViewerPrint;
+    let viewerWordsCatalog, viewerActiveWordHeader, viewerBitBarContainer, viewerReaderDeck;
+    let viewerFieldsList, viewerSdiSsmCard, btnViewerExport, btnViewerExportMd, btnViewerPrint;
 
     function initDOMElements() {
         viewerSection = document.getElementById('protocol-viewer-view');
@@ -60,9 +60,11 @@
         viewerWordsCatalog = document.getElementById('viewer-words-catalog');
         viewerActiveWordHeader = document.getElementById('viewer-active-word-header');
         viewerBitBarContainer = document.getElementById('viewer-bit-bar-container');
+        viewerReaderDeck = document.querySelector('.viewer-reader-deck');
         viewerFieldsList = document.getElementById('viewer-fields-list');
         viewerSdiSsmCard = document.getElementById('viewer-sdi-ssm-card');
 
+        btnViewerExport = document.getElementById('btn-viewer-export');
         btnViewerExportMd = document.getElementById('btn-viewer-export-md');
         btnViewerPrint = document.getElementById('btn-viewer-print');
     }
@@ -86,11 +88,28 @@
     }
 
     // 载入协议进入只读查阅模式
-    async function loadProtocolIntoViewer(id, targetWordIndex = 0, targetFieldIndex = null) {
+    async function loadProtocolIntoViewer(protoOrId, targetWordIndex = 0, targetFieldIndex = null) {
         initDOMElements();
-        const p = await (window.dbHelper ? window.dbHelper.getProtocol(id) : null);
+
+        let p = null;
+        if (protoOrId && typeof protoOrId === 'object' && protoOrId.name) {
+            p = protoOrId;
+        } else if (protoOrId !== undefined && protoOrId !== null && protoOrId !== '') {
+            p = await (window.dbHelper ? window.dbHelper.getProtocol(protoOrId) : null);
+        }
+
+        // 若未指定或未找到，自动回退到当前工作台中已载入的协议
         if (!p) {
-            showToast('未找到指定通信协议', 'warning');
+            if (ProtoView.Controllers && ProtoView.Controllers.Arinc && ProtoView.Controllers.Arinc.getCurrentProtocol) {
+                p = ProtoView.Controllers.Arinc.getCurrentProtocol();
+            }
+            if (!p && ProtoView.Controllers && ProtoView.Controllers.Serial && ProtoView.Controllers.Serial.getCurrentProtocol) {
+                p = ProtoView.Controllers.Serial.getCurrentProtocol();
+            }
+        }
+
+        if (!p) {
+            showToast('请先选择或创建一个通信协议', 'warning');
             return;
         }
 
@@ -101,6 +120,11 @@
         if (viewerFieldSearch) viewerFieldSearch.value = '';
         if (btnClearViewerSearch) btnClearViewerSearch.style.display = 'none';
         if (viewerMatchCount) viewerMatchCount.style.display = 'none';
+
+        // 核心：立即切换界面到查阅模式视图
+        if (typeof window.switchToView === 'function') {
+            window.switchToView('protocol-viewer-view');
+        }
 
         renderHeaderMeta();
         renderPacketSelector();
@@ -133,8 +157,15 @@
 
         if (viewerTypeBadge) {
             const isArinc = p.type === 'ARINC429';
-            const isSerial = p.type === 'Serial';
-            const typeLabel = isArinc ? (p.subType || 'ARINC 429') : (isSerial ? (p.subType || 'Serial RS485') : (p.type || 'Bus'));
+            const isSerial = p.type === 'Serial' || ['RS422', 'RS485', 'RS232', 'UART'].includes(p.type);
+            let typeLabel = 'ARINC429';
+            if (isArinc) {
+                typeLabel = 'ARINC429';
+            } else if (isSerial) {
+                typeLabel = p.subType || (['RS422', 'RS485', 'RS232', 'UART'].includes(p.type) ? p.type : 'RS485');
+            } else if (p.type === 'CAN') {
+                typeLabel = 'CAN';
+            }
             viewerTypeBadge.textContent = typeLabel;
             viewerTypeBadge.className = `viewer-type-pill ${isArinc ? 'pill-arinc' : (isSerial ? 'pill-serial' : 'pill-can')}`;
         }
@@ -155,7 +186,8 @@
             const isRx = pkt.direction === 'Rx';
             const count = (pkt.words ? pkt.words.length : (pkt.fields ? pkt.fields.length : 0));
             const countUnit = currentProtocol.type === 'Serial' ? '字节' : '标号字';
-            opt.textContent = `[${isRx ? 'Rx' : 'Tx'} ${pkt.period || 20}ms] ${pkt.name || `数据包 ${idx + 1}`} (${count} ${countUnit})`;
+            opt.textContent = pkt.name || `数据包 ${idx + 1}`;
+            opt.title = `[${isRx ? 'Rx (收)' : 'Tx (发)'} ${pkt.period || 20}ms] ${pkt.name || `数据包 ${idx + 1}`} (${count} ${countUnit})`;
             if (idx === currentPacketIndex) opt.selected = true;
             viewerPacketSelect.appendChild(opt);
         });
@@ -278,6 +310,13 @@
         const pkt = getCurrentPacket();
         if (!pkt || !currentProtocol) return;
 
+        if (viewerReaderDeck) {
+            viewerReaderDeck.scrollTop = 0;
+        }
+        if (viewerBitBarContainer) {
+            viewerBitBarContainer.classList.remove('is-stuck');
+        }
+
         const isArinc = currentProtocol.type === 'ARINC429';
         const items = isArinc ? (pkt.words || []) : (pkt.fields || []);
         if (items.length === 0 || currentWordIndex >= items.length) {
@@ -376,16 +415,36 @@
         });
 
         // 渲染 32 位柱状图 (从高位 Bit 32 至低位 Bit 1 排列，符合航电工程阅读习惯)
+        const octal = (word.label || '000').toString().padStart(3, '0');
+        const wordName = word.name || '未命名标号字';
         const barWrap = document.createElement('div');
         barWrap.className = 'viewer-bit-bar-deck';
 
         const barHeader = document.createElement('div');
         barHeader.className = 'viewer-bit-bar-top-hint';
         barHeader.innerHTML = `
-            <span><i class="fa-solid fa-ruler-horizontal"></i> <b>32-Bit 传输位域全景映射</b> (B32 奇校验 · B30~B31 SSM · B11~B29 数据有效载荷 · B9~B10 SDI · B1~B8 标号)</span>
-            <span style="font-size:11px; color:var(--text-secondary);">鼠标悬浮或点击位段可快速穿梭至下方字段定义</span>
+            <div class="vbb-hint-left">
+                <span class="vbb-word-badge" title="八进制标号">${octal}₈</span>
+                <strong class="vbb-word-name" title="${escapeHTML(wordName)}">${escapeHTML(wordName)}</strong>
+                <span class="vbb-title-divider">|</span>
+                <span class="vbb-title-text"><i class="fa-solid fa-ruler-horizontal"></i> <b>32-Bit 传输位域全景映射</b></span>
+            </div>
+            <div class="vbb-hint-right">
+                <span class="vbb-bits-legend">B32 校验 · B30~B31 SSM · B11~B29 载荷 · B9~B10 SDI · B1~B8 标号</span>
+                <button type="button" class="btn-vbb-scroll-top" title="回到当前标号字顶部" style="display:none;"><i class="fa-solid fa-arrow-up"></i> 回顶</button>
+            </div>
         `;
         barWrap.appendChild(barHeader);
+
+        const btnScrollTop = barHeader.querySelector('.btn-vbb-scroll-top');
+        if (btnScrollTop) {
+            btnScrollTop.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (viewerReaderDeck) {
+                    viewerReaderDeck.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+        }
 
         const barTrack = document.createElement('div');
         barTrack.className = 'viewer-bit-bar-track';
@@ -619,9 +678,83 @@
         `;
     }
 
+    // 渲染串口整包字节流全景映射条
+    function renderSerialBytePanoramaBar(pkt, activeIndex) {
+        if (!viewerBitBarContainer || !pkt || !pkt.fields || pkt.fields.length === 0) {
+            if (viewerBitBarContainer) viewerBitBarContainer.innerHTML = '';
+            return;
+        }
+        viewerBitBarContainer.innerHTML = '';
+
+        const barWrap = document.createElement('div');
+        barWrap.className = 'viewer-bit-bar-deck';
+
+        const barHeader = document.createElement('div');
+        barHeader.className = 'viewer-bit-bar-top-hint';
+        barHeader.innerHTML = `
+            <div class="vbb-hint-left">
+                <span class="vbb-word-badge" style="background:#f59e0b;"><i class="fa-solid fa-bolt"></i> ${escapeHTML(pkt.name || '数据包')}</span>
+                <strong class="vbb-word-name">串行时序字节流全景映射</strong>
+                <span class="vbb-title-divider">|</span>
+                <span class="vbb-title-text"><i class="fa-solid fa-layer-group"></i> 共 ${pkt.fields.length} 个字段定义</span>
+            </div>
+            <div class="vbb-hint-right">
+                <span class="vbb-bits-legend">点击字节块可快速切换查看各字节规格</span>
+                <button type="button" class="btn-vbb-scroll-top" title="回到顶部" style="display:none;"><i class="fa-solid fa-arrow-up"></i> 回顶</button>
+            </div>
+        `;
+        barWrap.appendChild(barHeader);
+
+        const btnScrollTop = barHeader.querySelector('.btn-vbb-scroll-top');
+        if (btnScrollTop) {
+            btnScrollTop.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (viewerReaderDeck) {
+                    viewerReaderDeck.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+        }
+
+        const barTrack = document.createElement('div');
+        barTrack.className = 'viewer-serial-timeline-track';
+        barTrack.style.cssText = 'display: flex; gap: 4px; overflow-x: auto; padding: 4px 2px;';
+
+        pkt.fields.forEach((f, idx) => {
+            const off = f.byteOffset !== undefined ? f.byteOffset : idx;
+            const cnt = f.byteCount || f.length || 1;
+            const spanText = (typeof SerialHelper !== 'undefined') ? SerialHelper.formatByteSpanText(off, cnt) : `B${off}`;
+            const isActive = idx === activeIndex;
+
+            const cell = document.createElement('div');
+            cell.className = `viewer-byte-cell ${isActive ? 'active' : ''}`;
+            cell.style.cssText = `
+                flex-shrink: 0; min-width: 64px; padding: 4px 8px; border-radius: 4px;
+                border: 1.5px solid ${isActive ? 'var(--accent-color)' : 'var(--border-color)'};
+                background: ${isActive ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-secondary)'};
+                cursor: pointer; text-align: center; transition: all 0.15s ease;
+            `;
+            cell.title = `点击切换至: ${spanText} [${f.name || '未命名'}]`;
+            cell.innerHTML = `
+                <div style="font-family:var(--font-mono, monospace); font-size:11px; font-weight:700; color:${isActive ? 'var(--accent-color)' : 'var(--text-primary)'};">${escapeHTML(spanText)}</div>
+                <div style="font-size:10px; color:var(--text-secondary); max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHTML(f.name || `字节 ${off}`)}</div>
+            `;
+            cell.addEventListener('click', () => {
+                currentWordIndex = idx;
+                document.querySelectorAll('.viewer-catalog-item').forEach(el => el.classList.remove('active'));
+                const catItem = document.querySelector(`.viewer-catalog-item[data-word-index="${idx}"]`);
+                if (catItem) catItem.classList.add('active');
+                renderActiveWordView();
+            });
+            barTrack.appendChild(cell);
+        });
+
+        barWrap.appendChild(barTrack);
+        viewerBitBarContainer.appendChild(barWrap);
+    }
+
     // ----------------- 串口 (Serial) 专用规格书渲染 -----------------
     function renderSerialByteView(byteItem, pkt) {
-        if (viewerBitBarContainer) viewerBitBarContainer.innerHTML = '';
+        renderSerialBytePanoramaBar(pkt, currentWordIndex);
         if (viewerSdiSsmCard) viewerSdiSsmCard.style.display = 'none';
 
         const offset = byteItem.offset !== undefined ? byteItem.offset : currentWordIndex;
@@ -817,46 +950,44 @@
             });
         }
 
-        // 导出规范 Markdown
-        if (btnViewerExportMd) {
-            btnViewerExportMd.addEventListener('click', () => {
-                if (!currentProtocol) return;
-                let mdText = '';
-                if (currentProtocol.type === 'ARINC429' && typeof Arinc429Helper !== 'undefined') {
-                    mdText = Arinc429Helper.generateMarkdownSpec(currentProtocol);
-                } else if (currentProtocol.type === 'Serial' && typeof SerialHelper !== 'undefined') {
-                    mdText = SerialHelper.generateMarkdownSpec(currentProtocol);
-                } else {
-                    mdText = `# ${currentProtocol.name}\n\n${currentProtocol.description || ''}`;
+        // 统一协议导出 (呼出全局统一导出中心，支持 JSON、PDF、Markdown、HTML)
+        if (btnViewerExport) {
+            btnViewerExport.addEventListener('click', () => {
+                if (typeof window.openProtocolExportModal === 'function') {
+                    window.openProtocolExportModal(currentProtocol);
                 }
-                const safeName = (currentProtocol.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
-                downloadFile(mdText, `${safeName}_ICD规范说明书.md`, 'text/markdown;charset=utf-8');
-                showToast('已导出 Markdown 规范说明书', 'success');
             });
         }
 
-        // 打印 / 导出 PDF 接口卡片
-        if (btnViewerPrint) {
-            btnViewerPrint.addEventListener('click', () => {
-                if (!currentProtocol) return;
-                let fullHtml = '';
-                if (currentProtocol.type === 'ARINC429' && typeof Arinc429Helper !== 'undefined') {
-                    fullHtml = Arinc429Helper.generateHtmlSpec(currentProtocol);
-                } else {
-                    window.print();
-                    return;
-                }
-                const printWin = window.open('', '_blank');
-                if (printWin) {
-                    printWin.document.open();
-                    printWin.document.write(fullHtml);
-                    printWin.document.close();
-                    printWin.focus();
-                    setTimeout(() => printWin.print(), 300);
-                } else {
-                    window.print();
+        // 兼容旧按钮触发
+        if (btnViewerExportMd) {
+            btnViewerExportMd.addEventListener('click', () => {
+                if (typeof window.openProtocolExportModal === 'function') {
+                    window.openProtocolExportModal(currentProtocol);
                 }
             });
+        }
+
+        if (btnViewerPrint) {
+            btnViewerPrint.addEventListener('click', () => {
+                if (typeof window.openProtocolExportModal === 'function') {
+                    window.openProtocolExportModal(currentProtocol);
+                }
+            });
+        }
+
+        // 监听右侧主阅读视窗滚动，联动 32-Bit 位域全景映射浮动投影与快捷回顶按钮
+        if (viewerReaderDeck) {
+            viewerReaderDeck.addEventListener('scroll', () => {
+                const isStuck = viewerReaderDeck.scrollTop > 40;
+                if (viewerBitBarContainer) {
+                    viewerBitBarContainer.classList.toggle('is-stuck', isStuck);
+                    const btnTop = viewerBitBarContainer.querySelector('.btn-vbb-scroll-top');
+                    if (btnTop) {
+                        btnTop.style.display = isStuck ? 'inline-flex' : 'none';
+                    }
+                }
+            }, { passive: true });
         }
     }
 

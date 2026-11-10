@@ -934,6 +934,222 @@
                     }
                 ]
             };
+        },
+
+        /**
+         * 生成串口通信协议标准 Markdown 说明书
+         */
+        generateMarkdownSpec(protocol) {
+            if (!protocol) return '# 无有效串口协议\n';
+            const pName = protocol.name || '串口通信协议';
+            const pProduct = protocol.product ? ` [所属产品: ${protocol.product}]` : '';
+            const pSubtype = protocol.subType || 'RS485';
+            const baud = protocol.baudRate || 115200;
+            const parityMap = { 'odd': '奇校验 (Odd)', 'even': '偶校验 (Even)', 'none': '无校验 (None)' };
+            const parityStr = parityMap[protocol.parity] || '无校验';
+            const formatStr = `${protocol.dataBits || 8}-${(protocol.parity || 'none')[0].toUpperCase()}-${protocol.stopBits || 1}`;
+            const dev = protocol.device || '传感器/执行器节点';
+            const desc = protocol.description || '';
+
+            let md = `# ${pName}${pProduct} - 串口通信规约与 ICD 接口定义\n\n`;
+            md += `### 1. 通信总线物理层参数\n\n`;
+            md += `| 接口总线类型 | 波特率 (Baud Rate) | 数据格式 (Data-Parity-Stop) | 默认周期 (Period) | 对端设备 / 节点 | 通信模式 |\n`;
+            md += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+            md += `| **${pSubtype}** | ${baud} bps | ${formatStr} (${parityStr}) | ${protocol.period || 20} ms | ${dev} | ${protocol.direction || 'Tx/Rx'} |\n\n`;
+            if (desc) {
+                md += `> **协议概述**: ${desc}\n\n`;
+            }
+
+            const packets = protocol.packets || [];
+            if (packets.length === 0) {
+                md += `> 当前协议尚未配置数据包。\n\n`;
+                return md;
+            }
+
+            md += `### 2. 协议数据包时序与字节布局\n\n`;
+
+            packets.forEach((pkt, pIdx) => {
+                const totalBytes = this.calcPacketTotalBytes ? this.calcPacketTotalBytes(pkt) : (pkt.fields ? pkt.fields.length : 0);
+                const isTx = (pkt.direction === 'Rx') ? 'Rx (接收)' : 'Tx (发送)';
+                const pktPeriod = pkt.period !== undefined ? pkt.period : (protocol.period || 20);
+
+                md += `#### 2.${pIdx + 1} 数据包: ${pkt.name || `数据包 ${pIdx + 1}`} (${isTx})\n\n`;
+                md += `- **功能定义**: ${pkt.name || '未命名包'}\n`;
+                if (pkt.cmd) md += `- **命令功能码 (CMD)**: \`${pkt.cmd}\`\n`;
+                md += `- **传输方向**: ${isTx}\n`;
+                md += `- **通信周期**: ${pktPeriod} ms\n`;
+                md += `- **整包总长**: ${totalBytes} 字节 (Bytes)\n\n`;
+
+                md += `| 字节偏移 (Offset) | 字段名称 | 默认 Hex | 数据类型 | 跨度 | 比例 (LSB) | 物理量程 | 单位 | 状态枚举 / 备注说明 |\n`;
+                md += `| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |\n`;
+
+                const fields = pkt.fields || [];
+                fields.forEach((f, fIdx) => {
+                    const off = f.byteOffset !== undefined ? f.byteOffset : fIdx;
+                    const cnt = f.byteCount || 1;
+                    const spanText = cnt > 1 ? `Byte ${off}~${off + cnt - 1} (${cnt}B)` : `Byte ${off}`;
+                    const defHex = f.fixedHex ? `0x${f.fixedHex}` : (f.defaultValue !== undefined ? `0x${Number(f.defaultValue).toString(16).padStart(cnt * 2, '0').toUpperCase()}` : '-');
+                    const dType = f.dataType || 'u8';
+                    const scale = f.scale !== undefined && f.scale !== '' ? f.scale : (f.resolution !== undefined ? f.resolution : 1.0);
+                    const range = (f.min !== undefined && f.min !== '' && f.max !== undefined && f.max !== '') ? `${f.min} ~ ${f.max}` : '-';
+                    const unit = f.unit || '-';
+
+                    let dictOrRemark = [];
+                    if (f.dict && typeof f.dict === 'object' && Object.keys(f.dict).length > 0) {
+                        const dictStr = Object.entries(f.dict).map(([k, v]) => `${k}:${v}`).join('; ');
+                        dictOrRemark.push(`枚举: [${dictStr}]`);
+                    }
+                    if (f.signals && Array.isArray(f.signals) && f.signals.length > 0) {
+                        const bitDescs = f.signals.map(s => {
+                            const dStr = (s.dict && Object.keys(s.dict).length > 0) ? ` (${Object.entries(s.dict).map(([k,v]) => `${k}:${v}`).join(',')})` : '';
+                            return `${s.bitRange || `bit${s.startBit}`}: ${s.name || ''}${dStr}`;
+                        }).join('; ');
+                        if (bitDescs) dictOrRemark.push(`Bit细分: ${bitDescs}`);
+                    }
+                    if (f.remark) dictOrRemark.push(f.remark);
+                    const descStr = dictOrRemark.join(' | ') || '-';
+
+                    md += `| **${spanText}** | **${f.name || '未命名'}** | \`${defHex}\` | \`${dType}\` | ${cnt} Byte | ${scale} | ${range} | ${unit} | ${descStr} |\n`;
+                });
+                md += `\n---\n\n`;
+            });
+
+            return md;
+        },
+
+        /**
+         * 生成串口通信协议标准可打印独立 HTML 说明书 (支持打印/PDF)
+         */
+        generateHtmlSpec(protocol) {
+            if (!protocol) return '<h1>无有效协议</h1>';
+            const pName = protocol.name || '串口通信协议';
+            const pProduct = protocol.product ? ` [${protocol.product}]` : '';
+            const pSubtype = protocol.subType || 'RS485';
+            const baud = protocol.baudRate || 115200;
+            const parityMap = { 'odd': '奇校验 (Odd)', 'even': '偶校验 (Even)', 'none': '无校验 (None)' };
+            const parityStr = parityMap[protocol.parity] || '无校验';
+            const formatStr = `${protocol.dataBits || 8}-${(protocol.parity || 'none')[0].toUpperCase()}-${protocol.stopBits || 1}`;
+            const dev = protocol.device || '传感器/执行器节点';
+            const packets = protocol.packets || [];
+
+            let packetsHtml = '';
+            packets.forEach((pkt, pIdx) => {
+                const totalBytes = this.calcPacketTotalBytes ? this.calcPacketTotalBytes(pkt) : (pkt.fields ? pkt.fields.length : 0);
+                const isTx = (pkt.direction === 'Rx') ? 'Rx (接收)' : 'Tx (发送)';
+                const pktPeriod = pkt.period !== undefined ? pkt.period : (protocol.period || 20);
+
+                let rowsHtml = '';
+                const fields = pkt.fields || [];
+                fields.forEach((f, fIdx) => {
+                    const off = f.byteOffset !== undefined ? f.byteOffset : fIdx;
+                    const cnt = f.byteCount || 1;
+                    const spanText = cnt > 1 ? `Byte ${off}~${off + cnt - 1}` : `Byte ${off}`;
+                    const defHex = f.fixedHex ? `0x${f.fixedHex}` : (f.defaultValue !== undefined ? `0x${Number(f.defaultValue).toString(16).padStart(cnt * 2, '0').toUpperCase()}` : '-');
+                    const dType = f.dataType || 'u8';
+                    const scale = f.scale !== undefined && f.scale !== '' ? f.scale : (f.resolution !== undefined ? f.resolution : 1.0);
+                    const range = (f.min !== undefined && f.min !== '' && f.max !== undefined && f.max !== '') ? `${f.min} ~ ${f.max}` : '-';
+                    const unit = f.unit || '-';
+
+                    let noteHtml = [];
+                    if (f.dict && typeof f.dict === 'object' && Object.keys(f.dict).length > 0) {
+                        const dictStr = Object.entries(f.dict).map(([k, v]) => `<code>${k}</code>: ${v}`).join(', ');
+                        noteHtml.push(`<div><b>状态字典:</b> ${dictStr}</div>`);
+                    }
+                    if (f.signals && Array.isArray(f.signals) && f.signals.length > 0) {
+                        const bitStr = f.signals.map(s => {
+                            const dStr = (s.dict && Object.keys(s.dict).length > 0) ? ` (${Object.entries(s.dict).map(([k,v]) => `${k}:${v}`).join(',')})` : '';
+                            return `[${s.bitRange || `bit${s.startBit}`}] ${s.name || ''}${dStr}`;
+                        }).join('; ');
+                        noteHtml.push(`<div><b>位域开关:</b> ${bitStr}</div>`);
+                    }
+                    if (f.remark) noteHtml.push(`<div><b>备注:</b> ${f.remark}</div>`);
+
+                    rowsHtml += `
+                        <tr>
+                            <td style="text-align:center; font-weight:700; background:#f8fafc;">${spanText}</td>
+                            <td style="font-weight:600;">${f.name || '未命名'}</td>
+                            <td style="text-align:center; font-family:monospace;">${defHex}</td>
+                            <td style="text-align:center;"><code>${dType}</code></td>
+                            <td style="text-align:center;">${scale}</td>
+                            <td style="text-align:center;">${range}</td>
+                            <td style="text-align:center;">${unit}</td>
+                            <td style="font-size:11.5px;">${noteHtml.join('') || '-'}</td>
+                        </tr>
+                    `;
+                });
+
+                packetsHtml += `
+                    <div class="packet-block" style="margin-bottom: 24px; page-break-inside: avoid; break-inside: avoid;">
+                        <div class="packet-hdr" style="background: #0f172a; color:#fff; padding: 8px 12px; border-radius: 4px 4px 0 0; display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:14px; font-weight:bold;">第 ${pIdx + 1} 包：${pkt.name || '数据包'}</span>
+                            <span style="font-size:12px; color:#cbd5e1;">方向: <b>${isTx}</b> · 周期: <b>${pktPeriod}ms</b> · 总长: <b>${totalBytes} Bytes</b> ${pkt.cmd ? `· CMD: <b>${pkt.cmd}</b>` : ''}</span>
+                        </div>
+                        <table style="width:100%; border-collapse:collapse; border:1px solid #cbd5e1; font-size:12.5px;">
+                            <thead>
+                                <tr style="background:#f1f5f9; text-align:center; font-weight:bold; border-bottom:1.5px solid #0f172a;">
+                                    <th style="padding:6px; width:100px;">字节偏移</th>
+                                    <th style="padding:6px;">字段名称</th>
+                                    <th style="padding:6px; width:70px;">默认Hex</th>
+                                    <th style="padding:6px; width:70px;">类型</th>
+                                    <th style="padding:6px; width:70px;">比例(LSB)</th>
+                                    <th style="padding:6px; width:90px;">有效量程</th>
+                                    <th style="padding:6px; width:60px;">单位</th>
+                                    <th style="padding:6px;">说明与字典</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+
+            return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>${pName} - 串口通信协议规格书</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 20px; background: #f8fafc; color: #1e293b; }
+    .page-container { max-width: 1040px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .no-print-bar { display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; padding: 10px 16px; border-radius: 6px; margin-bottom: 24px; border: 1px solid #e2e8f0; }
+    .btn-action { background: #2563eb; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; }
+    .doc-header { border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .doc-title { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 6px 0; }
+    .doc-meta { font-size: 12px; color: #64748b; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 12.5px; }
+    table td, table th { border: 1px solid #cbd5e1; padding: 6px 8px; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .page-container { box-shadow: none; padding: 0; max-width: 100%; }
+      .no-print-bar { display: none !important; }
+      .packet-block { page-break-inside: avoid !important; break-inside: avoid !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div class="no-print-bar">
+      <span><strong>串口协议 ICD 规格说明书</strong> (源自 ProtoView 工业通信总线设计系统)</span>
+      <button class="btn-action" onclick="window.print()">🖨️ 打印 / 另存为 PDF</button>
+    </div>
+    <div class="doc-header">
+      <div>
+        <h1 class="doc-title">${pName}${pProduct}</h1>
+        <div class="doc-meta">物理总线: <b>${pSubtype}</b> | 波特率: <b>${baud} bps</b> | 格式: <b>${formatStr}</b> (${parityStr}) | 对端: <b>${dev}</b></div>
+      </div>
+      <div class="doc-meta" style="text-align: right;">
+        <div>规约体系: 串口时序字节流</div>
+        <div>导出时间: ${new Date().toLocaleDateString()}</div>
+      </div>
+    </div>
+    <div class="doc-body">
+      ${packetsHtml}
+    </div>
+  </div>
+</body>
+</html>`;
         }
     };
 

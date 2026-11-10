@@ -181,6 +181,10 @@
                 if (typeof window.setMobileSerialView === 'function' && window.innerWidth <= 768) {
                     window.setMobileSerialView('packets');
                 }
+            } else if (viewId === 'protocol-viewer-view') {
+                if (ProtoView.Controllers && ProtoView.Controllers.Viewer && ProtoView.Controllers.Viewer.loadProtocolIntoViewer) {
+                    ProtoView.Controllers.Viewer.loadProtocolIntoViewer();
+                }
             } else if (viewId === 'admin-view') {
                 if (!isAdmin) {
                     if (ProtoView.Utils && ProtoView.Utils.showToast) {

@@ -40,8 +40,8 @@
         protoFormId, protoFormMode, protoFormLockedType,
         protoFormName, protoFormProduct, protoFormType, protoTypeLockBadge,
         protoFormDevice, protoFormDirection, protoFormPeriod, protoFormPeriodHint,
-        protoArincSubtype, protoArincSubtypeLockBadge, protoArincSpeed, protoArincParity, protoArincMode, protoArincModeLockBadge,
-        protoSerialSubtype, protoSerialSubtypeLockBadge, protoSerialBaud, protoSerialDataBits, protoSerialParity, protoSerialStopBits,
+        protoArincSpeed, protoArincParity, protoArincMode, protoArincModeLockBadge,
+        protoSerialBaud, protoSerialDataBits, protoSerialParity, protoSerialStopBits,
         protoCanStandard, protoCanStandardLockBadge, protoCanBaud,
         protoFormDesc, protoFormSummaryBox, protoSummaryCountLabel, protoSummaryCountVal, protoSummaryIdVal,
         btnProtoFormSubmit, btnProtoSubmitText;
@@ -86,15 +86,11 @@
         protoFormPeriod = document.getElementById('proto-form-period');
         protoFormPeriodHint = document.getElementById('proto-form-period-hint');
 
-        protoArincSubtype = document.getElementById('proto-arinc-subtype');
-        protoArincSubtypeLockBadge = document.getElementById('proto-arinc-subtype-lock-badge');
         protoArincSpeed = document.getElementById('proto-arinc-speed');
         protoArincParity = document.getElementById('proto-arinc-parity');
         protoArincMode = document.getElementById('proto-arinc-mode');
         protoArincModeLockBadge = document.getElementById('proto-arinc-mode-lock-badge');
 
-        protoSerialSubtype = document.getElementById('proto-serial-subtype');
-        protoSerialSubtypeLockBadge = document.getElementById('proto-serial-subtype-lock-badge');
         protoSerialBaud = document.getElementById('proto-serial-baud');
         protoSerialDataBits = document.getElementById('proto-serial-databits');
         protoSerialParity = document.getElementById('proto-serial-parity');
@@ -405,6 +401,11 @@
         }
     }
 
+    // 辅助识别 6 大通信接口体系中的串行家族 (RS422, RS485, RS232, UART)
+    function isSerialFamily(type) {
+        return ['RS422', 'RS485', 'RS232', 'UART', 'Serial'].includes(type);
+    }
+
     function createProtocolCardElement(p) {
         const card = document.createElement('div');
         card.className = 'card glass-effect protocol-card';
@@ -447,7 +448,7 @@
             const modeName = p.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式';
             const deviceName = p.device || p.source || '未指定设备';
             const parityName = p.parity === 'odd' ? '奇校验' : (p.parity === 'even' ? '偶校验' : '无校验');
-            const arincTag = p.subType || 'ARINC429 (HB6096)';
+            const arincTag = 'ARINC429';
 
             card.innerHTML = `
                 <div class="protocol-card-header">
@@ -475,13 +476,13 @@
                     <button type="button" class="btn btn-sm btn-proto-view" onclick="window.openProtocolViewer && window.openProtocolViewer('${p.id}')" title="进入只读查阅模式：清晰查看位域拓扑、字段定义与规格书"><i class="fa-solid fa-eye"></i> 查阅</button>
                     <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入工程工作台编辑标号字与字段"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
                     <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、周期、速率等)"><i class="fa-solid fa-sliders"></i> 属性</button>
-                    <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById && window.exportProtocolById('${p.id}')" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
+                    <button type="button" class="btn btn-sm btn-proto-export" onclick="window.openProtocolExportModal ? window.openProtocolExportModal('${p.id}') : (window.exportProtocolById && window.exportProtocolById('${p.id}'))" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export"></i> 导出</button>
                     <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
                 </div>
             `;
-        } else if (p.type === 'Serial') {
+        } else if (p.type === 'Serial' || isSerialFamily(p.type)) {
             const packetCount = p.packets ? p.packets.length : 0;
-            const subTypeName = p.subType || 'RS485';
+            const subTypeName = p.subType || (['RS422', 'RS485', 'RS232', 'UART'].includes(p.type) ? p.type : 'RS485');
             const deviceName = p.device || '传感器/执行器';
             const baudStr = (p.baudRate || 115200) + ' bps';
             const formatStr = `${p.dataBits || 8}-${(p.parity || 'none')[0].toUpperCase()}-${p.stopBits || 1}`;
@@ -505,18 +506,18 @@
                     <span class="pstat-item"><i class="fa-solid fa-microchip"></i> ${formatStr}</span>
                 </div>
                 <p class="protocol-card-desc">
-                    ${escapeHTML(p.description || '工业/航电标准串口通信协议 (UART / RS422 / RS485)')}
+                    ${escapeHTML(p.description || `工业/航电标准 ${subTypeName} 串行通信协议`)}
                 </p>
                 <div class="protocol-actions">
                     <button type="button" class="btn btn-sm btn-proto-view" onclick="window.openProtocolViewer && window.openProtocolViewer('${p.id}')" title="进入只读查阅模式：清晰查看数据包字节与规格书"><i class="fa-solid fa-eye"></i> 查阅</button>
                     <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入串口工作台编辑数据包与字段"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
                     <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、波特率等)"><i class="fa-solid fa-sliders"></i> 属性</button>
-                    <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById && window.exportProtocolById('${p.id}')" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
+                    <button type="button" class="btn btn-sm btn-proto-export" onclick="window.openProtocolExportModal ? window.openProtocolExportModal('${p.id}') : (window.exportProtocolById && window.exportProtocolById('${p.id}'))" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export"></i> 导出</button>
                     <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
                 </div>
             `;
         } else {
-            const canTag = p.canStandard || p.subType || 'CAN 2.0B';
+            const canTag = 'CAN';
             card.innerHTML = `
                 <div class="protocol-card-header">
                     <div class="protocol-card-title-wrap">
@@ -538,7 +539,7 @@
                     <button type="button" class="btn btn-sm btn-proto-view" onclick="window.openProtocolViewer && window.openProtocolViewer('${p.id}')" title="进入只读查阅模式：清晰查看通信报文与规格书"><i class="fa-solid fa-eye"></i> 查阅</button>
                     <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入工作台编辑报文与信号"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
                     <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、周期等)"><i class="fa-solid fa-sliders"></i> 属性</button>
-                    <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById && window.exportProtocolById('${p.id}')" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
+                    <button type="button" class="btn btn-sm btn-proto-export" onclick="window.openProtocolExportModal ? window.openProtocolExportModal('${p.id}') : (window.exportProtocolById && window.exportProtocolById('${p.id}'))" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export"></i> 导出</button>
                     <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
                 </div>
             `;
@@ -942,7 +943,7 @@
             return;
         }
 
-        if (p.type === 'Serial') {
+        if (p.type === 'Serial' || isSerialFamily(p.type)) {
             if (typeof window.switchToView === 'function') window.switchToView('serial-view');
             if (typeof window.loadSerialProtocolIntoEditor === 'function') {
                 await window.loadSerialProtocolIntoEditor(p.id);
@@ -954,13 +955,13 @@
         await openProtocolPropsModal(p);
     }
 
-    // 辅助切换不同接口类型的表单字段分栏展示
+    // 辅助切换 6 大接口类型 (ARINC429, RS422, RS485, RS232, UART, CAN) 的表单字段分栏展示
     function refreshTypeSpecificSections(type) {
         initDOMElements();
         const effectiveType = type || 'ARINC429';
 
         const isArinc = effectiveType === 'ARINC429';
-        const isSerial = effectiveType === 'Serial';
+        const isSerial = isSerialFamily(effectiveType);
         const isCan = effectiveType === 'CAN';
 
         document.querySelectorAll('.section-type-arinc').forEach(el => el.style.display = isArinc ? '' : 'none');
@@ -971,7 +972,7 @@
             if (isArinc) {
                 protoFormPeriodHint.textContent = '429 数据字通信调度基准周期 (推荐 10~100ms)';
             } else if (isSerial) {
-                protoFormPeriodHint.textContent = '串口数据包通信调度基准周期 (推荐 20~1000ms)';
+                protoFormPeriodHint.textContent = `${effectiveType} 串行数据包通信调度基准周期 (推荐 20~1000ms)`;
             } else if (isCan) {
                 protoFormPeriodHint.textContent = 'CAN 周期报文发送基准周期 (推荐 10~500ms)';
             } else {
@@ -980,7 +981,7 @@
         }
     }
 
-    // 打开统一新建协议对话框 (接口类型自由自选，参数与编辑弹窗完全一致)
+    // 打开统一新建协议对话框 (6 大接口类型自由自选，无冗余多级标签)
     function openCreate429Modal(defaultName = '', targetProduct = '', defaultType = 'ARINC429') {
         try {
             initDOMElements();
@@ -1003,18 +1004,17 @@
                 btnProtoSubmitText.textContent = '创建协议并进入工作台';
             }
 
+            // 校验并匹配 6 大接口类型之一
+            const initialType = (defaultType && ['ARINC429', 'RS422', 'RS485', 'RS232', 'UART', 'CAN'].includes(defaultType))
+                ? defaultType
+                : (isSerialFamily(defaultType) ? 'RS485' : 'ARINC429');
+
             // 解除接口类型及架构锁定，新建模式下允许自由选择
             if (protoFormType) {
-                protoFormType.value = defaultType;
+                protoFormType.value = initialType;
                 protoFormType.disabled = false;
             }
             if (protoTypeLockBadge) protoTypeLockBadge.style.display = 'none';
-
-            if (protoArincSubtype) {
-                protoArincSubtype.value = 'ARINC429 (HB6096)';
-                protoArincSubtype.disabled = false;
-            }
-            if (protoArincSubtypeLockBadge) protoArincSubtypeLockBadge.style.display = 'none';
 
             if (protoArincMode) {
                 protoArincMode.value = 'classic';
@@ -1022,28 +1022,22 @@
             }
             if (protoArincModeLockBadge) protoArincModeLockBadge.style.display = 'none';
 
-            if (protoSerialSubtype) {
-                protoSerialSubtype.value = 'RS485';
-                protoSerialSubtype.disabled = false;
-            }
-            if (protoSerialSubtypeLockBadge) protoSerialSubtypeLockBadge.style.display = 'none';
-
             if (protoCanStandard) {
                 protoCanStandard.value = 'CAN2.0B';
                 protoCanStandard.disabled = false;
             }
             if (protoCanStandardLockBadge) protoCanStandardLockBadge.style.display = 'none';
 
-            // 默认协议名称
+            // 默认协议名称根据选定的接口精准预设
             if (protoFormName) {
                 if (defaultName) {
                     protoFormName.value = defaultName;
-                } else if (defaultType === 'Serial') {
-                    protoFormName.value = '新建串口通信协议 (RS485)';
-                } else if (defaultType === 'CAN') {
+                } else if (isSerialFamily(initialType)) {
+                    protoFormName.value = `新建 ${initialType} 串行通信协议`;
+                } else if (initialType === 'CAN') {
                     protoFormName.value = '新建 CAN 报文通信协议';
                 } else {
-                    protoFormName.value = '新建 ARINC 429 协议';
+                    protoFormName.value = '新建 ARINC429 通信协议';
                 }
             }
 
@@ -1069,7 +1063,7 @@
             if (protoFormDesc) protoFormDesc.value = '';
             if (protoFormSummaryBox) protoFormSummaryBox.style.display = 'none';
 
-            refreshTypeSpecificSections(defaultType);
+            refreshTypeSpecificSections(initialType);
             if (typeof refreshProductDatalist === 'function') {
                 refreshProductDatalist().catch(err => console.warn("refreshProductDatalist error:", err));
             }
@@ -1106,12 +1100,22 @@
                 return;
             }
 
-            const protoType = p.type || 'ARINC429';
+            // 精准映射到 6 大通信接口之一 (ARINC429, RS422, RS485, RS232, UART, CAN)
+            let displayType = 'ARINC429';
+            if (p.type === 'ARINC429') {
+                displayType = 'ARINC429';
+            } else if (p.type === 'CAN') {
+                displayType = 'CAN';
+            } else if (p.type === 'Serial' || isSerialFamily(p.type)) {
+                displayType = (p.subType && ['RS422', 'RS485', 'RS232', 'UART'].includes(p.subType))
+                    ? p.subType
+                    : (['RS422', 'RS485', 'RS232', 'UART'].includes(p.type) ? p.type : 'RS485');
+            }
 
             // 切换为编辑模式
             if (protoFormMode) protoFormMode.value = 'edit';
             if (protoFormId) protoFormId.value = p.id || '';
-            if (protoFormLockedType) protoFormLockedType.value = protoType;
+            if (protoFormLockedType) protoFormLockedType.value = displayType;
 
             if (protoModalTitle) {
                 protoModalTitle.innerHTML = `<i class="fa-solid fa-sliders" style="color:var(--accent-color);"></i> 协议属性配置 [${escapeHTML(p.name || '通信协议')}]`;
@@ -1122,28 +1126,16 @@
 
             // 核心要求：编辑协议时锁死协议接口类型及底层架构参数，绝不允许随意更改
             if (protoFormType) {
-                protoFormType.value = protoType;
+                protoFormType.value = displayType;
                 protoFormType.disabled = true;
             }
             if (protoTypeLockBadge) protoTypeLockBadge.style.display = 'inline-flex';
-
-            if (protoArincSubtype) {
-                protoArincSubtype.value = p.subType || 'ARINC429 (HB6096)';
-                protoArincSubtype.disabled = true;
-            }
-            if (protoArincSubtypeLockBadge) protoArincSubtypeLockBadge.style.display = 'inline-flex';
 
             if (protoArincMode) {
                 protoArincMode.value = p.mode || 'classic';
                 protoArincMode.disabled = true;
             }
             if (protoArincModeLockBadge) protoArincModeLockBadge.style.display = 'inline-flex';
-
-            if (protoSerialSubtype) {
-                protoSerialSubtype.value = p.subType || 'RS485';
-                protoSerialSubtype.disabled = true;
-            }
-            if (protoSerialSubtypeLockBadge) protoSerialSubtypeLockBadge.style.display = 'inline-flex';
 
             if (protoCanStandard) {
                 protoCanStandard.value = p.canStandard || 'CAN2.0B';
@@ -1157,15 +1149,15 @@
             if (protoFormDevice) protoFormDevice.value = p.device || p.source || (p.product ? `${p.product}系统` : '机载航电系统');
             if (protoFormPeriod) protoFormPeriod.value = p.period || 20;
 
-            if (protoType === 'ARINC429') {
+            if (p.type === 'ARINC429') {
                 if (protoArincSpeed) protoArincSpeed.value = p.speed || '100kbps';
                 if (protoArincParity) protoArincParity.value = p.parity || 'odd';
-            } else if (protoType === 'Serial') {
+            } else if (p.type === 'Serial' || isSerialFamily(p.type)) {
                 if (protoSerialBaud) protoSerialBaud.value = p.baudRate || 115200;
                 if (protoSerialDataBits) protoSerialDataBits.value = p.dataBits || 8;
                 if (protoSerialParity) protoSerialParity.value = p.parity || 'none';
                 if (protoSerialStopBits) protoSerialStopBits.value = p.stopBits || 1;
-            } else if (protoType === 'CAN') {
+            } else if (p.type === 'CAN') {
                 if (protoCanBaud) protoCanBaud.value = p.baudRate || 500000;
             }
 
@@ -1176,10 +1168,10 @@
                 protoFormSummaryBox.style.display = 'flex';
                 if (protoSummaryIdVal) protoSummaryIdVal.textContent = p.id ? `#${p.id}` : '(新)';
                 if (protoSummaryCountLabel && protoSummaryCountVal) {
-                    if (protoType === 'ARINC429') {
+                    if (p.type === 'ARINC429') {
                         protoSummaryCountLabel.textContent = '标号字数量';
                         protoSummaryCountVal.textContent = `${p.words ? p.words.length : 0} 个标号字`;
-                    } else if (protoType === 'Serial') {
+                    } else if (p.type === 'Serial' || isSerialFamily(p.type)) {
                         protoSummaryCountLabel.textContent = '数据包数量';
                         protoSummaryCountVal.textContent = `${p.packets ? p.packets.length : 0} 个数据包`;
                     } else {
@@ -1189,7 +1181,7 @@
                 }
             }
 
-            refreshTypeSpecificSections(protoType);
+            refreshTypeSpecificSections(displayType);
             if (typeof refreshProductDatalist === 'function') {
                 refreshProductDatalist().catch(err => console.warn("refreshProductDatalist error:", err));
             }
@@ -1209,8 +1201,12 @@
     global.editProtocolProps = openProtocolPropsModal;
     global.editProtocol = openProtocolPropsModal;
 
-    // 根据指定协议ID直接导出本地文件
+    // 根据指定协议ID呼出统一导出中心 (全视角统一支持 JSON、PDF、Markdown 与 HTML)
     async function exportProtocolById(id) {
+        if (typeof window.openProtocolExportModal === 'function') {
+            await window.openProtocolExportModal(id);
+            return;
+        }
         const proto = await (window.dbHelper ? window.dbHelper.getProtocol(id) : null);
         if (!proto) {
             alert("未找到该协议！");
@@ -1353,20 +1349,20 @@
                 // 在新建模式下，若当前名称为默认模板名称，联动切换默认名称
                 if (protoFormMode && protoFormMode.value === 'create' && protoFormName) {
                     const curName = protoFormName.value.trim();
-                    if (!curName || curName.includes('ARINC 429') || curName.includes('串口通信协议') || curName.includes('CAN 报文通信协议')) {
-                        if (newType === 'Serial') {
-                            protoFormName.value = '新建串口通信协议 (RS485)';
+                    if (!curName || curName.includes('ARINC') || curName.includes('串行通信协议') || curName.includes('串口通信协议') || curName.includes('CAN 报文通信协议')) {
+                        if (isSerialFamily(newType)) {
+                            protoFormName.value = `新建 ${newType} 串行通信协议`;
                         } else if (newType === 'CAN') {
                             protoFormName.value = '新建 CAN 报文通信协议';
                         } else {
-                            protoFormName.value = '新建 ARINC 429 协议';
+                            protoFormName.value = '新建 ARINC429 通信协议';
                         }
                     }
                 }
             });
         }
 
-        // 统一协议配置表单提交处理 (新建与编辑统一流)
+        // 统一协议配置表单提交处理 (新建与编辑统一流，适配 6 大通信接口)
         if (protocolConfigForm) {
             protocolConfigForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -1375,12 +1371,12 @@
                     const targetId = Number(protoFormId ? protoFormId.value : 0);
 
                     // 获取总线类型（若被锁定 disabled，则从 lockedType 恢复）
-                    let protoType = protoFormLockedType && protoFormLockedType.value ? protoFormLockedType.value : (protoFormType ? protoFormType.value : 'ARINC429');
+                    let selectedType = protoFormLockedType && protoFormLockedType.value ? protoFormLockedType.value : (protoFormType ? protoFormType.value : 'ARINC429');
                     if (!isEdit && protoFormType) {
-                        protoType = protoFormType.value || 'ARINC429';
+                        selectedType = protoFormType.value || 'ARINC429';
                     }
 
-                    const name = (protoFormName ? protoFormName.value.trim() : '') || (protoType === 'Serial' ? '未命名串口协议' : (protoType === 'CAN' ? '未命名CAN协议' : '未命名429协议'));
+                    const name = (protoFormName ? protoFormName.value.trim() : '') || (isSerialFamily(selectedType) ? `未命名${selectedType}协议` : (selectedType === 'CAN' ? '未命名CAN协议' : '未命名429协议'));
                     const product = (protoFormProduct ? protoFormProduct.value.trim() : '');
                     if (product) {
                         await window.dbHelper.saveProduct({ name: product });
@@ -1390,7 +1386,7 @@
                     }
                     const device = (protoFormDevice ? protoFormDevice.value.trim() : '') || (product ? `${product}系统` : '机载航电系统');
                     const period = parseInt(protoFormPeriod ? protoFormPeriod.value : 20) || 20;
-                    const desc = (protoFormDesc ? protoFormDesc.value.trim() : '') || `${protoType} 通信总线协议`;
+                    const desc = (protoFormDesc ? protoFormDesc.value.trim() : '') || `${selectedType} 通信总线协议`;
 
                     if (isEdit) {
                         // ========================= 编辑模式 =========================
@@ -1412,10 +1408,9 @@
                         targetProto.description = desc;
 
                         if (targetProto.type === 'ARINC429') {
-                            targetProto.subType = protoArincSubtype ? protoArincSubtype.value : (targetProto.subType || 'ARINC429 (HB6096)');
+                            targetProto.subType = 'ARINC429';
                             targetProto.speed = protoArincSpeed ? protoArincSpeed.value : '100kbps';
                             targetProto.parity = protoArincParity ? protoArincParity.value : 'odd';
-                            // mode 锁定保持原值
 
                             if (targetProto.words) {
                                 targetProto.words.forEach(w => {
@@ -1429,8 +1424,7 @@
                                     Object.assign(curArinc, targetProto);
                                 }
                             }
-                        } else if (targetProto.type === 'Serial') {
-                            // subType 锁定保持原值
+                        } else if (targetProto.type === 'Serial' || isSerialFamily(targetProto.type)) {
                             targetProto.baudRate = Number(protoSerialBaud ? protoSerialBaud.value : 115200);
                             targetProto.dataBits = Number(protoSerialDataBits ? protoSerialDataBits.value : 8);
                             targetProto.parity = protoSerialParity ? protoSerialParity.value : 'none';
@@ -1443,7 +1437,6 @@
                                 }
                             }
                         } else if (targetProto.type === 'CAN') {
-                            // canStandard 锁定保持原值
                             targetProto.baudRate = Number(protoCanBaud ? protoCanBaud.value : 500000);
                         }
 
@@ -1461,7 +1454,7 @@
 
                         if (targetProto.type === 'ARINC429' && typeof window.updateToolbarProtocolInfo === 'function') {
                             window.updateToolbarProtocolInfo();
-                        } else if (targetProto.type === 'Serial' && typeof window.updateSerialToolbarProtocolInfo === 'function') {
+                        } else if ((targetProto.type === 'Serial' || isSerialFamily(targetProto.type)) && typeof window.updateSerialToolbarProtocolInfo === 'function') {
                             window.updateSerialToolbarProtocolInfo();
                         }
 
@@ -1470,8 +1463,8 @@
                         // ========================= 新建模式 =========================
                         let newProto = null;
 
-                        if (protoType === 'Serial') {
-                            const subTypeVal = protoSerialSubtype ? protoSerialSubtype.value : 'RS485';
+                        if (isSerialFamily(selectedType)) {
+                            const subTypeVal = selectedType === 'Serial' ? 'RS485' : selectedType;
                             const baudVal = Number(protoSerialBaud ? protoSerialBaud.value : 115200);
                             const dataBitsVal = Number(protoSerialDataBits ? protoSerialDataBits.value : 8);
                             const parityVal = protoSerialParity ? protoSerialParity.value : 'none';
@@ -1514,11 +1507,11 @@
                             if (typeof window.loadSerialProtocolIntoEditor === 'function') {
                                 await window.loadSerialProtocolIntoEditor(id);
                             }
-                            showToast(`已成功创建串口通信协议「${newProto.name}」并进入工作台！`, 'success');
+                            showToast(`已成功创建 ${subTypeVal} 串行通信协议「${newProto.name}」并进入工作台！`, 'success');
                             return;
                         }
 
-                        if (protoType === 'CAN') {
+                        if (selectedType === 'CAN') {
                             const canStd = protoCanStandard ? protoCanStandard.value : 'CAN2.0B';
                             const canBaud = Number(protoCanBaud ? protoCanBaud.value : 500000);
 
@@ -1526,10 +1519,10 @@
                                 name,
                                 product,
                                 type: 'CAN',
+                                subType: 'CAN',
                                 canStandard: canStd,
                                 baudRate: canBaud,
                                 device,
-                                direction,
                                 period,
                                 description: desc,
                                 frames: []
@@ -1550,7 +1543,6 @@
                         }
 
                         // 默认 ARINC 429
-                        const subtype = protoArincSubtype ? protoArincSubtype.value : 'ARINC429 (HB6096)';
                         const speed = protoArincSpeed ? protoArincSpeed.value : '100kbps';
                         const parity = protoArincParity ? protoArincParity.value : 'odd';
                         const mode = protoArincMode ? protoArincMode.value : 'classic';
@@ -1568,7 +1560,7 @@
                             name,
                             product,
                             type: 'ARINC429',
-                            subType: subtype,
+                            subType: 'ARINC429',
                             mode,
                             period,
                             device,
@@ -1594,7 +1586,7 @@
                         await loadProtocols();
                         if (typeof window.loadArincProtocolIntoEditor === 'function') await window.loadArincProtocolIntoEditor(id);
 
-                        showToast(`已成功创建 ARINC 429 协议「${newProto.name}」并进入工作台！`, 'success');
+                        showToast(`已成功创建 ARINC429 通信协议「${newProto.name}」并进入工作台！`, 'success');
                     }
                 } catch (err) {
                     console.error("保存协议失败:", err);

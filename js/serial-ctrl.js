@@ -54,7 +54,7 @@
         btnDuplicateSerialPacket = document.getElementById('btn-duplicate-serial-packet');
         btnDeleteSerialPacket = document.getElementById('btn-delete-serial-packet');
         btnViewSerialProps = document.getElementById('btn-view-serial-props');
-        btnSerialExportJson = document.getElementById('btn-serial-export-json');
+        btnSerialExportJson = document.getElementById('btn-serial-export') || document.getElementById('btn-serial-export-json');
         btnSerialSave = document.getElementById('btn-serial-save');
 
         serialTimelineTotalBadge = document.getElementById('serial-timeline-total-badge');
@@ -157,7 +157,8 @@
                 const isRx = pkt.direction === 'Rx';
                 const pktPeriod = pkt.period !== undefined ? pkt.period : (p.period || 20);
                 const periodText = isRx ? '' : ` ${pktPeriod}ms`;
-                opt.textContent = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'}`;
+                opt.textContent = pkt.name || '未命名数据包';
+                opt.title = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'}`;
                 if (idx === currentSerialPacketIndex) {
                     opt.selected = true;
                 }
@@ -1236,6 +1237,15 @@
             btnSerialSave.addEventListener('click', saveCurrentSerialProtocol);
         }
 
+        const btnSerialSwitchViewer = document.getElementById('btn-serial-switch-viewer');
+        if (btnSerialSwitchViewer) {
+            btnSerialSwitchViewer.addEventListener('click', () => {
+                if (typeof window.openProtocolViewer === 'function') {
+                    window.openProtocolViewer(currentSerialProtocol);
+                }
+            });
+        }
+
         if (serialPacketSelect) {
             serialPacketSelect.addEventListener('change', (e) => {
                 currentSerialPacketIndex = parseInt(e.target.value, 10) || 0;
@@ -1409,11 +1419,15 @@
         }
 
         if (btnSerialExportJson) {
-            btnSerialExportJson.addEventListener('click', () => {
-                if (!currentSerialProtocol) return;
-                const safeName = (currentSerialProtocol.name || 'serial_protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
-                const jsonStr = JSON.stringify(currentSerialProtocol, null, 2);
-                downloadFile(jsonStr, `${safeName}.json`, 'application/json');
+            btnSerialExportJson.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (window.openProtocolExportModal) {
+                    window.openProtocolExportModal(currentSerialProtocol);
+                } else if (currentSerialProtocol) {
+                    const safeName = (currentSerialProtocol.name || 'serial_protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
+                    const jsonStr = JSON.stringify(currentSerialProtocol, null, 2);
+                    downloadFile(jsonStr, `${safeName}.json`, 'application/json');
+                }
             });
         }
 
