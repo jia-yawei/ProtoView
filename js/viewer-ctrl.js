@@ -32,6 +32,8 @@
     let currentWordIndex = 0;
     let searchQuery = '';
     let layoutMode = 'single'; // 'single' (单字专注查阅) 或 'continuous' (长卷全文视图)
+    let isViewerLoading = false;
+    let viewerEventsBound = false;
 
     // DOM 元素引用
     let viewerSection;
@@ -87,52 +89,81 @@
         return currentProtocol.packets[currentPacketIndex];
     }
 
-    // 载入协议进入只读查阅模式
+    // 载入协议进入只读查阅模式 (秒级极速渲染与防重入保障)
     async function loadProtocolIntoViewer(protoOrId, targetWordIndex = 0, targetFieldIndex = null) {
-        initDOMElements();
+        if (isViewerLoading) return;
+        isViewerLoading = true;
 
-        let p = null;
-        if (protoOrId && typeof protoOrId === 'object' && protoOrId.name) {
-            p = protoOrId;
-        } else if (protoOrId !== undefined && protoOrId !== null && protoOrId !== '') {
-            p = await (window.dbHelper ? window.dbHelper.getProtocol(protoOrId) : null);
-        }
+        try {
+            initDOMElements();
 
-        // 若未指定或未找到，自动回退到当前工作台中已载入的协议
-        if (!p) {
-            if (ProtoView.Controllers && ProtoView.Controllers.Arinc && ProtoView.Controllers.Arinc.getCurrentProtocol) {
-                p = ProtoView.Controllers.Arinc.getCurrentProtocol();
+            let p = null;
+            if (protoOrId && typeof protoOrId === 'object' && protoOrId.name) {
+                p = protoOrId;
+            } else if (protoOrId !== undefined && protoOrId !== null && protoOrId !== '') {
+                // 1. 优先从内存当前工作台极速检索，无需等待数据库异步轮询
+                if (ProtoView.Controllers && ProtoView.Controllers.Arinc) {
+                    const cur = ProtoView.Controllers.Arinc.getCurrentProtocol();
+                    if (cur && (cur.id === protoOrId || String(cur.id) === String(protoOrId))) {
+                        p = cur;
+                    }
+                }
+                if (!p && ProtoView.Controllers && ProtoView.Controllers.Serial) {
+                    const cur = ProtoView.Controllers.Serial.getCurrentProtocol();
+                    if (cur && (cur.id === protoOrId || String(cur.id) === String(protoOrId))) {
+                        p = cur;
+                    }
+                }
+                if (!p && currentProtocol && (currentProtocol.id === protoOrId || String(currentProtocol.id) === String(protoOrId))) {
+                    p = currentProtocol;
+                }
+                // 2. 本地数据库回退
+                if (!p && window.dbHelper) {
+                    p = await window.dbHelper.getProtocol(protoOrId);
+                }
             }
-            if (!p && ProtoView.Controllers && ProtoView.Controllers.Serial && ProtoView.Controllers.Serial.getCurrentProtocol) {
-                p = ProtoView.Controllers.Serial.getCurrentProtocol();
+
+            // 若未指定或未找到，自动回退到当前工作台中已载入的协议
+            if (!p) {
+                if (ProtoView.Controllers && ProtoView.Controllers.Arinc && ProtoView.Controllers.Arinc.getCurrentProtocol) {
+                    p = ProtoView.Controllers.Arinc.getCurrentProtocol();
+                }
+                if (!p && ProtoView.Controllers && ProtoView.Controllers.Serial && ProtoView.Controllers.Serial.getCurrentProtocol) {
+                    p = ProtoView.Controllers.Serial.getCurrentProtocol();
+                }
+                if (!p && currentProtocol) {
+                    p = currentProtocol;
+                }
             }
-        }
 
-        if (!p) {
-            showToast('请先选择或创建一个通信协议', 'warning');
-            return;
-        }
+            if (!p) {
+                showToast('请先选择或创建一个通信协议', 'warning');
+                return;
+            }
 
-        currentProtocol = p;
-        currentPacketIndex = 0;
-        currentWordIndex = targetWordIndex || 0;
-        searchQuery = '';
-        if (viewerFieldSearch) viewerFieldSearch.value = '';
-        if (btnClearViewerSearch) btnClearViewerSearch.style.display = 'none';
-        if (viewerMatchCount) viewerMatchCount.style.display = 'none';
+            currentProtocol = p;
+            currentPacketIndex = 0;
+            currentWordIndex = targetWordIndex || 0;
+            searchQuery = '';
+            if (viewerFieldSearch) viewerFieldSearch.value = '';
+            if (btnClearViewerSearch) btnClearViewerSearch.style.display = 'none';
+            if (viewerMatchCount) viewerMatchCount.style.display = 'none';
 
-        // 核心：立即切换界面到查阅模式视图
-        if (typeof window.switchToView === 'function') {
-            window.switchToView('protocol-viewer-view');
-        }
+            // 核心：立即切换界面到查阅模式视图 (如果已处于该视图，switchToView 内部已防护不会重复触发)
+            if (typeof window.switchToView === 'function') {
+                window.switchToView('protocol-viewer-view');
+            }
 
-        renderHeaderMeta();
-        renderPacketSelector();
-        renderWordsCatalog();
-        renderActiveWordView();
+            renderHeaderMeta();
+            renderPacketSelector();
+            renderWordsCatalog();
+            renderActiveWordView();
 
-        if (targetFieldIndex !== null) {
-            scrollToField(targetFieldIndex);
+            if (targetFieldIndex !== null) {
+                scrollToField(targetFieldIndex);
+            }
+        } finally {
+            isViewerLoading = false;
         }
     }
 
@@ -212,6 +243,7 @@
 
         let totalMatchedFields = 0;
         const query = searchQuery.toLowerCase().trim();
+        const frag = document.createDocumentFragment();
 
         items.forEach((item, idx) => {
             const card = document.createElement('div');
@@ -230,7 +262,7 @@
                 const sigCount = item.signals ? item.signals.length : 0;
                 subInfoStr = `${item.direction || pkt.direction || 'Tx'} · ${sigCount} 字段 · ${item.period || pkt.period || 20}ms`;
 
-                // 搜索命中匹配检测
+                // 搜索命中匹配检测 (仅匹配用户定义的名字、单位、备注、位段与字典)
                 if (query) {
                     const matchLabel = octal.includes(query);
                     const matchName = (item.name || '').toLowerCase().includes(query);
@@ -240,7 +272,6 @@
                         item.signals.forEach(s => {
                             if (!s) return;
                             const mName = (s.name || '').toLowerCase().includes(query);
-                            const mKey = (s.key || '').toLowerCase().includes(query);
                             const mUnit = (s.unit || '').toLowerCase().includes(query);
                             const mRemark = (s.remark || '').toLowerCase().includes(query);
                             const mBit = `b${s.startBit}`.includes(query) || `b${(s.startBit || 1) + (s.bitCount || 1) - 1}`.includes(query);
@@ -248,7 +279,7 @@
                             if (s.dict && typeof s.dict === 'object') {
                                 mDict = Object.values(s.dict).some(v => String(v).toLowerCase().includes(query));
                             }
-                            if (mName || mKey || mUnit || mRemark || mBit || mDict) {
+                            if (mName || mUnit || mRemark || mBit || mDict) {
                                 matchedInThisWord++;
                             }
                         });
@@ -284,15 +315,10 @@
                 <div class="vci-sub">${escapeHTML(subInfoStr)}</div>
             `;
 
-            card.addEventListener('click', () => {
-                currentWordIndex = idx;
-                document.querySelectorAll('.viewer-catalog-item').forEach(el => el.classList.remove('active'));
-                card.classList.add('active');
-                renderActiveWordView();
-            });
-
-            viewerWordsCatalog.appendChild(card);
+            frag.appendChild(card);
         });
+
+        viewerWordsCatalog.appendChild(frag);
 
         // 更新搜索统计徽章
         if (viewerMatchCount) {
@@ -368,8 +394,11 @@
         // 3. 字段工程规格明细表 (Publication-grade Field Definition Cards)
         renderArincFieldsTable(signals);
 
-        // 4. SDI / SSM 常驻速查参考卡片
-        renderArincSdiSsmCard(word);
+        // 4. 彻底隐藏/不渲染用户协议未定义的外部编码规范卡片
+        if (viewerSdiSsmCard) {
+            viewerSdiSsmCard.style.display = 'none';
+            viewerSdiSsmCard.innerHTML = '';
+        }
     }
 
     // 渲染 ARINC 429 交互式 32 位位域拓扑图
@@ -430,7 +459,6 @@
                 <span class="vbb-title-text"><i class="fa-solid fa-ruler-horizontal"></i> <b>32-Bit 传输位域全景映射</b></span>
             </div>
             <div class="vbb-hint-right">
-                <span class="vbb-bits-legend">B32 校验 · B30~B31 SSM · B11~B29 载荷 · B9~B10 SDI · B1~B8 标号</span>
                 <button type="button" class="btn-vbb-scroll-top" title="回到当前标号字顶部" style="display:none;"><i class="fa-solid fa-arrow-up"></i> 回顶</button>
             </div>
         `;
@@ -448,6 +476,7 @@
 
         const barTrack = document.createElement('div');
         barTrack.className = 'viewer-bit-bar-track';
+        const trackFrag = document.createDocumentFragment();
 
         for (let b = 32; b >= 1; b--) {
             const info = bitMap[b];
@@ -463,7 +492,7 @@
                 if (info.type === 'signal') {
                     typeClass = 'bit-signal';
                     cellColorStyle = `background: ${info.color.bg}; border-color: ${info.color.border}; color: ${info.color.text};`;
-                    titleText = `Bit ${b} · 字段「${info.name}」\n占用跨度: B${info.startBit}~B${info.endBit} (${info.endBit - info.startBit + 1}位)\n类型: ${info.dataType} | 精度: ${info.scale} ${info.unit}`;
+                    titleText = `Bit ${b} · 字段「${info.name}」\n占用跨度: B${info.startBit}~B${info.endBit} (${info.endBit - info.startBit + 1}位)`;
                     cell.setAttribute('data-signal-index', info.signalIndex);
                 } else if (info.type === 'label') {
                     typeClass = 'bit-label';
@@ -502,14 +531,15 @@
                 }
             });
 
-            barTrack.appendChild(cell);
+            trackFrag.appendChild(cell);
         }
 
+        barTrack.appendChild(trackFrag);
         barWrap.appendChild(barTrack);
         viewerBitBarContainer.appendChild(barWrap);
     }
 
-    // 渲染 ARINC 429 字段工程规格明细表
+    // 渲染 ARINC 429 字段工程规格明细表 (仅重点显示有数据的属性，绝不显示空白占位或未定义的编码规范/内部字段key)
     function renderArincFieldsTable(signals) {
         if (!viewerFieldsList) return;
         viewerFieldsList.innerHTML = '';
@@ -527,6 +557,7 @@
         }
 
         const query = searchQuery.toLowerCase().trim();
+        const frag = document.createDocumentFragment();
 
         signals.forEach((sig, sIdx) => {
             const start = Number(sig.startBit || 1);
@@ -534,11 +565,10 @@
             const end = start + count - 1;
             const color = FIELD_PALETTES[sIdx % FIELD_PALETTES.length];
 
-            // 搜索过滤与高亮判断
+            // 搜索过滤与高亮判断 (仅匹配用户定义的名字、单位、备注与字典，绝不搜索隐藏的系统key)
             let isMatched = false;
             if (query) {
                 const mName = (sig.name || '').toLowerCase().includes(query);
-                const mKey = (sig.key || '').toLowerCase().includes(query);
                 const mUnit = (sig.unit || '').toLowerCase().includes(query);
                 const mRemark = (sig.remark || '').toLowerCase().includes(query);
                 const mBit = `b${start}`.includes(query) || `b${end}`.includes(query) || `${start}` === query || `${end}` === query;
@@ -546,7 +576,7 @@
                 if (sig.dict && typeof sig.dict === 'object') {
                     mDict = Object.values(sig.dict).some(v => String(v).toLowerCase().includes(query));
                 }
-                isMatched = mName || mKey || mUnit || mRemark || mBit || mDict;
+                isMatched = mName || mUnit || mRemark || mBit || mDict;
             }
 
             const card = document.createElement('div');
@@ -554,23 +584,59 @@
             card.id = `viewer-field-card-${sIdx}`;
             card.setAttribute('data-field-index', sIdx);
 
-            // 字典状态枚举 Pill 生成
+            // 1. 严格只收集用户真正有定义、有数据的工程属性
+            const propItems = [];
+
+            // 分辨率 / 精度 (优先看 precision，其次 resolution)
+            const precisionVal = (sig.precision !== undefined && sig.precision !== null && String(sig.precision).trim() !== '') ? String(sig.precision).trim() : '';
+            const resolutionVal = (sig.resolution !== undefined && sig.resolution !== null && String(sig.resolution).trim() !== '') ? String(sig.resolution).trim() : '';
+            if (precisionVal) {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">精度:</span><span class="vfc-prop-v">${escapeHTML(precisionVal)}</span></div>`);
+            } else if (resolutionVal) {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">分辨率 (LSB):</span><span class="vfc-prop-v">${escapeHTML(resolutionVal)}</span></div>`);
+            }
+
+            // 有效工程量程 (Min ~ Max)
+            const minVal = (sig.min !== undefined && sig.min !== null && String(sig.min).trim() !== '') ? String(sig.min).trim() : '';
+            const maxVal = (sig.max !== undefined && sig.max !== null && String(sig.max).trim() !== '') ? String(sig.max).trim() : '';
+            if (minVal !== '' || maxVal !== '') {
+                const rangeDisplay = (minVal !== '' && maxVal !== '') 
+                    ? `${minVal} ~ ${maxVal}${sig.unit ? ' ' + sig.unit : ''}` 
+                    : (minVal !== '' ? `≥ ${minVal}` : `≤ ${maxVal}`);
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">有效量程:</span><span class="vfc-prop-v">${escapeHTML(rangeDisplay)}</span></div>`);
+            }
+
+            // 零点偏移 (Offset) - 仅在非 0 且有效时显示
+            if (sig.offset !== undefined && sig.offset !== null && String(sig.offset).trim() !== '' && Number(sig.offset) !== 0) {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">零点偏移:</span><span class="vfc-prop-v">${escapeHTML(String(sig.offset))}</span></div>`);
+            }
+
+            // 默认值 (Default) - 仅在用户显式指定了且非 '-' 时显示
+            if (sig.defaultValue !== undefined && sig.defaultValue !== null && String(sig.defaultValue).trim() !== '' && String(sig.defaultValue).trim() !== '-' && sig.defaultValue !== 0) {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">默认值:</span><span class="vfc-prop-v">${escapeHTML(String(sig.defaultValue))}</span></div>`);
+            }
+
+            const propsHtml = propItems.length > 0 ? `<div class="vfc-props-grid">${propItems.join('')}</div>` : '';
+
+            // 2. 数据字典 / 状态枚举 (如果定义了字典，作为核心重点高亮呈现)
             let dictHtml = '';
             if (sig.dict && typeof sig.dict === 'object' && Object.keys(sig.dict).length > 0) {
                 dictHtml = `<div class="vfc-dict-deck">`;
-                dictHtml += `<span class="vfc-dict-label"><i class="fa-solid fa-book-bookmark"></i> 状态枚举字典:</span>`;
+                dictHtml += `<span class="vfc-dict-label"><i class="fa-solid fa-book-bookmark" style="color:var(--accent-color);"></i> 状态字典 / 枚举映射:</span>`;
                 Object.entries(sig.dict).forEach(([k, val]) => {
                     dictHtml += `<span class="vfc-dict-pill"><code>${escapeHTML(k)}</code>: ${escapeHTML(String(val))}</span>`;
                 });
                 dictHtml += `</div>`;
             }
 
-            // 有效范围与默认值
-            let rangeStr = '-';
-            if (sig.min !== undefined && sig.min !== '' && sig.max !== undefined && sig.max !== '') {
-                rangeStr = `${sig.min} ~ ${sig.max} ${sig.unit || ''}`;
-            }
+            // 3. 备注说明 / 工程说明 (如果存在，作为重点清晰展示)
+            const remarkHtml = (sig.remark && String(sig.remark).trim()) ? `
+                <div class="vfc-remark-box">
+                    <i class="fa-solid fa-circle-info" style="color:var(--accent-color);"></i> <b>工程说明:</b> ${highlightText(sig.remark.trim(), query)}
+                </div>
+            ` : '';
 
+            // 组装卡片：绝不显示 main_value 等技术内部 key，且无数据的内容绝不占用空间
             card.innerHTML = `
                 <div class="vfc-header">
                     <div class="vfc-title-group">
@@ -578,43 +644,20 @@
                             B${start} ~ B${end} <small>(${count} Bits)</small>
                         </span>
                         <h4 class="vfc-name">${highlightText(sig.name || '未命名信号', query)}</h4>
-                        ${sig.key ? `<span class="vfc-key"><code>${escapeHTML(sig.key)}</code></span>` : ''}
                         <span class="vfc-datatype-pill">${escapeHTML(sig.dataType || 'BNR')}</span>
-                        ${sig.unit ? `<span class="vfc-unit-pill">${escapeHTML(sig.unit)}</span>` : ''}
+                        ${(sig.unit && String(sig.unit).trim()) ? `<span class="vfc-unit-pill">${escapeHTML(sig.unit.trim())}</span>` : ''}
                     </div>
                     <div class="vfc-actions">
                         <button type="button" class="btn-vfc-copy" data-copy="${escapeHTML(sig.name || '')}" title="复制信号名称"><i class="fa-regular fa-copy"></i> 复制名</button>
                     </div>
                 </div>
-
-                <div class="vfc-body">
-                    <div class="vfc-props-grid">
-                        <div class="vfc-prop-item">
-                            <span class="vfc-prop-k">分辨率 (LSB):</span>
-                            <span class="vfc-prop-v">${sig.resolution !== undefined ? sig.resolution : 1.0}</span>
-                        </div>
-                        <div class="vfc-prop-item">
-                            <span class="vfc-prop-k">零点偏移 (Offset):</span>
-                            <span class="vfc-prop-v">${sig.offset !== undefined && sig.offset !== '' ? sig.offset : 0.0}</span>
-                        </div>
-                        <div class="vfc-prop-item">
-                            <span class="vfc-prop-k">工程量程 (Min~Max):</span>
-                            <span class="vfc-prop-v">${rangeStr}</span>
-                        </div>
-                        <div class="vfc-prop-item">
-                            <span class="vfc-prop-k">默认值 (Default):</span>
-                            <span class="vfc-prop-v">${sig.defaultValue !== undefined ? sig.defaultValue : (sig.defaultVal !== undefined ? sig.defaultVal : '-')}</span>
-                        </div>
+                ${(propsHtml || dictHtml || remarkHtml) ? `
+                    <div class="vfc-body">
+                        ${propsHtml}
+                        ${dictHtml}
+                        ${remarkHtml}
                     </div>
-
-                    ${dictHtml}
-
-                    ${sig.remark ? `
-                        <div class="vfc-remark-box">
-                            <i class="fa-solid fa-circle-info"></i> <b>工程说明:</b> ${highlightText(sig.remark, query)}
-                        </div>
-                    ` : ''}
-                </div>
+                ` : ''}
             `;
 
             // 复制按钮事件
@@ -638,44 +681,10 @@
                 unhighlightBitBarSegments();
             });
 
-            viewerFieldsList.appendChild(card);
-        });
-    }
-
-    // 渲染 ARINC 429 SDI / SSM 常驻速查参考卡片
-    function renderArincSdiSsmCard(word) {
-        if (!viewerSdiSsmCard) return;
-        viewerSdiSsmCard.style.display = 'block';
-
-        const sdiDict = word.sdiDict || { "0": "全部系统 (All)", "1": "系统 1 (左侧)", "2": "系统 2 (右侧)", "3": "系统 3 (备用)" };
-        const ssmDict = word.ssmDict || (currentProtocol && currentProtocol.ssmDict) || { "0": "正常运算 (Normal)", "1": "无计算数据 (NCD)", "2": "功能测试 (FT)", "3": "故障告警 (Fail)" };
-
-        let sdiItemsHtml = '';
-        Object.entries(sdiDict).forEach(([k, v]) => {
-            sdiItemsHtml += `<div class="vref-row"><code>${k.padStart(2, '0')}b</code>: ${escapeHTML(String(v))}</div>`;
+            frag.appendChild(card);
         });
 
-        let ssmItemsHtml = '';
-        Object.entries(ssmDict).forEach(([k, v]) => {
-            ssmItemsHtml += `<div class="vref-row"><code>${k.padStart(2, '0')}b</code>: ${escapeHTML(String(v))}</div>`;
-        });
-
-        viewerSdiSsmCard.innerHTML = `
-            <div class="vref-header">
-                <i class="fa-solid fa-microchip" style="color:var(--accent-color);"></i>
-                <span>航电标准控制域编码规范 (B9~B10 SDI · B30~B31 SSM)</span>
-            </div>
-            <div class="vref-body">
-                <div class="vref-col">
-                    <h5 class="vref-col-title"><i class="fa-solid fa-network-wired"></i> SDI 设备识别源 (B9~B10)</h5>
-                    ${sdiItemsHtml}
-                </div>
-                <div class="vref-col">
-                    <h5 class="vref-col-title"><i class="fa-solid fa-shield-halved"></i> SSM 状态符号矩阵 (B30~B31)</h5>
-                    ${ssmItemsHtml}
-                </div>
-            </div>
-        `;
+        viewerFieldsList.appendChild(frag);
     }
 
     // 渲染串口整包字节流全景映射条
@@ -775,8 +784,18 @@
             `;
         }
 
-        // 渲染串口字段或位域
+        // 渲染串口字段或位域 (仅展示有有效数据的字段属性)
         if (viewerFieldsList) {
+            const propItems = [];
+            if (byteItem.scale && byteItem.scale !== 1.0) {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">比例系数:</span><span class="vfc-prop-v">${byteItem.scale}</span></div>`);
+            }
+            if (byteItem.min !== undefined && byteItem.max !== undefined && String(byteItem.min).trim() !== '' && String(byteItem.max).trim() !== '') {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">有效量程:</span><span class="vfc-prop-v">${byteItem.min} ~ ${byteItem.max}${byteItem.unit ? ' ' + byteItem.unit : ''}</span></div>`);
+            }
+            const propsHtml = propItems.length > 0 ? `<div class="vfc-props-grid">${propItems.join('')}</div>` : '';
+            const remarkHtml = (byteItem.remark && String(byteItem.remark).trim()) ? `<div class="vfc-remark-box"><i class="fa-solid fa-circle-info" style="color:var(--accent-color);"></i> <b>工程说明:</b> ${escapeHTML(byteItem.remark.trim())}</div>` : '';
+
             viewerFieldsList.innerHTML = `
                 <div class="viewer-field-card">
                     <div class="vfc-header">
@@ -787,23 +806,12 @@
                             ${byteItem.unit ? `<span class="vfc-unit-pill">${escapeHTML(byteItem.unit)}</span>` : ''}
                         </div>
                     </div>
-                    <div class="vfc-body">
-                        <div class="vfc-props-grid">
-                            <div class="vfc-prop-item">
-                                <span class="vfc-prop-k">比例系数:</span>
-                                <span class="vfc-prop-v">${byteItem.scale || 1.0}</span>
-                            </div>
-                            <div class="vfc-prop-item">
-                                <span class="vfc-prop-k">物理单位:</span>
-                                <span class="vfc-prop-v">${byteItem.unit || '-'}</span>
-                            </div>
-                            <div class="vfc-prop-item">
-                                <span class="vfc-prop-k">有效量程:</span>
-                                <span class="vfc-prop-v">${(byteItem.min !== undefined && byteItem.max !== undefined) ? `${byteItem.min} ~ ${byteItem.max}` : '-'}</span>
-                            </div>
+                    ${(propsHtml || remarkHtml) ? `
+                        <div class="vfc-body">
+                            ${propsHtml}
+                            ${remarkHtml}
                         </div>
-                        ${byteItem.remark ? `<div class="vfc-remark-box"><i class="fa-solid fa-circle-info"></i> ${escapeHTML(byteItem.remark)}</div>` : ''}
-                    </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -876,9 +884,11 @@
         }
     }
 
-    // 绑定事件
+    // 绑定事件 (仅初始化单次绑定，杜绝重复监听器导致的内存泄漏与滚动卡顿)
     function bindViewerEvents() {
+        if (viewerEventsBound) return;
         initDOMElements();
+        viewerEventsBound = true;
 
         // 返回协议列表
         if (btnViewerBack) {
@@ -892,6 +902,20 @@
         // 一键进入编辑工作台
         if (btnViewerEditWorkbench) {
             btnViewerEditWorkbench.addEventListener('click', switchToEditWorkbench);
+        }
+
+        // 左侧标号字目录单次事件委托监听 (高速即时响应)
+        if (viewerWordsCatalog) {
+            viewerWordsCatalog.addEventListener('click', (e) => {
+                const card = e.target.closest('.viewer-catalog-item');
+                if (!card) return;
+                const idx = parseInt(card.getAttribute('data-word-index'), 10);
+                if (isNaN(idx)) return;
+                currentWordIndex = idx;
+                document.querySelectorAll('.viewer-catalog-item').forEach(el => el.classList.remove('active'));
+                card.classList.add('active');
+                renderActiveWordView();
+            });
         }
 
         // 顶部全局即时搜索

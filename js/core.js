@@ -110,6 +110,11 @@
 
     // 6. 全局视图路由切换
     function switchToView(viewId) {
+        const currentActive = document.querySelector('.view-section.active');
+        if (currentActive && currentActive.id === viewId) {
+            return; // 已处于目标视图，避免重复重绘与事件风暴循环
+        }
+
         const navItems = document.querySelectorAll('.nav-item');
         const viewSections = document.querySelectorAll('.view-section');
 

@@ -920,10 +920,7 @@
 
     // 进入只读查阅模式 (以极致可读性、位域拓扑与秒级字段速查为核心)
     async function openProtocolViewer(id) {
-        if (typeof window.switchToView === 'function') {
-            window.switchToView('protocol-viewer-view');
-        }
-        if (ProtoView.Controllers && ProtoView.Controllers.Viewer) {
+        if (ProtoView.Controllers && ProtoView.Controllers.Viewer && ProtoView.Controllers.Viewer.loadProtocolIntoViewer) {
             await ProtoView.Controllers.Viewer.loadProtocolIntoViewer(id);
         } else if (typeof window.openProtocolViewer === 'function') {
             await window.openProtocolViewer(id);
