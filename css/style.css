@@ -5969,66 +5969,233 @@ body.resizing-active .workbench-resizer {
     border-color: rgba(59, 130, 246, 0.3);
 }
 
-.admin-grid-3 {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    padding: 16px 18px;
+/* ========================================================
+   后台管理顶部分段标签页 (Admin View Tab Bar)
+   ======================================================== */
+.admin-tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-primary);
+    padding: 4px;
+    border-radius: 9px;
+    border: 1px solid var(--border-color);
+    width: fit-content;
+    margin-bottom: 2px;
 }
 
-@media (max-width: 960px) {
-    .admin-grid-3 {
-        grid-template-columns: 1fr;
-    }
+.admin-tab-btn {
+    border: none;
+    background: transparent;
+    padding: 7px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.15s ease;
+}
+
+.admin-tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.admin-tab-btn.active {
+    background: var(--card-bg, var(--bg-secondary));
+    color: var(--accent-color);
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .admin-tab-btn.active {
+    background: #1e293b;
+    color: #60a5fa;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.admin-tab-badge {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--text-secondary);
+    font-family: var(--font-mono, monospace);
+    font-weight: 600;
+}
+
+.admin-tab-btn.active .admin-tab-badge {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-color);
+}
+
+[data-theme="dark"] .admin-tab-btn.active .admin-tab-badge {
+    background: rgba(59, 130, 246, 0.25);
+    color: #93c5fd;
+}
+
+.admin-tab-pane {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    animation: adminFadeIn 0.2s ease forwards;
+}
+
+.admin-tab-pane.active {
+    display: flex;
+}
+
+@keyframes adminFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .admin-section-card .admin-kpi-card {
     background: var(--bg-primary);
 }
 
-/* 3. Cloudflare 配额网格 */
-.admin-quota-grid {
+/* ========================================================
+   Cloudflare 免费资源配额全新直观双引擎仪表盘
+   ======================================================== */
+.cf-resource-dashboard {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
     padding: 16px 18px;
 }
 
-@media (max-width: 1100px) {
-    .admin-quota-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 640px) {
-    .admin-quota-grid {
+@media (max-width: 992px) {
+    .cf-resource-dashboard {
         grid-template-columns: 1fr;
     }
 }
 
-.quota-box {
+.cf-engine-card {
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.cf-engine-card:hover {
+    border-color: rgba(59, 130, 246, 0.35);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.cf-engine-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.cf-engine-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cf-engine-icon-box {
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.cf-engine-icon-box.r2-icon {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
+}
+
+.cf-engine-icon-box.d1-icon {
+    background: rgba(139, 92, 246, 0.12);
+    color: #8b5cf6;
+}
+
+.cf-engine-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cf-engine-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.cf-engine-sub {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+.cf-engine-tag {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2.5px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cf-engine-tag.r2-tag {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.cf-engine-tag.d1-tag {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+/* 仪表组 */
+.cf-engine-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cf-meter-box {
+    background: var(--card-bg, var(--bg-secondary));
+    border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 13px 14px;
+    padding: 12px 14px;
     display: flex;
     flex-direction: column;
     gap: 8px;
     transition: all 0.15s ease;
 }
 
-.quota-box:hover {
-    border-color: rgba(59, 130, 246, 0.35);
+.cf-meter-box:hover {
+    border-color: rgba(59, 130, 246, 0.3);
 }
 
-.quota-box-header {
+.cf-meter-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    font-size: 12px;
 }
 
-.quota-title {
-    font-size: 12.5px;
+.cf-meter-title {
     font-weight: 600;
     color: var(--text-primary);
     display: flex;
@@ -6036,46 +6203,107 @@ body.resizing-active .workbench-resizer {
     gap: 6px;
 }
 
-.quota-val-text {
-    font-size: 11.5px;
-    font-family: var(--font-mono, monospace);
+.cf-meter-quota-cap {
+    font-size: 11px;
     color: var(--text-secondary);
 }
 
-.quota-val-badge {
-    font-size: 11px;
-    font-weight: 600;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.1);
-    padding: 1px 6px;
-    border-radius: 4px;
+.cf-meter-quota-cap b {
+    color: var(--text-primary);
+    font-family: var(--font-mono, monospace);
 }
 
-.quota-progress-track {
+.cf-meter-val-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 1px 0;
+}
+
+.cf-meter-used-val {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-family: var(--font-mono, monospace);
+    color: var(--text-primary);
+    letter-spacing: -0.2px;
+}
+
+.cf-meter-status-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1.5px 7px;
+    border-radius: 4px;
+    font-family: var(--font-mono, monospace);
+}
+
+.cf-meter-status-chip.healthy {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+}
+
+.cf-meter-status-chip.warning {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+}
+
+.cf-meter-status-chip.danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+.cf-meter-track {
     width: 100%;
     height: 7px;
-    background: rgba(0, 0, 0, 0.06);
     border-radius: 4px;
+    background: rgba(0, 0, 0, 0.06);
     overflow: hidden;
     position: relative;
 }
 
-[data-theme="dark"] .quota-progress-track {
+[data-theme="dark"] .cf-meter-track {
     background: rgba(255, 255, 255, 0.08);
 }
 
-.quota-progress-bar-fill {
+.cf-meter-fill {
     height: 100%;
     border-radius: 4px;
-    transition: width 0.4s ease-out;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 4px;
 }
 
-.quota-progress-bar-fill.healthy {
-    background: linear-gradient(90deg, #3b82f6, #10b981);
+.cf-meter-fill.r2-fill {
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
 }
 
-.quota-progress-bar-fill.warning {
-    background: linear-gradient(90deg, #f59e0b, #f97316);
+.cf-meter-fill.writes-fill {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.cf-meter-fill.d1-fill {
+    background: linear-gradient(90deg, #8b5cf6, #6366f1);
+}
+
+.cf-meter-fill.rows-fill {
+    background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.cf-meter-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding-top: 2px;
+}
+
+.cf-meter-foot-note b {
+    color: #10b981;
+    font-family: var(--font-mono, monospace);
+}
+
+.cf-meter-badge-sub {
+    font-size: 10px;
+    opacity: 0.8;
 }
 
 .quota-progress-bar-fill.danger {

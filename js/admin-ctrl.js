@@ -406,92 +406,39 @@
         }
     }
 
-    // 渲染 Cloudflare 官方 API 爬取的真实流量与请求数据
+    // 渲染 Cloudflare 底座状态指示药丸
     function renderCloudflareLiveMetrics(workersQuota) {
-        if (!workersQuota) return;
-
-        // 1. 真实出站流量 (Bandwidth)
-        if (quotaTrafficUsed) {
-            if (workersQuota.isLive) {
-                quotaTrafficUsed.textContent = `${formatBytes(workersQuota.realTrafficBytes || 0)} / 24小时`;
-            } else {
-                quotaTrafficUsed.textContent = `${formatBytes(workersQuota.realTrafficBytes || 0)} (估算)`;
-            }
-        }
-        if (quotaTrafficSourcePill) {
-            if (workersQuota.isLive) {
-                quotaTrafficSourcePill.textContent = '官方实时采集';
-                quotaTrafficSourcePill.className = 'quota-percent-pill healthy';
-            } else {
-                quotaTrafficSourcePill.textContent = '需配置官方 API';
-                quotaTrafficSourcePill.className = 'quota-percent-pill';
-            }
-        }
-
-        // 2. 真实 HTTP 请求量 (Requests)
-        if (quotaRequestsCount) {
-            const r24 = workersQuota.realRequests24h || 0;
-            quotaRequestsCount.textContent = `${r24.toLocaleString()} 次 / 今日`;
-        }
-        if (quotaRequests30d) {
-            const r30 = workersQuota.realRequests30d || workersQuota.realRequests24h || 0;
-            quotaRequests30d.textContent = r30.toLocaleString();
-        }
-        if (quotaRequestsSourcePill) {
-            if (workersQuota.isLive) {
-                quotaRequestsSourcePill.innerHTML = '<i class="fa-solid fa-circle-check"></i> 官方实时';
-                quotaRequestsSourcePill.className = 'quota-status-pill healthy';
-            } else {
-                quotaRequestsSourcePill.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> 自测估算';
-                quotaRequestsSourcePill.className = 'quota-status-pill';
-            }
-        }
-
-        // 3. 遥测状态指示药丸
-        const telemetryBadge = document.getElementById('cf-telemetry-badge');
-        if (telemetryBadge) {
-            if (workersQuota.isLive) {
-                telemetryBadge.textContent = '官方实时连线';
-                telemetryBadge.className = 'quota-badge-pill healthy';
-            } else {
-                telemetryBadge.textContent = '运行估算模式';
-                telemetryBadge.className = 'quota-badge-pill';
-            }
-        }
-
-        // 4. 边缘运算卡片数值
-        const workersOps = document.getElementById('quota-workers-ops');
-        if (workersOps) {
-            const r24 = workersQuota.realRequests24h || 0;
-            const pct = Math.min(100, (r24 / 100000) * 100);
-            workersOps.textContent = `${r24.toLocaleString()} / 10 万次 (${pct < 0.01 ? '<0.01' : pct.toFixed(2)}%)`;
-        }
-
         if (cfRealDataBadge) {
             cfRealDataBadge.textContent = 'R2 & D1 实时直连';
             cfRealDataBadge.className = 'quota-badge-pill healthy';
         }
     }
 
-    // 渲染 Cloudflare 官方免费额度健康条与真实使用量
+    // 渲染 Cloudflare 官方免费额度健康条与真实使用量 (直观双引擎仪表盘)
     function renderQuotaHealth(quota) {
         if (!quota) return;
 
-        // 1. R2 存储空间进度条 (10 GB)
+        // 1. R2 存储空间仪表 (10 GB 永久免费)
         if (quota.r2) {
             const usedStr = formatBytes(quota.r2.usedBytes || 0);
-            const totalStr = formatBytes(quota.r2.totalBytes || 10737418240);
+            const totalBytes = quota.r2.totalBytes || 10737418240;
+            const totalStr = formatBytes(totalBytes);
+            const remainBytes = Math.max(0, totalBytes - (quota.r2.usedBytes || 0));
             const pct = Math.min(100, quota.r2.percent || 0.01);
 
             if (quotaR2UsedText) quotaR2UsedText.textContent = `${usedStr} / ${totalStr}`;
             if (quotaR2Percent) quotaR2Percent.textContent = `${pct < 0.01 ? '<0.01' : pct.toFixed(2)}%`;
             if (quotaR2Bar) {
                 quotaR2Bar.style.width = `${Math.max(1, pct)}%`;
-                quotaR2Bar.className = `quota-progress-bar-fill ${pct > 85 ? 'danger' : (pct > 70 ? 'warning' : 'healthy')}`;
+                quotaR2Bar.className = `cf-meter-fill r2-fill ${pct > 85 ? 'danger' : (pct > 70 ? 'warning' : 'healthy')}`;
+            }
+            const r2RemainEl = document.getElementById('quota-r2-remain-text');
+            if (r2RemainEl) {
+                r2RemainEl.textContent = `剩余 ${formatBytes(remainBytes)} (极充裕)`;
             }
         }
 
-        // 2. R2 协议写入 (Class A) 进度条 (100 万次/月)
+        // 2. R2 协议写入 (Class A) 仪表 (100 万次/月)
         if (quota.r2Writes) {
             const usedWrites = quota.r2Writes.usedWrites || 0;
             const totalWrites = quota.r2Writes.totalWrites || 1000000;
@@ -509,25 +456,31 @@
             }
             if (quotaR2WritesBar) {
                 quotaR2WritesBar.style.width = `${Math.max(1, pct)}%`;
-                quotaR2WritesBar.className = `quota-progress-bar-fill ${pct > 85 ? 'danger' : (pct > 70 ? 'warning' : 'healthy')}`;
+                quotaR2WritesBar.className = `cf-meter-fill writes-fill ${pct > 85 ? 'danger' : (pct > 70 ? 'warning' : 'healthy')}`;
             }
         }
 
-        // 3. D1 数据库存储容量 (5 GB)
+        // 3. D1 关系型数据库存储容量 (5 GB 永久免费)
         if (quota.d1) {
             const usedStr = formatBytes(quota.d1.usedBytes || 0);
-            const totalStr = formatBytes(quota.d1.totalBytes || 5368709120);
+            const totalBytes = quota.d1.totalBytes || 5368709120;
+            const totalStr = formatBytes(totalBytes);
+            const remainBytes = Math.max(0, totalBytes - (quota.d1.usedBytes || 0));
             const pct = Math.min(100, quota.d1.percent || 0.001);
 
             if (quotaD1UsedText) quotaD1UsedText.textContent = `${usedStr} / ${totalStr}`;
             if (quotaD1Percent) quotaD1Percent.textContent = `${pct < 0.01 ? '<0.01' : pct.toFixed(3)}%`;
             if (quotaD1Bar) {
                 quotaD1Bar.style.width = `${Math.max(1, pct)}%`;
-                quotaD1Bar.className = `quota-progress-bar-fill ${pct > 85 ? 'danger' : 'healthy'}`;
+                quotaD1Bar.className = `cf-meter-fill d1-fill ${pct > 85 ? 'danger' : 'healthy'}`;
+            }
+            const d1RemainEl = document.getElementById('quota-d1-remain-text');
+            if (d1RemainEl) {
+                d1RemainEl.textContent = `剩余 ${formatBytes(remainBytes)} (极充裕)`;
             }
         }
 
-        // 4. D1 账号数据库写入进度条 (10 万行/天)
+        // 4. D1 账号数据库写入仪表 (10 万行/天)
         if (quota.d1Writes) {
             const usedWrites = quota.d1Writes.usedWrites || 0;
             const totalWrites = quota.d1Writes.totalWrites || 100000;
@@ -545,7 +498,7 @@
             }
             if (quotaD1WritesBar) {
                 quotaD1WritesBar.style.width = `${Math.max(1, pct)}%`;
-                quotaD1WritesBar.className = `quota-progress-bar-fill ${pct > 85 ? 'danger' : 'healthy'}`;
+                quotaD1WritesBar.className = `cf-meter-fill rows-fill ${pct > 85 ? 'danger' : 'healthy'}`;
             }
         }
     }
@@ -565,6 +518,11 @@
 
         if (userCountBadge) {
             userCountBadge.textContent = filtered.length;
+        }
+
+        const tabUserCount = document.getElementById('admin-tab-user-count');
+        if (tabUserCount) {
+            tabUserCount.textContent = list.length;
         }
 
         if (filtered.length === 0) {
@@ -890,6 +848,19 @@
 
     function bindEvents() {
         initDOMElements();
+
+        // 管理后台顶部分段标签页切换 (系统监控与资源配额 vs 注册用户与权限明细)
+        const adminTabBtns = document.querySelectorAll('.admin-tab-btn');
+        adminTabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetTab = btn.getAttribute('data-admin-tab');
+                adminTabBtns.forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.admin-tab-pane').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                const targetPane = document.getElementById(`admin-tab-pane-${targetTab}`);
+                if (targetPane) targetPane.classList.add('active');
+            });
+        });
 
         if (btnRefreshAdmin) btnRefreshAdmin.addEventListener('click', loadAdminStats);
         if (btnRecheckBindings) btnRecheckBindings.addEventListener('click', loadAdminStats);

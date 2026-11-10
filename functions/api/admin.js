@@ -312,10 +312,12 @@ export async function onRequestGet(context) {
             }
 
             // 诊断 R2 / D1 / KV 存储桶与协议总数
+            // 诊断 R2 / D1 / KV 存储桶与协议精确统计 (严格区分通信协议与产品元数据)
             let totalProtocols = 0;
             let totalStorageBytes = 0;
             const userProtoMap = {};
             const typeDistribution = { ARINC429: 0, Serial: 0, CAN: 0, Other: 0 };
+            const seenProtoKeys = new Set();
 
             const r2Status = {
                 connected: !!bucket,
@@ -323,26 +325,29 @@ export async function onRequestGet(context) {
                 ready: !!bucket || !!db
             };
 
+            // 1. 扫描 R2 对象存储桶
             if (bucket) {
                 try {
                     const listed = await bucket.list({ prefix: "ws:" });
                     for (const obj of (listed.objects || [])) {
-                        totalProtocols++;
+                        // 所有 R2 存储对象 (包含协议与产品元数据) 均计入 R2 存储空间占用
                         totalStorageBytes += (obj.size || 0);
 
-                        const match = obj.key.match(/^ws:([^:]+):proto:/i);
+                        // 只有符合协议前缀模式 ws:{username}:proto:{name} 的才判定为通信协议
+                        const match = obj.key.match(/^ws:([^:]+):proto:(.+)$/i);
                         if (match) {
+                            seenProtoKeys.add(obj.key);
                             const u = match[1].toLowerCase();
                             if (!userProtoMap[u]) userProtoMap[u] = { count: 0, bytes: 0 };
                             userProtoMap[u].count++;
                             userProtoMap[u].bytes += (obj.size || 0);
-                        }
 
-                        const type = obj.customMetadata?.type || "ARINC429";
-                        if (typeDistribution[type] !== undefined) {
-                            typeDistribution[type]++;
-                        } else {
-                            typeDistribution.Other++;
+                            const type = obj.customMetadata?.type || "ARINC429";
+                            if (typeDistribution[type] !== undefined) {
+                                typeDistribution[type]++;
+                            } else {
+                                typeDistribution.Other++;
+                            }
                         }
                     }
                 } catch (e) {
@@ -350,47 +355,57 @@ export async function onRequestGet(context) {
                 }
             }
 
-            // 若 R2 统计到的协议数为 0，且 D1 存在 protocols 表，则从 D1 统计协议
-            if (totalProtocols === 0 && db && d1Status.hasProtocolsTable) {
+            // 2. 扫描 D1 数据库协议表 (补充未存入 R2 或仅在 D1 持久化的协议，基于 key 去重)
+            if (db && d1Status.hasProtocolsTable) {
                 try {
-                    const d1ProtoRows = await db.prepare("SELECT username, type, LENGTH(data) as size FROM protocols").all();
+                    const d1ProtoRows = await db.prepare("SELECT key, username, type, LENGTH(data) as size FROM protocols").all();
                     for (const row of (d1ProtoRows.results || [])) {
-                        totalProtocols++;
-                        totalStorageBytes += (row.size || 0);
-                        const u = (row.username || "").toLowerCase();
-                        if (!userProtoMap[u]) userProtoMap[u] = { count: 0, bytes: 0 };
-                        userProtoMap[u].count++;
-                        userProtoMap[u].bytes += (row.size || 0);
+                        const pKey = row.key || `ws:${(row.username || 'default').toLowerCase()}:proto:unnamed`;
+                        if (!seenProtoKeys.has(pKey)) {
+                            seenProtoKeys.add(pKey);
+                            if (!bucket) {
+                                totalStorageBytes += (row.size || 0);
+                            }
+                            const u = (row.username || "").toLowerCase();
+                            if (!userProtoMap[u]) userProtoMap[u] = { count: 0, bytes: 0 };
+                            userProtoMap[u].count++;
+                            userProtoMap[u].bytes += (row.size || 0);
 
-                        const type = row.type || "ARINC429";
-                        if (typeDistribution[type] !== undefined) {
-                            typeDistribution[type]++;
-                        } else {
-                            typeDistribution.Other++;
+                            const type = row.type || "ARINC429";
+                            if (typeDistribution[type] !== undefined) {
+                                typeDistribution[type]++;
+                            } else {
+                                typeDistribution.Other++;
+                            }
                         }
                     }
-                    if (totalProtocols > 0) {
+                    if (seenProtoKeys.size > 0 && !bucket) {
                         r2Status.engine = "D1";
                     }
                 } catch (e) {
                     console.warn("D1 协议统计异常:", e.message);
                 }
-            } else if (kv) {
+            } else if (kv && seenProtoKeys.size === 0) {
+                // 3. 扫描 KV 备选
                 try {
                     const listed = await kv.list({ prefix: "ws:" });
-                    totalProtocols = (listed.keys || []).length;
                     for (const k of (listed.keys || [])) {
-                        const match = k.name.match(/^ws:([^:]+):proto:/i);
+                        const match = k.name.match(/^ws:([^:]+):proto:(.+)$/i);
                         if (match) {
+                            seenProtoKeys.add(k.name);
                             const u = match[1].toLowerCase();
                             if (!userProtoMap[u]) userProtoMap[u] = { count: 0, bytes: 0 };
                             userProtoMap[u].count++;
                             userProtoMap[u].bytes += 50000;
+                            totalStorageBytes += 50000;
+                            typeDistribution.ARINC429++;
                         }
                     }
-                    totalStorageBytes = totalProtocols * 50000;
                 } catch (e) {}
             }
+
+            // 核心修复：全站协议总数严格等于去重后的协议集合大小，与用户详情列表 100% 保持一致
+            totalProtocols = seenProtoKeys.size;
 
             // 统计产品型号总数
             let totalProducts = 0;
@@ -432,12 +447,9 @@ export async function onRequestGet(context) {
             // 抓取 Cloudflare 官方 API 实时流量与请求数据
             const cfLiveMetrics = await getCloudflareLiveMetrics(cfToken, cfAccountId, cfZoneId, cfR2Bucket);
             if (cfLiveMetrics.isLive && cfLiveMetrics.r2Usage) {
-                // 若官方 R2 接口返回了精确计量值，采用官方值
+                // 若官方 R2 接口返回了精确存储容量计量值，采用官方值 (注：不得覆盖 totalProtocols，因 R2 objectCount 包含非协议元数据)
                 if (cfLiveMetrics.r2Usage.payloadSize) {
                     totalStorageBytes = cfLiveMetrics.r2Usage.payloadSize;
-                }
-                if (cfLiveMetrics.r2Usage.objectCount) {
-                    totalProtocols = cfLiveMetrics.r2Usage.objectCount;
                 }
             }
 
