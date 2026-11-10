@@ -53,11 +53,7 @@ let d1ProductsTableReady = false;
 async function ensureD1ProductsTable(db) {
     if (d1ProductsTableReady || !db) return;
     try {
-        await db.prepare(`CREATE TABLE IF NOT EXISTS user_products (
-            username TEXT PRIMARY KEY,
-            data TEXT NOT NULL,
-            updated_at INTEGER NOT NULL
-        )`).run();
+        await db.prepare("CREATE TABLE IF NOT EXISTS user_products (username TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)").run();
         d1ProductsTableReady = true;
     } catch (e) {
         console.warn("D1 user_products 表初始化提示:", e.message);
@@ -76,17 +72,14 @@ async function getAuthenticatedUser(request, env) {
     if (db) {
         try {
             const now = Date.now();
-            const row = await db.prepare(
-                `SELECT s.username, u.created_at
-                 FROM sessions s
-                 JOIN users u ON s.username = u.username
-                 WHERE s.token = ? AND s.expires_at > ?`
-            ).bind(token, now).first();
-
-            if (row) {
+            let row = await db.prepare("SELECT s.username, u.created_at FROM sessions s JOIN users u ON s.username = u.username WHERE s.token = ? AND s.expires_at > ?").bind(token, now).first();
+            if (!row) {
+                row = await db.prepare("SELECT username FROM sessions WHERE token = ? AND expires_at > ?").bind(token, now).first();
+            }
+            if (row && row.username) {
                 return {
                     username: row.username,
-                    createdAt: row.created_at
+                    createdAt: row.created_at || now
                 };
             }
         } catch (e) {
@@ -317,9 +310,7 @@ export async function onRequestPost(context) {
         // 2. 同步存入 D1
         if (db) {
             try {
-                await db.prepare(
-                    `INSERT OR REPLACE INTO user_products (username, data, updated_at) VALUES (?, ?, ?)`
-                ).bind(workspace, payloadStr, Date.now()).run();
+                await db.prepare("INSERT OR REPLACE INTO user_products (username, data, updated_at) VALUES (?, ?, ?)").bind(workspace, payloadStr, Date.now()).run();
                 if (primaryEngine === "none") primaryEngine = "D1";
             } catch (d1Err) {
                 console.warn("D1 保存产品列表异常:", d1Err.message);
@@ -416,9 +407,7 @@ export async function onRequestDelete(context) {
     }
     if (db) {
         try {
-            await db.prepare(
-                `INSERT OR REPLACE INTO user_products (username, data, updated_at) VALUES (?, ?, ?)`
-            ).bind(workspace, payloadStr, Date.now()).run();
+            await db.prepare("INSERT OR REPLACE INTO user_products (username, data, updated_at) VALUES (?, ?, ?)").bind(workspace, payloadStr, Date.now()).run();
         } catch (e) {}
     }
     if (kv) {

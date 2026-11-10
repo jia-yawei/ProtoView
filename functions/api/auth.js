@@ -120,12 +120,10 @@ export async function onRequestGet(context) {
             try {
                 await ensureD1Tables(db);
                 const now = Date.now();
-                const sessionRow = await db.prepare(
-                    `SELECT s.token, s.username, s.expires_at, u.created_at
-                     FROM sessions s
-                     JOIN users u ON s.username = u.username
-                     WHERE s.token = ? AND s.expires_at > ?`
-                ).bind(token, now).first();
+                let sessionRow = await db.prepare("SELECT s.token, s.username, s.expires_at, u.created_at FROM sessions s JOIN users u ON s.username = u.username WHERE s.token = ? AND s.expires_at > ?").bind(token, now).first();
+                if (!sessionRow) {
+                    sessionRow = await db.prepare("SELECT token, username, expires_at, created_at FROM sessions WHERE token = ? AND expires_at > ?").bind(token, now).first();
+                }
 
                 if (!sessionRow) {
                     return new Response(JSON.stringify({ success: false, error: "登录已失效，请重新登录" }), {

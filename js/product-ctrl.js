@@ -1281,14 +1281,20 @@
                 await window.dbHelper.saveProduct({ name, code, desc, softwareItems });
 
                 // 立即持久化同步到云端 (支持即便当前没有任何协议，产品型号也能独立持久化)
+                let cloudRes = { ok: true };
                 if (ProtoView.WorkspaceSync && ProtoView.WorkspaceSync.syncProductsToCloud) {
-                    await ProtoView.WorkspaceSync.syncProductsToCloud();
+                    cloudRes = await ProtoView.WorkspaceSync.syncProductsToCloud();
                 }
 
                 if (productManageModal) productManageModal.classList.remove('active');
                 await refreshProductDatalist();
                 await loadProtocols();
-                showToast(`产品型号「${name}」已保存并同步至云端！`, 'success');
+
+                if (cloudRes && cloudRes.ok) {
+                    showToast(`产品型号「${name}」已保存并同步至云端！`, 'success');
+                } else {
+                    alert(`【警告】产品型号「${name}」在本地保存成功，但同步至云端数据库受阻：\n${cloudRes ? cloudRes.error : '未知异常'}\n\n请检查 Cloudflare 数据库/存储桶连接。`);
+                }
             });
         }
 

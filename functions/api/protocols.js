@@ -53,17 +53,9 @@ let d1ProtocolsTableReady = false;
 async function ensureD1ProtocolsTable(db) {
     if (d1ProtocolsTableReady || !db) return;
     try {
-        await db.prepare(`CREATE TABLE IF NOT EXISTS protocols (
-            key TEXT PRIMARY KEY,
-            username TEXT NOT NULL,
-            name TEXT NOT NULL,
-            type TEXT NOT NULL DEFAULT 'ARINC429',
-            product TEXT DEFAULT '',
-            data TEXT NOT NULL,
-            updated_at INTEGER NOT NULL
-        )`).run();
+        await db.prepare("CREATE TABLE IF NOT EXISTS protocols (key TEXT PRIMARY KEY, username TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'ARINC429', product TEXT DEFAULT '', data TEXT NOT NULL, updated_at INTEGER NOT NULL)").run();
         try {
-            await db.prepare(`CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username)`).run();
+            await db.prepare("CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username)").run();
         } catch (ie) {}
         d1ProtocolsTableReady = true;
     } catch (e) {
@@ -84,17 +76,14 @@ async function getAuthenticatedUser(request, env) {
     if (db) {
         try {
             const now = Date.now();
-            const row = await db.prepare(
-                `SELECT s.username, u.created_at
-                 FROM sessions s
-                 JOIN users u ON s.username = u.username
-                 WHERE s.token = ? AND s.expires_at > ?`
-            ).bind(token, now).first();
-
-            if (row) {
+            let row = await db.prepare("SELECT s.username, u.created_at FROM sessions s JOIN users u ON s.username = u.username WHERE s.token = ? AND s.expires_at > ?").bind(token, now).first();
+            if (!row) {
+                row = await db.prepare("SELECT username FROM sessions WHERE token = ? AND expires_at > ?").bind(token, now).first();
+            }
+            if (row && row.username) {
                 return {
                     username: row.username,
-                    createdAt: row.created_at
+                    createdAt: row.created_at || now
                 };
             }
         } catch (e) {
@@ -298,9 +287,7 @@ export async function onRequestGet(context) {
     // 2.2 从 D1 数据库列举 (当 R2 为空或未绑定时提供无缝存储)
     if (db) {
         try {
-            const rows = await db.prepare(
-                `SELECT key, name, type, product, data, updated_at FROM protocols WHERE username = ? ORDER BY updated_at DESC`
-            ).bind(workspace).all();
+            const rows = await db.prepare("SELECT key, name, type, product, data, updated_at FROM protocols WHERE username = ? ORDER BY updated_at DESC").bind(workspace).all();
 
             for (const row of (rows.results || [])) {
                 let parsed = null;
@@ -503,9 +490,7 @@ export async function onRequestPost(context) {
         // 2. 同步写入 Cloudflare D1 数据库 (作为强力冗余或无 R2 时的绝对持久化)
         if (db) {
             try {
-                await db.prepare(
-                    `INSERT OR REPLACE INTO protocols (key, username, name, type, product, data, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-                ).bind(key, workspace, body.name, body.type || 'ARINC429', body.product || '', payloadStr, Date.now()).run();
+                await db.prepare("INSERT OR REPLACE INTO protocols (key, username, name, type, product, data, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(key, workspace, body.name, body.type || 'ARINC429', body.product || '', payloadStr, Date.now()).run();
                 if (primaryEngine === "none") primaryEngine = "D1";
             } catch (d1Err) {
                 console.warn("D1 协议写入异常:", d1Err.message);
