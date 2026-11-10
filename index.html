@@ -234,48 +234,122 @@
                 </div>
             </section>
 
+            <!-- 视图 2：协议只读查阅与规范速查中心 (极致可读性，秒级定位字段定义与位域拓扑) -->
+            <section id="protocol-viewer-view" class="view-section">
+                <!-- 查阅中心顶部工具栏 -->
+                <header class="viewer-dense-toolbar">
+                    <div class="viewer-tb-left">
+                        <button type="button" class="dense-btn" id="btn-viewer-back" title="返回协议管理列表">
+                            <i class="fa-solid fa-arrow-left"></i> 列表
+                        </button>
+                        <div class="viewer-title-group">
+                            <span class="viewer-proto-title" id="viewer-proto-title">通信协议</span>
+                            <span class="viewer-badge-product" id="viewer-product-badge" style="display:none;"></span>
+                            <span class="viewer-type-pill" id="viewer-type-badge">ARINC 429</span>
+                            <span class="viewer-readonly-tag"><i class="fa-solid fa-eye"></i> 只读查阅模式</span>
+                        </div>
+                    </div>
+
+                    <!-- 顶部中央：全局/包内即时字段查找搜索框 (秒级定位核心) -->
+                    <div class="viewer-tb-search">
+                        <div class="viewer-search-wrapper">
+                            <i class="fa-solid fa-magnifying-glass viewer-search-icon"></i>
+                            <input type="text" id="viewer-field-search" class="viewer-search-input" placeholder="输入字段名、位段(如 B12)、八进制(如 203)、单位或枚举释义秒级查找..." autocomplete="off">
+                            <button type="button" class="viewer-search-clear" id="btn-clear-viewer-search" style="display:none;" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <span class="viewer-match-pill" id="viewer-match-count" style="display:none;"></span>
+                    </div>
+
+                    <!-- 顶部右侧：数据包切换、导出与一键切换编辑工作台 -->
+                    <div class="viewer-tb-actions">
+                        <select id="viewer-packet-select" class="dense-select-xs" style="display:none;" title="切换数据包"></select>
+                        <button type="button" class="dense-btn" id="btn-viewer-export-md" title="导出为标准 Markdown 格式规范文档"><i class="fa-solid fa-file-arrow-down"></i> 导出规范</button>
+                        <button type="button" class="dense-btn" id="btn-viewer-print" title="打印或导出 PDF 规格书卡片"><i class="fa-solid fa-print"></i> 打印卡片</button>
+                        <button type="button" class="dense-btn dense-btn-primary" id="btn-viewer-edit-workbench" title="切换到编辑工作台以修改协议定义与标号字"><i class="fa-solid fa-pen-ruler"></i> 进入编辑工作台</button>
+                    </div>
+                </header>
+
+                <!-- 查阅中心主工作区 (双栏布局：左侧导航目录 + 右侧工程规格书阅读器) -->
+                <div class="viewer-main-container">
+                    <!-- 左侧：标号字 / 字节导航清单 -->
+                    <aside class="viewer-catalog-panel">
+                        <div class="viewer-catalog-header">
+                            <span class="viewer-catalog-title"><i class="fa-solid fa-layer-group"></i> 协议字目录导航</span>
+                        </div>
+                        <div class="viewer-catalog-list" id="viewer-words-catalog">
+                            <!-- JS 动态渲染各标号字卡片 -->
+                        </div>
+                    </aside>
+
+                    <!-- 右侧：选中的标号字完整 ICD 规格书 -->
+                    <main class="viewer-reader-deck">
+                        <!-- 标号字摘要头 -->
+                        <div class="viewer-active-word-card glass-effect" id="viewer-active-word-header"></div>
+
+                        <!-- 32-Bit 传输位域全景映射图 -->
+                        <div class="viewer-bit-bar-container" id="viewer-bit-bar-container"></div>
+
+                        <!-- 字段工程规格明细列表 -->
+                        <div class="viewer-fields-section">
+                            <div class="viewer-fields-header">
+                                <span class="viewer-fields-title"><i class="fa-solid fa-table-list"></i> 字段工程规格定义表</span>
+                                <span class="viewer-fields-hint"><i class="fa-solid fa-mouse-pointer"></i> 悬浮位图可快速定位字段，点击复制字段名称</span>
+                            </div>
+                            <div class="viewer-fields-list" id="viewer-fields-list">
+                                <!-- 字段卡片列表 -->
+                            </div>
+                        </div>
+
+                        <!-- SDI / SSM 常驻速查参考卡片 -->
+                        <div class="viewer-sdi-ssm-card glass-effect" id="viewer-sdi-ssm-card" style="display:none;"></div>
+                    </main>
+                </div>
+            </section>
+
             <!-- 视图 3：ARINC 429 航电通信协议编辑工作台 (高数据密度工程视图) -->
             <section id="arinc429-view" class="view-section">
                 <!-- 极简高密度顶部工具栏 (约42px高度，精简对齐串口视图) -->
                 <header class="arinc-dense-toolbar">
                     <div class="dense-tb-left">
-                        <button type="button" class="dense-btn" id="btn-arinc-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 协议列表</button>
+                        <button type="button" class="dense-btn" id="btn-arinc-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 列表</button>
                         <span class="dense-tb-title" id="toolbar-proto-title" title="ARINC 429 通信协议"><i class="fa-solid fa-plane-departure" style="color: var(--accent-color);"></i> 429 协议</span>
                     </div>
 
-                    <!-- 顶部中央：429 数据包切换与管理 (支持多包：一包协议要么发送要么接收，严格单向不共存) -->
+                    <!-- 顶部中央：429 数据包切换与管理 (精简高密度，消除视觉拥挤) -->
                     <div class="dense-tb-packet-selector" id="arinc-packet-selector-strip">
-                        <label>
-                            <i class="fa-solid fa-box-archive" style="color: var(--accent-color);"></i> 数据包:
-                        </label>
-                        <select id="arinc-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 130px; max-width: 185px;" title="切换当前编辑的 429 数据包"></select>
+                        <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px;" title="429 数据包切换">
+                            <i class="fa-solid fa-box-archive"></i>
+                        </span>
+                        <select id="arinc-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 110px; max-width: 165px;" title="切换当前编辑的 429 数据包"></select>
                         <button type="button" class="dense-btn dense-btn-xs" id="btn-add-arinc-packet" title="添加新数据包"><i class="fa-solid fa-plus"></i> 新包</button>
                         <button type="button" class="dense-btn dense-btn-xs" id="btn-duplicate-arinc-packet" title="克隆当前数据包及其标号字"><i class="fa-solid fa-copy"></i></button>
                         <button type="button" class="dense-btn dense-btn-danger dense-btn-xs" id="btn-delete-arinc-packet" title="删除当前数据包"><i class="fa-solid fa-trash"></i></button>
 
                         <span class="dense-tb-divider"></span>
 
-                        <div class="dense-form-item">
-                            <label>方向:</label>
-                            <select id="arinc-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 75px;" title="该包通信方向 (严格单向：要么发送要么接收，绝不共存)">
+                        <div class="dense-form-item" title="该包通信方向 (严格单向：要么发送要么接收)">
+                            <select id="arinc-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 68px;">
                                 <option value="Tx">Tx (发)</option>
                                 <option value="Rx">Rx (收)</option>
                             </select>
                         </div>
-                        <div class="dense-form-item" id="arinc-packet-period-item">
-                            <label>发送周期:</label>
-                            <input type="number" id="arinc-packet-period" class="dense-input-xs" style="width: 55px;" min="1" max="10000" placeholder="20" title="发送数据包通讯周期 (ms)">
+                        <div class="dense-form-item" id="arinc-packet-period-item" title="发送通讯周期 (ms)">
+                            <label for="arinc-packet-period" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 2px;">
+                                <i class="fa-regular fa-clock" style="color: var(--text-secondary); font-size: 11px;"></i>
+                                <span style="font-size: 11px;">周期:</span>
+                            </label>
+                            <input type="number" id="arinc-packet-period" class="dense-input-xs" style="width: 48px;" min="1" max="10000" placeholder="20">
                             <span style="font-size: 11px; color: var(--text-secondary);">ms</span>
                         </div>
                         <div class="dense-form-item">
-                            <label>包名:</label>
-                            <input type="text" id="arinc-packet-name" class="dense-input-xs" style="width: 130px;" placeholder="数据包名称" title="当前 429 数据包业务名称 (如: 主航电发送包 / 传感器接收包)">
+                            <input type="text" id="arinc-packet-name" class="dense-input-xs" style="width: 105px;" placeholder="数据包名称" title="当前 429 数据包业务名称 (如: 主航电发送包 / 传感器接收包)">
                         </div>
                     </div>
 
                     <div class="dense-tb-actions">
-                        <button type="button" class="dense-btn" id="btn-arinc-check" title="对当前协议进行静态合规与健康度全面体检"><i class="fa-solid fa-stethoscope" style="color:var(--accent-color);"></i> 协议检查</button>
-                        <button type="button" class="dense-btn" id="btn-view-arinc-props" title="查看或修改当前协议属性"><i class="fa-solid fa-sliders"></i> 协议属性</button>
+                        <button type="button" class="dense-btn" id="btn-arinc-switch-viewer" onclick="window.openProtocolViewer && window.openProtocolViewer(window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Arinc && window.ProtoView.Controllers.Arinc.getCurrentProtocol() ? window.ProtoView.Controllers.Arinc.getCurrentProtocol().id : '')" title="切换至只读查阅模式：清晰查看位域拓扑与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
+                        <button type="button" class="dense-btn" id="btn-arinc-check" title="对当前协议进行静态合规与健康度全面体检"><i class="fa-solid fa-stethoscope" style="color:var(--accent-color);"></i> 检查</button>
+                        <button type="button" class="dense-btn" id="btn-view-arinc-props" title="查看或修改当前协议属性"><i class="fa-solid fa-sliders"></i> 属性</button>
                         <input type="file" id="arinc-file-input" accept=".json" style="display:none">
                         <button type="button" class="dense-btn" id="btn-arinc-export" title="导出为电脑本地 .json 协议文件"><i class="fa-solid fa-download"></i> 导出</button>
                         <button type="button" class="dense-btn dense-btn-primary" id="btn-arinc-save" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
@@ -300,18 +374,18 @@
                             <span class="dense-panel-title">
                                 <i class="fa-solid fa-list"></i> 标号字列表 (<span id="words-count-badge">0</span>)
                             </span>
-                            <button class="dense-btn dense-btn-primary dense-btn-xs" id="btn-add-word">
-                                <i class="fa-solid fa-plus"></i> 添加字
-                            </button>
-                        </div>
-
-                        <!-- 搜索与标号字排序工具栏 -->
-                        <div class="dense-filter-strip">
-                            <input type="text" id="arinc-word-search" class="dense-input-sm" placeholder="搜索标号/字名/字段名..." style="flex: 1; min-width: 90px;">
-                            <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                            <div class="dense-panel-actions" style="display: flex; gap: 4px; align-items: center;">
+                                <button class="dense-btn dense-btn-primary dense-btn-xs" id="btn-add-word" title="添加新的 429 标号字">
+                                    <i class="fa-solid fa-plus"></i> 添加字
+                                </button>
                                 <button type="button" class="dense-btn dense-btn-xs" id="btn-move-word-up" onclick="if(window.moveArincWord){window.moveArincWord(-1);}" title="上移当前选中的标号字"><i class="fa-solid fa-arrow-up"></i> 上移</button>
                                 <button type="button" class="dense-btn dense-btn-xs" id="btn-move-word-down" onclick="if(window.moveArincWord){window.moveArincWord(1);}" title="下移当前选中的标号字"><i class="fa-solid fa-arrow-down"></i> 下移</button>
                             </div>
+                        </div>
+
+                        <!-- 搜索与标号字排序工具栏 (输入框独占整行，清爽无遮挡防误触) -->
+                        <div class="dense-filter-strip">
+                            <input type="text" id="arinc-word-search" class="dense-input-sm" placeholder="搜索标号/字名/字段名..." style="width: 100%;">
                         </div>
 
                         <!-- 高密度字表格容器 -->
@@ -492,42 +566,44 @@
                 <!-- 极简高密度顶部工具栏 (约42px高度) -->
                 <header class="arinc-dense-toolbar">
                     <div class="dense-tb-left">
-                        <button type="button" class="dense-btn" id="btn-serial-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 协议列表</button>
+                        <button type="button" class="dense-btn" id="btn-serial-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 列表</button>
                         <span class="dense-tb-title" id="serial-toolbar-proto-title" title="串口总线通信协议"><i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 串口协议</span>
                     </div>
 
-                    <!-- 顶部中央：当前数据包切换下拉与包名/发送周期定义 -->
+                    <!-- 顶部中央：当前数据包切换下拉与包名/发送周期定义 (精简高密度，消除视觉拥挤) -->
                     <div class="dense-tb-packet-selector" id="serial-packet-selector-strip">
-                        <label>
-                            <i class="fa-solid fa-box-archive" style="color: var(--accent-color);"></i> 数据包:
-                        </label>
-                        <select id="serial-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 130px; max-width: 185px;" title="切换当前编辑的数据包"></select>
+                        <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px;" title="串口数据包切换">
+                            <i class="fa-solid fa-box-archive"></i>
+                        </span>
+                        <select id="serial-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 110px; max-width: 165px;" title="切换当前编辑的数据包"></select>
                         <button type="button" class="dense-btn dense-btn-xs" id="btn-add-serial-packet" title="添加新数据包"><i class="fa-solid fa-plus"></i> 新包</button>
                         <button type="button" class="dense-btn dense-btn-xs" id="btn-duplicate-serial-packet" title="克隆当前数据包"><i class="fa-solid fa-copy"></i></button>
                         <button type="button" class="dense-btn dense-btn-danger dense-btn-xs" id="btn-delete-serial-packet" title="删除当前数据包"><i class="fa-solid fa-trash"></i></button>
 
                         <span class="dense-tb-divider"></span>
 
-                        <div class="dense-form-item">
-                            <label>方向:</label>
-                            <select id="serial-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 75px;" title="该包通信方向 (严格单向：要么发送要么接收)">
+                        <div class="dense-form-item" title="该包通信方向 (严格单向：要么发送要么接收)">
+                            <select id="serial-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 68px;">
                                 <option value="Tx">Tx (发)</option>
                                 <option value="Rx">Rx (收)</option>
                             </select>
                         </div>
-                        <div class="dense-form-item" id="serial-packet-period-item">
-                            <label>发送周期:</label>
-                            <input type="number" id="serial-packet-period" class="dense-input-xs" style="width: 55px;" min="1" max="10000" placeholder="20" title="发送数据包通讯周期 (ms)">
+                        <div class="dense-form-item" id="serial-packet-period-item" title="发送通讯周期 (ms)">
+                            <label for="serial-packet-period" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 2px;">
+                                <i class="fa-regular fa-clock" style="color: var(--text-secondary); font-size: 11px;"></i>
+                                <span style="font-size: 11px;">周期:</span>
+                            </label>
+                            <input type="number" id="serial-packet-period" class="dense-input-xs" style="width: 48px;" min="1" max="10000" placeholder="20">
                             <span style="font-size: 11px; color: var(--text-secondary);">ms</span>
                         </div>
                         <div class="dense-form-item">
-                            <label>包名:</label>
-                            <input type="text" id="serial-packet-name" class="dense-input-xs" style="width: 130px;" placeholder="数据包名称" title="当前数据包业务名称 (如 遥测状态上报包)">
+                            <input type="text" id="serial-packet-name" class="dense-input-xs" style="width: 105px;" placeholder="数据包名称" title="当前数据包业务名称 (如 遥测状态上报包)">
                         </div>
                     </div>
 
                     <div class="dense-tb-actions">
-                        <button type="button" class="dense-btn" id="btn-view-serial-props" title="查看或修改串口物理参数 (接口类型、波特率、校验、周期等)"><i class="fa-solid fa-sliders"></i> 协议属性</button>
+                        <button type="button" class="dense-btn" id="btn-serial-switch-viewer" onclick="window.openProtocolViewer && window.openProtocolViewer(window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Serial && window.ProtoView.Controllers.Serial.getCurrentProtocol() ? window.ProtoView.Controllers.Serial.getCurrentProtocol().id : '')" title="切换至只读查阅模式：清晰查看数据包字节与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
+                        <button type="button" class="dense-btn" id="btn-view-serial-props" title="查看或修改串口物理参数 (接口类型、波特率、校验、周期等)"><i class="fa-solid fa-sliders"></i> 属性</button>
                         <button type="button" class="dense-btn" id="btn-serial-export-json" title="导出为电脑本地 .json 协议文件"><i class="fa-solid fa-download"></i> 导出</button>
                         <button type="button" class="dense-btn dense-btn-primary" id="btn-serial-save" onclick="window.saveCurrentSerialProtocol && window.saveCurrentSerialProtocol()" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                     </div>
@@ -551,21 +627,19 @@
                             <span class="dense-panel-title">
                                 <i class="fa-solid fa-list-ol"></i> 字节序 (<span id="serial-bytes-count-badge">0</span> 字节)
                             </span>
-                            <div style="display: flex; gap: 4px;">
-                                <button type="button" class="dense-btn dense-btn-xs" id="btn-serial-auto-offsets" onclick="if(window.autoAssignSerialOffsets){window.autoAssignSerialOffsets();}else{console.warn('autoAssignSerialOffsets未就绪');}" title="按照列表当前顺序重新紧凑分配起始偏移 (消除重叠与空洞)"><i class="fa-solid fa-arrow-down-1-9"></i> 顺排偏移</button>
+                            <div class="dense-panel-actions" style="display: flex; gap: 4px; align-items: center;">
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-serial-auto-offsets" onclick="if(window.autoAssignSerialOffsets){window.autoAssignSerialOffsets();}else{console.warn('autoAssignSerialOffsets未就绪');}" title="按照列表当前顺序重新紧凑分配起始偏移 (消除重叠与空洞)"><i class="fa-solid fa-arrow-down-1-9"></i> 顺排</button>
                                 <button type="button" class="dense-btn dense-btn-primary dense-btn-xs" id="btn-add-serial-byte" onclick="window.addSerialByte && window.addSerialByte();">
                                     <i class="fa-solid fa-plus"></i> 添加字节
                                 </button>
-                            </div>
-                        </div>
-
-                        <!-- 搜索与字节排序工具栏 -->
-                        <div class="dense-filter-strip">
-                            <input type="text" id="serial-byte-search" class="dense-input-sm" placeholder="搜索偏移/字节名/字段名..." style="flex: 1; min-width: 90px;">
-                            <div style="display: flex; gap: 4px; flex-shrink: 0;">
                                 <button type="button" class="dense-btn dense-btn-xs" id="btn-move-byte-up" onclick="if(window.moveSerialField){window.moveSerialField(-1);}" title="上移当前选中的字节"><i class="fa-solid fa-arrow-up"></i> 上移</button>
                                 <button type="button" class="dense-btn dense-btn-xs" id="btn-move-byte-down" onclick="if(window.moveSerialField){window.moveSerialField(1);}" title="下移当前选中的字节"><i class="fa-solid fa-arrow-down"></i> 下移</button>
                             </div>
+                        </div>
+
+                        <!-- 搜索与字节排序工具栏 (输入框独占整行，清爽无遮挡防误触) -->
+                        <div class="dense-filter-strip">
+                            <input type="text" id="serial-byte-search" class="dense-input-sm" placeholder="搜索偏移/字节名/字段名..." style="width: 100%;">
                         </div>
 
                         <!-- 高密度字节表格容器 -->
@@ -1608,6 +1682,7 @@ CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
     <script src="js/arinc-ctrl.js"></script>
     <script src="js/serial-ctrl.js"></script>
     <script src="js/admin-ctrl.js"></script>
+    <script src="js/viewer-ctrl.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

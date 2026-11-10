@@ -408,7 +408,7 @@
     function createProtocolCardElement(p) {
         const card = document.createElement('div');
         card.className = 'card glass-effect protocol-card';
-        card.title = '点击进入编辑；按住可拖动至任意产品卡片或上方产品标签进行归类';
+        card.title = '点击进入只读查阅模式；按住可拖动至任意产品卡片或上方产品标签进行归类';
         card.draggable = true;
         card.setAttribute('data-protocol-id', p.id);
         card.setAttribute('data-current-product', p.product || '');
@@ -437,7 +437,7 @@
             if (e.target.closest('.protocol-actions') || e.target.closest('button')) {
                 return;
             }
-            openProtocolWorkbench(p.id);
+            openProtocolViewer(p.id);
         });
 
         const productName = (p.product || '').trim();
@@ -472,8 +472,9 @@
                     ${escapeHTML(p.description || '机载 ARINC 429 航空总线通信协议')}
                 </p>
                 <div class="protocol-actions">
-                    <button type="button" class="btn btn-sm btn-proto-open" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入协议工作台编辑标号字与字段"><i class="fa-solid fa-folder-open"></i> 打开</button>
-                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="编辑协议属性 (名称、产品型号、周期、速率等)"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-view" onclick="window.openProtocolViewer && window.openProtocolViewer('${p.id}')" title="进入只读查阅模式：清晰查看位域拓扑、字段定义与规格书"><i class="fa-solid fa-eye"></i> 查阅</button>
+                    <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入工程工作台编辑标号字与字段"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、周期、速率等)"><i class="fa-solid fa-sliders"></i> 属性</button>
                     <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById && window.exportProtocolById('${p.id}')" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
                     <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
                 </div>
@@ -507,8 +508,9 @@
                     ${escapeHTML(p.description || '工业/航电标准串口通信协议 (UART / RS422 / RS485)')}
                 </p>
                 <div class="protocol-actions">
-                    <button type="button" class="btn btn-sm btn-proto-open" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入串口工作台编辑数据包与字段"><i class="fa-solid fa-folder-open"></i> 打开</button>
-                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="编辑协议属性 (名称、产品型号、波特率等)"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-view" onclick="window.openProtocolViewer && window.openProtocolViewer('${p.id}')" title="进入只读查阅模式：清晰查看数据包字节与规格书"><i class="fa-solid fa-eye"></i> 查阅</button>
+                    <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入串口工作台编辑数据包与字段"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、波特率等)"><i class="fa-solid fa-sliders"></i> 属性</button>
                     <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById && window.exportProtocolById('${p.id}')" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
                     <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
                 </div>
@@ -533,8 +535,9 @@
                     ${escapeHTML(p.description || '工业总线通信协议')}
                 </p>
                 <div class="protocol-actions">
-                    <button type="button" class="btn btn-sm btn-proto-open" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入工作台编辑报文与信号"><i class="fa-solid fa-folder-open"></i> 打开</button>
-                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="编辑协议属性 (名称、产品型号、周期等)"><i class="fa-solid fa-pen-to-square"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-view" onclick="window.openProtocolViewer && window.openProtocolViewer('${p.id}')" title="进入只读查阅模式：清晰查看通信报文与规格书"><i class="fa-solid fa-eye"></i> 查阅</button>
+                    <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入工作台编辑报文与信号"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
+                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、周期等)"><i class="fa-solid fa-sliders"></i> 属性</button>
                     <button type="button" class="btn btn-sm btn-proto-export" onclick="window.exportProtocolById && window.exportProtocolById('${p.id}')" title="导出为电脑本地 .json 模板文件"><i class="fa-solid fa-download"></i> 导出</button>
                     <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
                 </div>
@@ -914,7 +917,19 @@
         }
     }
 
-    // 进入全量工作台
+    // 进入只读查阅模式 (以极致可读性、位域拓扑与秒级字段速查为核心)
+    async function openProtocolViewer(id) {
+        if (typeof window.switchToView === 'function') {
+            window.switchToView('protocol-viewer-view');
+        }
+        if (ProtoView.Controllers && ProtoView.Controllers.Viewer) {
+            await ProtoView.Controllers.Viewer.loadProtocolIntoViewer(id);
+        } else if (typeof window.openProtocolViewer === 'function') {
+            await window.openProtocolViewer(id);
+        }
+    }
+
+    // 进入全量工作台 (以工程编辑功能为核心)
     async function openProtocolWorkbench(id) {
         const p = await (window.dbHelper ? window.dbHelper.getProtocol(id) : null);
         if (!p) return;
@@ -1599,6 +1614,7 @@
         moveProtocolToProduct,
         deleteProtocol,
         openProtocolWorkbench,
+        openProtocolViewer,
         openCreate429Modal,
         openProtocolPropsModal,
         exportProtocolById,
@@ -1618,6 +1634,7 @@
     global.moveProtocolToProduct = moveProtocolToProduct;
     global.deleteProtocol = deleteProtocol;
     global.openProtocolWorkbench = openProtocolWorkbench;
+    global.openProtocolViewer = openProtocolViewer;
     global.openCreate429Modal = openCreate429Modal;
     global.openCreateProtocolModal = openCreate429Modal;
     global.openProtocolPropsModal = openProtocolPropsModal;

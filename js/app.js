@@ -112,6 +112,14 @@
                     return;
                 }
 
+                const viewerView = document.getElementById('protocol-viewer-view');
+                if (viewerView && viewerView.classList.contains('active')) {
+                    if (ProtoView.Utils && ProtoView.Utils.showToast) {
+                        ProtoView.Utils.showToast('当前处于只读查阅模式；若需修改协议，请点击右上角「进入编辑工作台」', 'info');
+                    }
+                    return;
+                }
+
                 const serialView = document.getElementById('serial-view');
                 if (serialView && serialView.classList.contains('active')) {
                     if (typeof window.saveCurrentSerialProtocol === 'function') {

@@ -119,7 +119,7 @@
         const navTarget = document.querySelector(`.nav-item[data-view="${viewId}"]`);
         if (navTarget) {
             navTarget.classList.add('active');
-        } else if (viewId === 'arinc429-view' || viewId === 'serial-view') {
+        } else if (viewId === 'arinc429-view' || viewId === 'serial-view' || viewId === 'protocol-viewer-view') {
             const protoNav = document.querySelector(`.nav-item[data-view="protocol-view"]`);
             if (protoNav) protoNav.classList.add('active');
         }
@@ -129,7 +129,7 @@
 
         const mainContent = document.querySelector('.main-content');
         if (mainContent) {
-            if (viewId === 'arinc429-view' || viewId === 'serial-view') {
+            if (viewId === 'arinc429-view' || viewId === 'serial-view' || viewId === 'protocol-viewer-view') {
                 mainContent.classList.add('dense-workbench-active');
             } else {
                 mainContent.classList.remove('dense-workbench-active');
