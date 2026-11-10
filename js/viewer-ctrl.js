@@ -367,22 +367,86 @@
         const octal = (word.label || '000').toString().padStart(3, '0');
         const hex = '0x' + (Arinc429Helper ? Arinc429Helper.octalToLabelByte(octal).toString(16).toUpperCase().padStart(2, '0') : '00');
         const signals = word.signals || [];
-        const isTx = (word.direction || pkt.direction || 'Tx') === 'Tx';
+        const isTx = (word.direction || pkt.direction || (currentProtocol && currentProtocol.direction) || 'Tx') === 'Tx';
 
-        // 1. 顶部字摘要卡片
+        // 协议级与字级控制域参数 (奇偶校验、SDI、SSM 为协议与标号字层级，非具体字段属性)
+        const protoMode = (currentProtocol && currentProtocol.mode) || word.editMode || 'classic';
+        const isBitstream = protoMode === 'bitstream';
+        const parityMode = word.parity || (currentProtocol && currentProtocol.parity) || 'odd';
+        const parityLabel = parityMode === 'odd' ? '奇校验 (Odd)' : (parityMode === 'even' ? '偶校验 (Even)' : '无校验 (None)');
+
+        // SDI (仅经典航电模式下分配 B9~B10)
+        const hasSdi = !isBitstream;
+        const sdiVal = word.sdi !== undefined ? String(word.sdi) : '0';
+        const sdiDict = word.sdiDict || (currentProtocol && currentProtocol.sdiDict) || { "0": "全部系统 (All)", "1": "系统 1 (左侧)", "2": "系统 2 (右侧)", "3": "系统 3 (备用)" };
+        const bitMapStr = { '0': '00', '1': '01', '2': '10', '3': '11' };
+        const sdiCode = bitMapStr[sdiVal] || '00';
+        const sdiDesc = sdiDict[sdiVal] || `模式 ${sdiVal}`;
+
+        // SSM (状态符号矩阵 B30~B31)
+        const ssmVal = word.ssm !== undefined ? String(word.ssm) : '0';
+        const ssmDict = (currentProtocol && currentProtocol.ssmDict) || word.ssmDict || { "0": "正常运算 (Normal)", "1": "无计算数据 (NCD)", "2": "功能测试 (FT)", "3": "故障告警 (Fail)" };
+        const ssmCode = bitMapStr[ssmVal] || '00';
+        const ssmDesc = ssmDict[ssmVal] || `状态 ${ssmVal}`;
+
+        // 1. 顶部字摘要卡片 + 协议传输控制域规范
         if (viewerActiveWordHeader) {
             viewerActiveWordHeader.innerHTML = `
                 <div class="vwh-title-row">
                     <div class="vwh-title-left">
-                        <span class="vwh-octal-badge">${octal}₈</span>
+                        <span class="vwh-octal-badge" title="ARINC 429 八进制标号 (B1~B8)">${octal}₈</span>
                         <h2 class="vwh-title" title="${escapeHTML(word.name || '未命名标号字')}">${escapeHTML(word.name || '未命名标号字')}</h2>
                         <span class="vwh-dir-chip ${isTx ? 'chip-tx' : 'chip-rx'}">${isTx ? 'Tx (发送)' : 'Rx (接收)'}</span>
+                        <span class="vwh-mode-chip" title="协议模式">${isBitstream ? '自由 Bit 模式' : '经典航电模式'}</span>
                     </div>
                     <div class="vwh-meta-chips">
-                        <span class="vwh-chip" title="16进制编码"><i class="fa-solid fa-hashtag"></i> ${hex}</span>
+                        <span class="vwh-chip" title="16进制标号编码"><i class="fa-solid fa-hashtag"></i> Hex: ${hex}</span>
                         <span class="vwh-chip" title="刷新周期"><i class="fa-regular fa-clock"></i> ${word.period || pkt.period || 20}ms</span>
-                        <span class="vwh-chip" title="字段总数"><i class="fa-solid fa-list-check"></i> ${signals.length} 个定义字段</span>
+                        <span class="vwh-chip" title="当前字定义的载荷字段数"><i class="fa-solid fa-list-check"></i> ${signals.length} 个字段</span>
                         <span class="vwh-chip" title="所属系统/信道"><i class="fa-solid fa-tower-broadcast"></i> ${escapeHTML(word.source || 'CH1')}</span>
+                    </div>
+                </div>
+
+                <!-- 航电协议控制域传输规范 (属于协议整体与字级的规范，非个别字段属性) -->
+                <div class="vwh-protocol-strip">
+                    <div class="vwh-proto-strip-head">
+                        <i class="fa-solid fa-satellite-dish" style="color:var(--accent-color);"></i>
+                        <span class="vwh-proto-strip-title">429 协议传输控制域规范</span>
+                    </div>
+                    <div class="vwh-proto-items">
+                        <!-- 1. 奇偶校验 -->
+                        <div class="vwh-proto-card proto-card-parity" title="奇偶校验位 (Bit 32)">
+                            <span class="vpc-tag"><i class="fa-solid fa-shield-halved"></i> 校验 (Bit 32):</span>
+                            <strong class="vpc-val">${parityLabel}</strong>
+                        </div>
+
+                        <!-- 2. SDI (源/目标识别) -->
+                        ${hasSdi ? `
+                        <div class="vwh-proto-card proto-card-sdi" title="SDI 系统设备识别 (Bits 9~10)">
+                            <span class="vpc-tag"><i class="fa-solid fa-diagram-project"></i> SDI (Bits 9~10):</span>
+                            <strong class="vpc-val"><code>${sdiCode}b</code> ${escapeHTML(sdiDesc)}</strong>
+                        </div>
+                        ` : `
+                        <div class="vwh-proto-card proto-card-sdi" title="自由 Bit 流模式不启用独立 SDI">
+                            <span class="vpc-tag"><i class="fa-solid fa-diagram-project"></i> SDI:</span>
+                            <span class="vpc-val" style="color:var(--text-secondary);">自由Bit流模式 (无独立SDI)</span>
+                        </div>
+                        `}
+
+                        <!-- 3. SSM (状态符号矩阵) -->
+                        <div class="vwh-proto-card proto-card-ssm" title="SSM 状态符号矩阵 (Bits 30~31)">
+                            <div class="vpc-row-top">
+                                <span class="vpc-tag"><i class="fa-solid fa-heart-pulse"></i> SSM (Bits 30~31):</span>
+                                <strong class="vpc-val"><code>${ssmCode}b</code> ${escapeHTML(ssmDesc)}</strong>
+                            </div>
+                            <div class="vpc-ssm-dict" title="协议全局 SSM 状态符号矩阵定义">
+                                ${Object.entries(ssmDict).map(([k, v]) => `
+                                    <span class="vpc-ssm-pill ${k === ssmVal ? 'active-ssm' : ''}">
+                                        <code>${bitMapStr[k] || k}b</code>: ${escapeHTML(v)}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -391,7 +455,7 @@
         // 2. 32 位位域全景拓扑图 (Interactive 32-Bit Map)
         renderArinc32BitBar(word, signals);
 
-        // 3. 字段工程规格明细表 (Publication-grade Field Definition Cards)
+        // 3. 字段工程规格明细表 (双列网格排布，两个字段占一行，仅展示配置过的属性)
         renderArincFieldsTable(signals);
 
         // 4. 彻底隐藏/不渲染用户协议未定义的外部编码规范卡片
@@ -414,12 +478,30 @@
         for (let b = 1; b <= 8; b++) {
             bitMap[b] = { type: 'label', name: `Label (${word.label || '000'}₈)`, startBit: 1, endBit: 8 };
         }
-        // B9~B10: SDI
-        bitMap[9] = bitMap[10] = { type: 'sdi', name: 'SDI 设备标识码', startBit: 9, endBit: 10 };
+
+        const protoMode = (currentProtocol && currentProtocol.mode) || word.editMode || 'classic';
+        const isBitstream = protoMode === 'bitstream';
+        const parityMode = word.parity || (currentProtocol && currentProtocol.parity) || 'odd';
+        const parityLabel = parityMode === 'odd' ? '奇校验' : (parityMode === 'even' ? '偶校验' : '无校验');
+
+        // B9~B10: SDI (仅经典航电模式存在)
+        if (!isBitstream) {
+            const sdiVal = word.sdi !== undefined ? String(word.sdi) : '0';
+            const sdiDict = word.sdiDict || (currentProtocol && currentProtocol.sdiDict) || { "0": "全部系统 (All)", "1": "系统 1 (左侧)", "2": "系统 2 (右侧)", "3": "系统 3 (备用)" };
+            const bitMapStr = { '0': '00', '1': '01', '2': '10', '3': '11' };
+            const sdiDesc = sdiDict[sdiVal] || `模式 ${sdiVal}`;
+            bitMap[9] = bitMap[10] = { type: 'sdi', name: `SDI: ${bitMapStr[sdiVal] || '00'}b (${sdiDesc})`, startBit: 9, endBit: 10 };
+        }
+
         // B30~B31: SSM
-        bitMap[30] = bitMap[31] = { type: 'ssm', name: 'SSM 状态符号矩阵', startBit: 30, endBit: 31 };
+        const ssmVal = word.ssm !== undefined ? String(word.ssm) : '0';
+        const ssmDict = (currentProtocol && currentProtocol.ssmDict) || word.ssmDict || { "0": "正常运算 (Normal)", "1": "无计算数据 (NCD)", "2": "功能测试 (FT)", "3": "故障告警 (Fail)" };
+        const bitMapStr = { '0': '00', '1': '01', '2': '10', '3': '11' };
+        const ssmDesc = ssmDict[ssmVal] || `状态 ${ssmVal}`;
+        bitMap[30] = bitMap[31] = { type: 'ssm', name: `SSM: ${bitMapStr[ssmVal] || '00'}b (${ssmDesc})`, startBit: 30, endBit: 31 };
+
         // B32: Parity
-        bitMap[32] = { type: 'parity', name: 'P 奇偶校验位 (奇校验)', startBit: 32, endBit: 32 };
+        bitMap[32] = { type: 'parity', name: `P 校验位: Bit 32 (${parityLabel})`, startBit: 32, endBit: 32 };
 
         // 信号载荷位 (B9~B29 或 B11~B29)
         signals.forEach((sig, sIdx) => {
@@ -539,14 +621,14 @@
         viewerBitBarContainer.appendChild(barWrap);
     }
 
-    // 渲染 ARINC 429 字段工程规格明细表 (仅重点显示有数据的属性，绝不显示空白占位或未定义的编码规范/内部字段key)
+    // 渲染 ARINC 429 字段工程规格明细表 (双列网格排布：两个字段占一行，仅重点显示有数据的属性，绝不显示空白占位或未定义的编码规范/内部字段key)
     function renderArincFieldsTable(signals) {
         if (!viewerFieldsList) return;
         viewerFieldsList.innerHTML = '';
 
         if (!signals || signals.length === 0) {
             viewerFieldsList.innerHTML = `
-                <div class="viewer-fields-empty">
+                <div class="viewer-fields-empty" style="grid-column: 1 / -1;">
                     <i class="fa-solid fa-circle-info"></i> 当前标号字尚未划分具体信号字段。
                     <button type="button" class="btn btn-sm btn-secondary" onclick="window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Viewer && window.ProtoView.Controllers.Viewer.switchToEditWorkbench();" style="margin-left: 8px;">
                         <i class="fa-solid fa-pen-ruler"></i> 进入工作台划分
@@ -584,71 +666,67 @@
             card.id = `viewer-field-card-${sIdx}`;
             card.setAttribute('data-field-index', sIdx);
 
-            // 1. 严格只收集用户真正有定义、有数据的工程属性
+            // 严格只收集编辑界面中真正有配置、有值的属性，未配置或没有值的绝不显示
             const propItems = [];
 
-            // 分辨率 / 精度 (优先看 precision，其次 resolution)
-            const precisionVal = (sig.precision !== undefined && sig.precision !== null && String(sig.precision).trim() !== '') ? String(sig.precision).trim() : '';
-            const resolutionVal = (sig.resolution !== undefined && sig.resolution !== null && String(sig.resolution).trim() !== '') ? String(sig.resolution).trim() : '';
-            if (precisionVal) {
-                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">精度:</span><span class="vfc-prop-v">${escapeHTML(precisionVal)}</span></div>`);
-            } else if (resolutionVal) {
-                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">分辨率 (LSB):</span><span class="vfc-prop-v">${escapeHTML(resolutionVal)}</span></div>`);
+            // 1. 分辨率
+            const resVal = (sig.resolution !== undefined && sig.resolution !== null && String(sig.resolution).trim() !== '') ? String(sig.resolution).trim() : '';
+            if (resVal) {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">分辨率:</span><span class="vfc-prop-v">${escapeHTML(resVal)}</span></div>`);
             }
 
-            // 有效工程量程 (Min ~ Max)
+            // 2. 精度
+            const precVal = (sig.precision !== undefined && sig.precision !== null && String(sig.precision).trim() !== '') ? String(sig.precision).trim() : '';
+            if (precVal) {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">精度:</span><span class="vfc-prop-v">${escapeHTML(precVal)}</span></div>`);
+            }
+
+            // 3. 有效量程 (Min ~ Max)
             const minVal = (sig.min !== undefined && sig.min !== null && String(sig.min).trim() !== '') ? String(sig.min).trim() : '';
             const maxVal = (sig.max !== undefined && sig.max !== null && String(sig.max).trim() !== '') ? String(sig.max).trim() : '';
-            if (minVal !== '' || maxVal !== '') {
-                const rangeDisplay = (minVal !== '' && maxVal !== '') 
-                    ? `${minVal} ~ ${maxVal}${sig.unit ? ' ' + sig.unit : ''}` 
-                    : (minVal !== '' ? `≥ ${minVal}` : `≤ ${maxVal}`);
-                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">有效量程:</span><span class="vfc-prop-v">${escapeHTML(rangeDisplay)}</span></div>`);
+            if (minVal !== '' && maxVal !== '') {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">${escapeHTML(minVal)} ~ ${escapeHTML(maxVal)}${sig.unit ? ' ' + escapeHTML(sig.unit.trim()) : ''}</span></div>`);
+            } else if (minVal !== '') {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">≥ ${escapeHTML(minVal)}${sig.unit ? ' ' + escapeHTML(sig.unit.trim()) : ''}</span></div>`);
+            } else if (maxVal !== '') {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">≤ ${escapeHTML(maxVal)}${sig.unit ? ' ' + escapeHTML(sig.unit.trim()) : ''}</span></div>`);
             }
 
-            // 零点偏移 (Offset) - 仅在非 0 且有效时显示
-            if (sig.offset !== undefined && sig.offset !== null && String(sig.offset).trim() !== '' && Number(sig.offset) !== 0) {
-                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">零点偏移:</span><span class="vfc-prop-v">${escapeHTML(String(sig.offset))}</span></div>`);
-            }
-
-            // 默认值 (Default) - 仅在用户显式指定了且非 '-' 时显示
-            if (sig.defaultValue !== undefined && sig.defaultValue !== null && String(sig.defaultValue).trim() !== '' && String(sig.defaultValue).trim() !== '-' && sig.defaultValue !== 0) {
-                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">默认值:</span><span class="vfc-prop-v">${escapeHTML(String(sig.defaultValue))}</span></div>`);
+            // 4. 字节序 (仅在 u16 且有具体配置时显示)
+            if (sig.dataType === 'u16' && sig.endianness && sig.endianness !== 'none') {
+                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">字节序:</span><span class="vfc-prop-v">${sig.endianness === 'little' ? '小端 (LSB)' : '大端 (MSB)'}</span></div>`);
             }
 
             const propsHtml = propItems.length > 0 ? `<div class="vfc-props-grid">${propItems.join('')}</div>` : '';
 
-            // 2. 数据字典 / 状态枚举 (如果定义了字典，作为核心重点高亮呈现)
+            // 5. 数据字典 / 状态枚举 (如果定义了字典，作为核心重点高亮呈现)
             let dictHtml = '';
             if (sig.dict && typeof sig.dict === 'object' && Object.keys(sig.dict).length > 0) {
                 dictHtml = `<div class="vfc-dict-deck">`;
-                dictHtml += `<span class="vfc-dict-label"><i class="fa-solid fa-book-bookmark" style="color:var(--accent-color);"></i> 状态字典 / 枚举映射:</span>`;
+                dictHtml += `<span class="vfc-dict-label"><i class="fa-solid fa-book-bookmark" style="color:var(--accent-color);"></i> 状态字典:</span>`;
                 Object.entries(sig.dict).forEach(([k, val]) => {
                     dictHtml += `<span class="vfc-dict-pill"><code>${escapeHTML(k)}</code>: ${escapeHTML(String(val))}</span>`;
                 });
                 dictHtml += `</div>`;
             }
 
-            // 3. 备注说明 / 工程说明 (如果存在，作为重点清晰展示)
+            // 6. 备注说明 / 工程说明 (如果存在，作为重点清晰展示)
             const remarkHtml = (sig.remark && String(sig.remark).trim()) ? `
                 <div class="vfc-remark-box">
-                    <i class="fa-solid fa-circle-info" style="color:var(--accent-color);"></i> <b>工程说明:</b> ${highlightText(sig.remark.trim(), query)}
+                    <i class="fa-solid fa-circle-info" style="color:var(--accent-color);"></i> <b>说明:</b> ${highlightText(sig.remark.trim(), query)}
                 </div>
             ` : '';
 
-            // 组装卡片：绝不显示 main_value 等技术内部 key，且无数据的内容绝不占用空间
+            // 组装卡片：双列排布，彻底移除无意义的复制按钮，不显示未配置的虚假属性
             card.innerHTML = `
                 <div class="vfc-header">
                     <div class="vfc-title-group">
                         <span class="vfc-bit-badge" style="background:${color.bg}; border-color:${color.border}; color:${color.text};">
-                            B${start} ~ B${end} <small>(${count} Bits)</small>
+                            B${start} ~ B${end} <small>(${count}b)</small>
                         </span>
                         <h4 class="vfc-name">${highlightText(sig.name || '未命名信号', query)}</h4>
-                        <span class="vfc-datatype-pill">${escapeHTML(sig.dataType || 'BNR')}</span>
+                        <span class="vfc-datatype-pill">${escapeHTML(sig.dataType || 'u8')}</span>
                         ${(sig.unit && String(sig.unit).trim()) ? `<span class="vfc-unit-pill">${escapeHTML(sig.unit.trim())}</span>` : ''}
-                    </div>
-                    <div class="vfc-actions">
-                        <button type="button" class="btn-vfc-copy" data-copy="${escapeHTML(sig.name || '')}" title="复制信号名称"><i class="fa-regular fa-copy"></i> 复制名</button>
                     </div>
                 </div>
                 ${(propsHtml || dictHtml || remarkHtml) ? `
@@ -660,17 +738,20 @@
                 ` : ''}
             `;
 
-            // 复制按钮事件
-            const btnCopy = card.querySelector('.btn-vfc-copy');
-            if (btnCopy) {
-                btnCopy.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const text = btnCopy.getAttribute('data-copy');
-                    copyTextToClipboard(text, () => {
-                        showToast(`已复制字段名「${text}」`, 'success');
-                    });
-                });
-            }
+            // 鼠标悬停高亮顶部位图
+            card.addEventListener('mouseenter', () => {
+                highlightBitBarSegments(sIdx);
+            });
+
+            card.addEventListener('mouseleave', () => {
+                unhighlightBitBarSegments();
+            });
+
+            frag.appendChild(card);
+        });
+
+        viewerFieldsList.appendChild(frag);
+    }
 
             // 鼠标悬停高亮顶部位图
             card.addEventListener('mouseenter', () => {
@@ -766,44 +847,151 @@
         renderSerialBytePanoramaBar(pkt, currentWordIndex);
         if (viewerSdiSsmCard) viewerSdiSsmCard.style.display = 'none';
 
-        const offset = byteItem.offset !== undefined ? byteItem.offset : currentWordIndex;
+        const offset = byteItem.byteOffset !== undefined ? byteItem.byteOffset : (byteItem.offset !== undefined ? byteItem.offset : currentWordIndex);
+        const subSignals = byteItem.signals || [];
+        const isTx = (pkt.direction || (currentProtocol && currentProtocol.direction) || 'Tx') === 'Tx';
+
         if (viewerActiveWordHeader) {
             viewerActiveWordHeader.innerHTML = `
                 <div class="vwh-title-row">
                     <div class="vwh-title-left">
-                        <span class="vwh-octal-badge">Byte ${offset}</span>
+                        <span class="vwh-octal-badge" style="background:#ea580c;">Byte ${offset}</span>
                         <h2 class="vwh-title">${escapeHTML(byteItem.name || `字节 ${offset}`)}</h2>
-                        <span class="vwh-dir-chip chip-tx">${pkt.direction || 'Tx'}</span>
+                        <span class="vwh-dir-chip ${isTx ? 'chip-tx' : 'chip-rx'}">${isTx ? 'Tx (发送)' : 'Rx (接收)'}</span>
                     </div>
                     <div class="vwh-meta-chips">
                         <span class="vwh-chip"><i class="fa-solid fa-arrows-left-right-to-line"></i> 偏移量: ${offset}</span>
-                        <span class="vwh-chip"><i class="fa-solid fa-shapes"></i> 数据类型: ${escapeHTML(byteItem.dataType || 'u8')}</span>
-                        <span class="vwh-chip"><i class="fa-solid fa-ruler"></i> 字节长度: ${byteItem.length || 1} Byte</span>
+                        <span class="vwh-chip"><i class="fa-solid fa-shapes"></i> 默认类型: ${escapeHTML(byteItem.dataType || 'u8')}</span>
+                        <span class="vwh-chip"><i class="fa-solid fa-list-check"></i> 字段数: ${subSignals.length > 0 ? subSignals.length : 1} 个</span>
+                        <span class="vwh-chip"><i class="fa-regular fa-clock"></i> 周期: ${pkt.period || (currentProtocol && currentProtocol.period) || 20}ms</span>
+                    </div>
+                </div>
+
+                <!-- 串口通信参数条 (属于协议整体的传输规范) -->
+                <div class="vwh-protocol-strip">
+                    <div class="vwh-proto-strip-head">
+                        <i class="fa-solid fa-bolt" style="color:#f59e0b;"></i>
+                        <span class="vwh-proto-strip-title">串口通信物理电气参数</span>
+                    </div>
+                    <div class="vwh-proto-items">
+                        <div class="vwh-proto-card" title="总线物理接口类型">
+                            <span class="vpc-tag"><i class="fa-solid fa-microchip"></i> 接口类型:</span>
+                            <strong class="vpc-val">${escapeHTML((currentProtocol && currentProtocol.type) || 'RS422')}</strong>
+                        </div>
+                        <div class="vwh-proto-card" title="通信波特率">
+                            <span class="vpc-tag"><i class="fa-solid fa-gauge"></i> 波特率:</span>
+                            <strong class="vpc-val">${escapeHTML(String((currentProtocol && currentProtocol.baudRate) || (currentProtocol && currentProtocol.baud) || '115200'))} bps</strong>
+                        </div>
+                        <div class="vwh-proto-card" title="奇偶校验位">
+                            <span class="vpc-tag"><i class="fa-solid fa-shield-halved"></i> 校验:</span>
+                            <strong class="vpc-val">${(currentProtocol && currentProtocol.parity === 'odd') ? '奇校验 (Odd)' : ((currentProtocol && currentProtocol.parity === 'even') ? '偶校验 (Even)' : '无校验 (None)')}</strong>
+                        </div>
                     </div>
                 </div>
             `;
         }
 
-        // 渲染串口字段或位域 (仅展示有有效数据的字段属性)
+        // 渲染单字节内字段卡片 (双列排布，无复制按钮，仅有配置的属性)
         if (viewerFieldsList) {
-            const propItems = [];
-            if (byteItem.scale && byteItem.scale !== 1.0) {
-                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">比例系数:</span><span class="vfc-prop-v">${byteItem.scale}</span></div>`);
-            }
-            if (byteItem.min !== undefined && byteItem.max !== undefined && String(byteItem.min).trim() !== '' && String(byteItem.max).trim() !== '') {
-                propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">有效量程:</span><span class="vfc-prop-v">${byteItem.min} ~ ${byteItem.max}${byteItem.unit ? ' ' + byteItem.unit : ''}</span></div>`);
-            }
-            const propsHtml = propItems.length > 0 ? `<div class="vfc-props-grid">${propItems.join('')}</div>` : '';
-            const remarkHtml = (byteItem.remark && String(byteItem.remark).trim()) ? `<div class="vfc-remark-box"><i class="fa-solid fa-circle-info" style="color:var(--accent-color);"></i> <b>工程说明:</b> ${escapeHTML(byteItem.remark.trim())}</div>` : '';
+            viewerFieldsList.innerHTML = '';
+            const frag = document.createDocumentFragment();
 
-            viewerFieldsList.innerHTML = `
-                <div class="viewer-field-card">
+            if (subSignals.length > 0) {
+                subSignals.forEach((sig, sIdx) => {
+                    const start = sig.startBit !== undefined ? sig.startBit : 0;
+                    const count = sig.bitCount !== undefined ? sig.bitCount : (sig.length || 8);
+                    const end = start + count - 1;
+                    const color = FIELD_PALETTES[sIdx % FIELD_PALETTES.length];
+
+                    const propItems = [];
+                    const resVal = (sig.resolution !== undefined && sig.resolution !== null && String(sig.resolution).trim() !== '') ? String(sig.resolution).trim() : '';
+                    if (resVal) {
+                        propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">分辨率:</span><span class="vfc-prop-v">${escapeHTML(resVal)}</span></div>`);
+                    }
+                    const precVal = (sig.precision !== undefined && sig.precision !== null && String(sig.precision).trim() !== '') ? String(sig.precision).trim() : '';
+                    if (precVal) {
+                        propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">精度:</span><span class="vfc-prop-v">${escapeHTML(precVal)}</span></div>`);
+                    }
+                    const minVal = (sig.min !== undefined && sig.min !== null && String(sig.min).trim() !== '') ? String(sig.min).trim() : '';
+                    const maxVal = (sig.max !== undefined && sig.max !== null && String(sig.max).trim() !== '') ? String(sig.max).trim() : '';
+                    if (minVal !== '' && maxVal !== '') {
+                        propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">${escapeHTML(minVal)} ~ ${escapeHTML(maxVal)}${sig.unit ? ' ' + escapeHTML(sig.unit.trim()) : ''}</span></div>`);
+                    } else if (minVal !== '') {
+                        propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">≥ ${escapeHTML(minVal)}${sig.unit ? ' ' + escapeHTML(sig.unit.trim()) : ''}</span></div>`);
+                    } else if (maxVal !== '') {
+                        propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">≤ ${escapeHTML(maxVal)}${sig.unit ? ' ' + escapeHTML(sig.unit.trim()) : ''}</span></div>`);
+                    }
+
+                    const propsHtml = propItems.length > 0 ? `<div class="vfc-props-grid">${propItems.join('')}</div>` : '';
+
+                    let dictHtml = '';
+                    if (sig.dict && typeof sig.dict === 'object' && Object.keys(sig.dict).length > 0) {
+                        dictHtml = `<div class="vfc-dict-deck"><span class="vfc-dict-label"><i class="fa-solid fa-book-bookmark" style="color:var(--accent-color);"></i> 状态字典:</span>`;
+                        Object.entries(sig.dict).forEach(([k, val]) => {
+                            dictHtml += `<span class="vfc-dict-pill"><code>${escapeHTML(k)}</code>: ${escapeHTML(String(val))}</span>`;
+                        });
+                        dictHtml += `</div>`;
+                    }
+
+                    const remarkHtml = (sig.remark && String(sig.remark).trim()) ? `<div class="vfc-remark-box"><i class="fa-solid fa-circle-info" style="color:var(--accent-color);"></i> <b>说明:</b> ${escapeHTML(sig.remark.trim())}</div>` : '';
+
+                    const card = document.createElement('div');
+                    card.className = 'viewer-field-card';
+                    card.id = `viewer-field-card-${sIdx}`;
+                    card.innerHTML = `
+                        <div class="vfc-header">
+                            <div class="vfc-title-group">
+                                <span class="vfc-bit-badge" style="background:${color.bg}; border-color:${color.border}; color:${color.text};">
+                                    bit${start}${count > 1 ? `~bit${end}` : ''} <small>(${count}b)</small>
+                                </span>
+                                <h4 class="vfc-name">${escapeHTML(sig.name || `字段 ${sIdx + 1}`)}</h4>
+                                <span class="vfc-datatype-pill">${escapeHTML(sig.dataType || 'u8')}</span>
+                                ${sig.unit ? `<span class="vfc-unit-pill">${escapeHTML(sig.unit.trim())}</span>` : ''}
+                            </div>
+                        </div>
+                        ${(propsHtml || dictHtml || remarkHtml) ? `
+                            <div class="vfc-body">
+                                ${propsHtml}
+                                ${dictHtml}
+                                ${remarkHtml}
+                            </div>
+                        ` : ''}
+                    `;
+                    frag.appendChild(card);
+                });
+            } else {
+                // 单字节自身作为字段卡片
+                const propItems = [];
+                const resVal = (byteItem.resolution !== undefined && byteItem.resolution !== null && String(byteItem.resolution).trim() !== '') ? String(byteItem.resolution).trim() : '';
+                if (resVal) {
+                    propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">分辨率:</span><span class="vfc-prop-v">${escapeHTML(resVal)}</span></div>`);
+                }
+                const precVal = (byteItem.precision !== undefined && byteItem.precision !== null && String(byteItem.precision).trim() !== '') ? String(byteItem.precision).trim() : '';
+                if (precVal) {
+                    propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">精度:</span><span class="vfc-prop-v">${escapeHTML(precVal)}</span></div>`);
+                }
+                const minVal = (byteItem.min !== undefined && byteItem.min !== null && String(byteItem.min).trim() !== '') ? String(byteItem.min).trim() : '';
+                const maxVal = (byteItem.max !== undefined && byteItem.max !== null && String(byteItem.max).trim() !== '') ? String(byteItem.max).trim() : '';
+                if (minVal !== '' && maxVal !== '') {
+                    propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">${escapeHTML(minVal)} ~ ${escapeHTML(maxVal)}${byteItem.unit ? ' ' + escapeHTML(byteItem.unit.trim()) : ''}</span></div>`);
+                } else if (minVal !== '') {
+                    propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">≥ ${escapeHTML(minVal)}${byteItem.unit ? ' ' + escapeHTML(byteItem.unit.trim()) : ''}</span></div>`);
+                } else if (maxVal !== '') {
+                    propItems.push(`<div class="vfc-prop-item"><span class="vfc-prop-k">范围:</span><span class="vfc-prop-v">≤ ${escapeHTML(maxVal)}${byteItem.unit ? ' ' + escapeHTML(byteItem.unit.trim()) : ''}</span></div>`);
+                }
+
+                const propsHtml = propItems.length > 0 ? `<div class="vfc-props-grid">${propItems.join('')}</div>` : '';
+                const remarkHtml = (byteItem.remark && String(byteItem.remark).trim()) ? `<div class="vfc-remark-box"><i class="fa-solid fa-circle-info" style="color:var(--accent-color);"></i> <b>说明:</b> ${escapeHTML(byteItem.remark.trim())}</div>` : '';
+
+                const card = document.createElement('div');
+                card.className = 'viewer-field-card';
+                card.innerHTML = `
                     <div class="vfc-header">
                         <div class="vfc-title-group">
                             <span class="vfc-bit-badge">Offset: ${offset}</span>
-                            <h4 class="vfc-name">${escapeHTML(byteItem.name || '未命名字节')}</h4>
+                            <h4 class="vfc-name">${escapeHTML(byteItem.name || `字节 ${offset}`)}</h4>
                             <span class="vfc-datatype-pill">${escapeHTML(byteItem.dataType || 'u8')}</span>
-                            ${byteItem.unit ? `<span class="vfc-unit-pill">${escapeHTML(byteItem.unit)}</span>` : ''}
+                            ${byteItem.unit ? `<span class="vfc-unit-pill">${escapeHTML(byteItem.unit.trim())}</span>` : ''}
                         </div>
                     </div>
                     ${(propsHtml || remarkHtml) ? `
@@ -812,8 +1000,11 @@
                             ${remarkHtml}
                         </div>
                     ` : ''}
-                </div>
-            `;
+                `;
+                frag.appendChild(card);
+            }
+
+            viewerFieldsList.appendChild(frag);
         }
     }
 

@@ -7199,41 +7199,56 @@ html:not(.is-admin) #nav-btn-protocol {
     align-items: center;
 }
 
+.viewer-search-wrapper .viewer-search-icon,
 .viewer-search-icon {
     position: absolute;
-    left: 10px;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
     color: var(--accent-color);
-    font-size: 12.5px;
+    font-size: 13px;
     pointer-events: none;
+    z-index: 2;
 }
 
-.viewer-search-input {
-    width: 100%;
-    height: 32px;
-    padding: 0 30px 0 32px;
-    font-size: 12.5px;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    outline: none;
+.viewer-search-wrapper input.viewer-search-input,
+input#viewer-field-search.viewer-search-input {
+    width: 100% !important;
+    height: 34px !important;
+    line-height: 32px !important;
+    padding-left: 36px !important;
+    padding-right: 32px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    font-size: 12.5px !important;
+    border-radius: 6px !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    outline: none !important;
+    box-sizing: border-box !important;
     transition: all 0.15s ease;
 }
 
-.viewer-search-input:focus {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+.viewer-search-wrapper input.viewer-search-input:focus,
+input#viewer-field-search.viewer-search-input:focus {
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15) !important;
 }
 
+.viewer-search-wrapper .viewer-search-clear,
 .viewer-search-clear {
     position: absolute;
     right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
     background: none;
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
     font-size: 12px;
     padding: 4px;
+    z-index: 2;
 }
 
 .viewer-match-pill {
@@ -7459,6 +7474,140 @@ html:not(.is-admin) #nav-btn-protocol {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
+}
+
+.vwh-mode-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+/* 航电协议控制域传输规范条 (奇偶校验、SDI、SSM) */
+.vwh-protocol-strip {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vwh-proto-strip-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.vwh-proto-strip-title {
+    color: var(--text-primary);
+}
+
+.vwh-proto-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.vwh-proto-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.proto-card-parity {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.04);
+}
+.proto-card-parity .vpc-tag {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.proto-card-sdi {
+    border-color: rgba(168, 85, 247, 0.3);
+    background: rgba(168, 85, 247, 0.04);
+}
+.proto-card-sdi .vpc-tag {
+    color: #9333ea;
+    font-weight: 600;
+}
+
+.proto-card-ssm {
+    flex: 1;
+    min-width: 280px;
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.04);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+}
+.proto-card-ssm .vpc-tag {
+    color: #d97706;
+    font-weight: 600;
+}
+
+.vpc-row-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.vpc-val {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.vpc-val code {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--accent-color);
+}
+
+.vpc-ssm-dict {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.vpc-ssm-pill {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.vpc-ssm-pill code {
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+.vpc-ssm-pill.active-ssm {
+    border-color: #f59e0b;
+    color: #b45309;
+    font-weight: 700;
+    background: rgba(245, 158, 11, 0.15);
 }
 
 /* 32-bit 位域全景映射常驻浮动容器 (阅读模式下随滚动一直浮在顶部) */
@@ -7705,13 +7854,22 @@ html:not(.is-admin) #nav-btn-protocol {
     color: var(--text-secondary);
 }
 
+/* 字段规格明细表双列网格布局 (两个字段占一行) */
 .viewer-fields-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: stretch;
+}
+
+@media (max-width: 900px) {
+    .viewer-fields-list {
+        grid-template-columns: 1fr;
+    }
 }
 
 .viewer-fields-empty {
+    grid-column: 1 / -1;
     padding: 2rem 1.5rem;
     text-align: center;
     border: 1px dashed var(--border-color);
@@ -7725,8 +7883,20 @@ html:not(.is-admin) #nav-btn-protocol {
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 12px 16px;
+    padding: 12px 14px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    box-sizing: border-box;
+    height: 100%;
+}
+
+.viewer-field-card .vfc-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
 }
 
 .viewer-field-card:hover {
@@ -7846,8 +8016,8 @@ html:not(.is-admin) #nav-btn-protocol {
 
 .vfc-props-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 6px 16px;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 6px 12px;
     font-size: 12px;
     margin-bottom: 8px;
 }
