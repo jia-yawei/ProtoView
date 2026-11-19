@@ -1,4 +1,4 @@
-n'g/**
+/**
  * @file auth.js
  * @brief ProtoView 多用户账号认证与隔离控制模块 (Cloudflare KV 驱动)
  * @author DeepMind Pair Programming
@@ -269,9 +269,42 @@ n'g/**
         }
     }
 
+    // 辅助：在登录门户中展示与清除错误提示
+    function showPortalLoginError(msg) {
+        const el = document.getElementById('portal-login-error');
+        if (el) {
+            if (msg) {
+                el.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> ${escapeHTML(msg)}`;
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+                el.innerHTML = '';
+            }
+        } else if (msg) {
+            alert(msg);
+        }
+    }
+
+    function showPortalRegError(msg) {
+        const el = document.getElementById('portal-reg-error');
+        if (el) {
+            if (msg) {
+                el.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> ${escapeHTML(msg)}`;
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+                el.innerHTML = '';
+            }
+        } else if (msg) {
+            alert(msg);
+        }
+    }
+
     // 切换登录/注册 Tab
     function switchAuthTab(tab) {
         initDOMElements();
+        showPortalLoginError('');
+        showPortalRegError('');
         if (tab === 'register') {
             if (tabAuthLogin) tabAuthLogin.classList.remove('active');
             if (tabAuthRegister) tabAuthRegister.classList.add('active');
@@ -287,12 +320,17 @@ n'g/**
         }
     }
 
-    // 打开登录/注册弹窗
+    // 打开登录/注册弹窗或展示准入门户
     function openAuthModal(defaultTab = 'login') {
         initDOMElements();
-        if (!authModal) return;
-        switchAuthTab(defaultTab);
-        authModal.classList.add('active');
+        if (authModal) {
+            switchAuthTab(defaultTab);
+            authModal.classList.add('active');
+        } else {
+            // 如无模态弹窗，直接复位认证状态呈现全屏准入门户
+            switchAuthTab(defaultTab);
+            setAuthSession(null, null);
+        }
     }
 
     // 关闭弹窗
@@ -304,6 +342,7 @@ n'g/**
     // 登录请求
     async function handleLogin(username, password) {
         const isLocal = isLocalDevEnv();
+        showPortalLoginError('');
         try {
             const res = await fetch('/api/auth?action=login', {
                 method: 'POST',
@@ -328,8 +367,11 @@ n'g/**
                 if (isLocal && (res.status === 404 || !res.ok)) {
                     return doLocalDevLogin(username);
                 }
-                const msg = (data && data.error) || '登录失败，请检查账号密码';
-                alert(msg);
+                let msg = (data && data.error) || '登录失败，请检查账号密码';
+                if (res.status === 404) {
+                    msg = 'Cloudflare 后端认证服务未找到 (/api/auth 返回 404)。如果您未配置 Cloudflare D1/KV 函数，请在 Cloudflare Pages 设置中绑定 D1 数据库；或可在本地离线环境调试。';
+                }
+                showPortalLoginError(msg);
                 return false;
             }
         } catch (e) {
@@ -337,7 +379,7 @@ n'g/**
             if (isLocal) {
                 return doLocalDevLogin(username);
             }
-            alert('连接认证服务异常: ' + e.message);
+            showPortalLoginError('连接 Cloudflare 认证服务异常: ' + e.message);
             return false;
         }
     }
@@ -345,6 +387,7 @@ n'g/**
     // 注册请求 (仅需用户名与密码)
     async function handleRegister(username, password) {
         const isLocal = isLocalDevEnv();
+        showPortalRegError('');
         try {
             const res = await fetch('/api/auth?action=register', {
                 method: 'POST',
@@ -367,15 +410,18 @@ n'g/**
                 if (isLocal && (res.status === 404 || !res.ok)) {
                     return doLocalDevLogin(username);
                 }
-                const msg = (data && data.error) || '注册失败，请更换用户名重试';
-                alert(msg);
+                let msg = (data && data.error) || '注册失败，请更换用户名重试';
+                if (res.status === 404) {
+                    msg = 'Cloudflare 后端认证服务未找到 (/api/auth 返回 404)。';
+                }
+                showPortalRegError(msg);
                 return false;
             }
         } catch (e) {
             if (isLocal) {
                 return doLocalDevLogin(username);
             }
-            alert('连接认证服务异常: ' + e.message);
+            showPortalRegError('连接 Cloudflare 认证服务异常: ' + e.message);
             return false;
         }
     }
@@ -391,9 +437,21 @@ n'g/**
     async function handleLogout() {
         const u = getCurrentUser();
         const uName = u ? u.username : '用户';
-        if (!confirm(`确定要退出账号「${uName}」吗？\n\n退出后将返回系统登录界面。`)) {
-            return;
+        
+        let confirmed = false;
+        if (ProtoView.Utils && typeof ProtoView.Utils.showConfirm === 'function') {
+            confirmed = await ProtoView.Utils.showConfirm({
+                title: '退出登录',
+                message: `确定要退出当前账号「${uName}」吗？`,
+                detail: '退出后将返回系统登录准入门户，您可以随时重新登录或切换账号。',
+                confirmText: '退出登录',
+                cancelText: '取消',
+                type: 'warning'
+            });
+        } else {
+            confirmed = confirm(`确定要退出账号「${uName}」吗？\n\n退出后将返回系统登录界面。`);
         }
+        if (!confirmed) return;
 
         const token = getToken();
         if (token && !token.startsWith('local_dev_token_')) {
@@ -435,8 +493,10 @@ n'g/**
             return;
         }
 
-        // 若是本地开发者 Token 或处于本地离线环境，直接保持本地 Session 有效
-        if (token.startsWith('local_dev_token_') || isLocalDevEnv()) {
+        const isLocal = isLocalDevEnv();
+
+        // 关键防护 1: 若当前处于本地离线环境，且有本地开发者 Token，保持本地 Session
+        if (isLocal && token.startsWith('local_dev_token_')) {
             const u = getCurrentUser();
             if (u && u.username) {
                 updateAuthUI();
@@ -444,6 +504,14 @@ n'g/**
             }
         }
 
+        // 关键防护 2: 若当前处于非本地生产环境 (如 Cloudflare)，但本地存储却残留了本地开发 mock token，必须立即抹除！
+        if (!isLocal && token.startsWith('local_dev_token_')) {
+            console.warn('ProtoView: 生产环境检测到残留的本地开发 Token，重置为未登录状态');
+            setAuthSession(null, null);
+            return;
+        }
+
+        // 3. 向云端验证 Token
         try {
             const res = await fetch('/api/auth?action=me', {
                 method: 'GET',
@@ -456,14 +524,19 @@ n'g/**
                 localStorage.setItem(AUTH_STORAGE_KEY_USER, JSON.stringify(data.user));
                 localStorage.setItem('protoview_cloud_ws', data.user.username);
                 updateAuthUI();
-            } else if (res.status === 401) {
-                // Token 已过期或已被销毁
-                console.warn('ProtoView: 登录已失效，自动切换为访客');
+            } else {
+                // Token 已失效、不存在或云端鉴权失败，立即清空重置为未登录状态，展示登录门户
+                console.warn('ProtoView: 云端会话校验未通过，重置为未登录状态:', res.status, data);
                 setAuthSession(null, null);
             }
         } catch (e) {
-            // 本地离线或开发模式，保持原有 session 容错
-            updateAuthUI();
+            console.warn('ProtoView: 校验云端会话网络异常:', e);
+            if (!isLocal) {
+                // 生产环境网络连不上且无法验证时，重置会话以防死锁展示空白页
+                setAuthSession(null, null);
+            } else {
+                updateAuthUI();
+            }
         }
     }
 
@@ -590,7 +663,7 @@ n'g/**
             });
         }
         if (sidebarUserCard) {
-            sidebarUserCard.addEventListener('click', (e) => {
+            sidebarUserCard.addEventListener('click', async (e) => {
                 // 若点击目标或其祖先为同步、主题切换按钮或退出按钮，则不触发账号切换弹窗
                 if (e.target && (e.target.closest('#theme-toggle') || e.target.closest('#btn-sidebar-auth-action') || e.target.closest('#sidebar-quick-sync-btn'))) {
                     return;
@@ -598,14 +671,39 @@ n'g/**
                 if (isLoggedIn()) {
                     const u = getCurrentUser();
                     const name = u ? (u.displayName || u.username) : '';
-                    if (confirm(`当前登录账号: ${name}\n\n需要切换账号吗？`)) {
-                        openAuthModal('login');
+                    let confirmed = false;
+                    if (ProtoView.Utils && typeof ProtoView.Utils.showConfirm === 'function') {
+                        confirmed = await ProtoView.Utils.showConfirm({
+                            title: '切换账号',
+                            message: `当前已登录账号: 「${name}」`,
+                            detail: '切换账号需要先退出当前账号并返回登录准入门户，是否继续？',
+                            confirmText: '切换账号',
+                            cancelText: '取消',
+                            type: 'info'
+                        });
+                    } else {
+                        confirmed = confirm(`当前登录账号: ${name}\n\n需要切换账号吗？`);
+                    }
+                    if (confirmed) {
+                        handleLogout();
                     }
                 } else {
                     openAuthModal('login');
                 }
             });
         }
+
+        // 自动探测并清理之前表单原生提交残留于地址栏的参数 (杜绝明文密码泄露在地址栏)
+        try {
+            const sp = new URLSearchParams(window.location.search);
+            if (sp.has('username')) {
+                const u = sp.get('username');
+                if (loginUsername && u && !loginUsername.value) loginUsername.value = u;
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }
+        } catch (e) {}
 
 
         // 登录门户右上角主题切换

@@ -38,13 +38,13 @@
 @import url("viewer.css?v=20261119_04");
 
 /* 7. 版本管理中心与 Git 时间轴 Diff 比对 */
-@import url("version-mgr.css?v=20261119_11");
+@import url("version-mgr.css?v=20261119_12");
 
 /* 8. 管理员控制台与全屏准入门户 */
-@import url("admin.css?v=20261118_20");
+@import url("admin.css?v=20261119_12");
 
 /* 9. 独立账号认证模块 */
-@import url("auth.css?v=20261118_20");
+@import url("auth.css?v=20261119_12");
 
 /* 10. 移动端与响应式适配 (置于末尾) */
 @import url("responsive.css?v=20261119_06");

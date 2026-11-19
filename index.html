@@ -28,7 +28,7 @@
         })();
     </script>
     <!-- 引入自定义样式 (增加版本后缀强制穿透缓存) -->
-    <link rel="stylesheet" href="css/style.css?v=20261119_11">
+    <link rel="stylesheet" href="css/style.css?v=20261119_12">
     
     <!-- Dexie.js 简化 IndexedDB -->
     <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
@@ -41,10 +41,18 @@
                 var token = localStorage.getItem('protoview_auth_token');
                 var userRaw = localStorage.getItem('protoview_auth_user');
                 if (token && userRaw) {
-                    document.documentElement.classList.add('is-authenticated');
-                    var user = JSON.parse(userRaw);
-                    if (user && (user.isAdmin || (user.username && user.username.toLowerCase() === 'admin'))) {
-                        document.documentElement.classList.add('is-admin');
+                    var host = window.location.hostname || '';
+                    var isLocal = (host === 'localhost' || host === '127.0.0.1' || host === '' || host.endsWith('.local') || window.location.protocol === 'file:');
+                    // 生产环境安全防护：若携带本地调试 mock token，严禁误判为已登录，清除残留
+                    if (isLocal || !token.startsWith('local_dev_token_')) {
+                        document.documentElement.classList.add('is-authenticated');
+                        var user = JSON.parse(userRaw);
+                        if (user && (user.isAdmin || (user.username && user.username.toLowerCase() === 'admin'))) {
+                            document.documentElement.classList.add('is-admin');
+                        }
+                    } else {
+                        localStorage.removeItem('protoview_auth_token');
+                        localStorage.removeItem('protoview_auth_user');
                     }
                 }
             } catch(e) {}
@@ -99,6 +107,8 @@
                         <input type="password" id="login-password" name="password" required placeholder="请输入密码" autocomplete="current-password">
                     </div>
                 </div>
+                <!-- 登录错误提示框 -->
+                <div id="portal-login-error" style="display:none; padding:8px 12px; border-radius:6px; font-size:12px; line-height:1.45; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#dc2626; margin-top:2px;"></div>
                 <button type="submit" class="btn btn-primary portal-submit-btn" id="btn-login-submit">
                     立即登录
                 </button>
@@ -131,6 +141,8 @@
                         <input type="password" id="reg-password-confirm" name="passwordConfirm" required placeholder="再次输入密码确认" autocomplete="new-password">
                     </div>
                 </div>
+                <!-- 注册错误提示框 -->
+                <div id="portal-reg-error" style="display:none; padding:8px 12px; border-radius:6px; font-size:12px; line-height:1.45; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#dc2626; margin-top:2px;"></div>
                 <button type="submit" class="btn btn-primary portal-submit-btn" id="btn-register-submit">
                     注册并登录
                 </button>
@@ -2252,21 +2264,21 @@ CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
     </div>
 
     <!-- 模块化架构分层脚本 (强制穿透静态缓存) -->
-    <script src="js/core.js?v=20261119_11"></script>
-    <script src="js/db.js?v=20261119_11"></script>
-    <script src="js/auth.js?v=20261119_11"></script>
-    <script src="js/draft-sync.js?v=20261119_11"></script>
-    <script src="js/workspace-sync.js?v=20261119_11"></script>
-    <script src="js/parser.js?v=20261119_11"></script>
-    <script src="js/arinc429.js?v=20261119_11"></script>
-    <script src="js/serial.js?v=20261119_11"></script>
-    <script src="js/product-ctrl.js?v=20261119_11"></script>
-    <script src="js/arinc-ctrl.js?v=20261119_11"></script>
-    <script src="js/serial-ctrl.js?v=20261119_11"></script>
-    <script src="js/admin-ctrl.js?v=20261119_11"></script>
-    <script src="js/viewer-ctrl.js?v=20261119_11"></script>
-    <script src="js/export-ctrl.js?v=20261119_11"></script>
-    <script src="js/version-diff.js?v=20261119_11"></script>
-    <script src="js/app.js?v=20261119_11"></script>
+    <script src="js/core.js?v=20261119_12"></script>
+    <script src="js/db.js?v=20261119_12"></script>
+    <script src="js/auth.js?v=20261119_12"></script>
+    <script src="js/draft-sync.js?v=20261119_12"></script>
+    <script src="js/workspace-sync.js?v=20261119_12"></script>
+    <script src="js/parser.js?v=20261119_12"></script>
+    <script src="js/arinc429.js?v=20261119_12"></script>
+    <script src="js/serial.js?v=20261119_12"></script>
+    <script src="js/product-ctrl.js?v=20261119_12"></script>
+    <script src="js/arinc-ctrl.js?v=20261119_12"></script>
+    <script src="js/serial-ctrl.js?v=20261119_12"></script>
+    <script src="js/admin-ctrl.js?v=20261119_12"></script>
+    <script src="js/viewer-ctrl.js?v=20261119_12"></script>
+    <script src="js/export-ctrl.js?v=20261119_12"></script>
+    <script src="js/version-diff.js?v=20261119_12"></script>
+    <script src="js/app.js?v=20261119_12"></script>
 </body>
 </html>

@@ -283,9 +283,11 @@
         initGlobalModalsAndShortcuts();
         initViewRouter();
 
-        // 未登录状态：清空本地旧缓存以防泄露历史数据，登录前仅呈现登录准入门户
+        // 未登录状态：确保移除已登录状态类名展示准入门户，清空本地旧缓存以防泄露历史数据
         const loggedIn = ProtoView.Auth && ProtoView.Auth.isLoggedIn ? ProtoView.Auth.isLoggedIn() : false;
         if (!loggedIn) {
+            document.documentElement.classList.remove('is-authenticated');
+            document.documentElement.classList.remove('is-admin');
             const isLocal = ProtoView.Auth && typeof ProtoView.Auth.isLocalDevEnv === 'function' ? ProtoView.Auth.isLocalDevEnv() : false;
             // 本地离线开发环境不抹除本地数据，防止调试刷新页面时丢失本地草稿
             if (!isLocal && window.dbHelper) {
