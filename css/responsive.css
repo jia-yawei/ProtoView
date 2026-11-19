@@ -1,0 +1,505 @@
+/* ========================================================
+   移动端浏览器专属深度自适应优化 (@media (max-width: 768px))
+   ======================================================== */
+@media (max-width: 768px) {
+    /* 1. 全局容器与导航 */
+    .app-container {
+        flex-direction: column !important;
+        height: 100dvh !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+    }
+
+    /* 原桌面侧边栏自动转为顶部 44px 紧凑工控顶栏 */
+    .sidebar {
+        width: 100% !important;
+        height: 44px !important;
+        min-height: 44px !important;
+        max-height: 44px !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0 10px !important;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        flex-shrink: 0 !important;
+        z-index: 100 !important;
+    }
+
+    .sidebar .logo {
+        padding: 0 !important;
+        font-size: 1.1rem !important;
+    }
+
+    .sidebar-collapse-btn {
+        display: none !important;
+    }
+
+    .sidebar .nav-menu {
+        flex-direction: row !important;
+        padding: 0 !important;
+        gap: 6px !important;
+        flex: 0 0 auto !important;
+    }
+
+    .sidebar .nav-item {
+        padding: 4px 10px !important;
+        font-size: 12px !important;
+        border-radius: 6px !important;
+        gap: 4px !important;
+        height: 30px !important;
+    }
+
+    .sidebar .settings {
+        padding: 0 !important;
+        border-top: none !important;
+    }
+
+    .sidebar .theme-toggle {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 12px !important;
+    }
+
+    /* 2. 主内容区 */
+    .main-content {
+        padding: 8px 10px !important;
+        flex: 1 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .main-content.dense-workbench-active,
+    .main-content:has(#arinc429-view.active),
+    .main-content:has(#serial-view.active),
+    .main-content:has(#protocol-viewer-view.active),
+    .main-content:has(#protocol-version-view.active) {
+        padding: 0 !important;
+        height: calc(100dvh - 44px) !important;
+        height: calc(100vh - 44px) !important;
+        overflow: hidden !important;
+    }
+
+    /* 3. 协议列表视图头部 */
+    .view-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        margin-bottom: 10px !important;
+    }
+
+    .view-header h1 {
+        font-size: 1.3rem !important;
+    }
+
+    .view-header p {
+        font-size: 0.8rem !important;
+    }
+
+    .view-header > div:last-child {
+        width: 100% !important;
+        display: flex !important;
+        gap: 8px !important;
+    }
+
+    .view-header > div:last-child .btn {
+        flex: 1 !important;
+        justify-content: center !important;
+        font-size: 13px !important;
+        padding: 8px 10px !important;
+    }
+
+    /* 4. 工作台模式选择与目录同步条 */
+    .workspace-mode-nav {
+        width: 100% !important;
+    }
+
+    .ws-mode-btn {
+        flex: 1 !important;
+        justify-content: center !important;
+        padding: 7px 4px !important;
+        font-size: 11.5px !important;
+    }
+
+    .workspace-dir-strip {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 10px 10px !important;
+        gap: 8px !important;
+    }
+
+    .ws-left {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .ws-info {
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+
+    .ws-name {
+        max-width: 100% !important;
+        font-size: 12px !important;
+        white-space: normal !important;
+        word-break: break-all !important;
+    }
+
+    .ws-right {
+        width: 100% !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+    }
+
+    .ws-right .btn {
+        flex: 1 1 calc(50% - 6px) !important;
+        min-width: 75px !important;
+        justify-content: center !important;
+        height: 32px !important;
+        padding: 0 4px !important;
+        font-size: 11px !important;
+    }
+
+    /* 5. 协议卡片列表 */
+    .protocol-list-container {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    .protocol-card {
+        padding: 12px 12px !important;
+    }
+
+    .protocol-stats {
+        gap: 4px !important;
+    }
+
+    .pstat-item {
+        font-size: 10.5px !important;
+        padding: 2px 5px !important;
+    }
+
+    .protocol-actions {
+        margin-top: 8px !important;
+        padding-top: 8px !important;
+        gap: 6px !important;
+    }
+
+    .protocol-actions .btn {
+        height: 32px !important;
+        font-size: 11.5px !important;
+    }
+
+    /* 6. ARINC 429 工作台工具栏 (横向滚动支持，保存按钮高亮最易点击) */
+    .arinc-dense-toolbar {
+        height: auto !important;
+        min-height: 40px !important;
+        flex-wrap: wrap !important;
+        padding: 4px 6px !important;
+        gap: 5px !important;
+    }
+
+    .dense-tb-left {
+        width: 100% !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 2px !important;
+    }
+
+    .dense-tb-center {
+        width: 100% !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        justify-content: flex-start !important;
+        padding: 2px 0 !important;
+    }
+
+    .dense-tb-actions {
+        width: 100% !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        justify-content: flex-start !important;
+        padding-bottom: 2px !important;
+        gap: 4px !important;
+    }
+
+    .dense-tb-actions .dense-btn {
+        flex-shrink: 0 !important;
+        height: 28px !important;
+        padding: 0 7px !important;
+        font-size: 11px !important;
+    }
+
+    #btn-arinc-save {
+        order: -1 !important;
+        font-weight: 700 !important;
+        background: var(--accent-color) !important;
+        color: #fff !important;
+    }
+
+    /* 7. 移动端专属：双栏 Tab 切换条 */
+    .arinc-mobile-tab-bar {
+        display: flex !important;
+        gap: 6px !important;
+        margin-bottom: 5px !important;
+        padding: 0 2px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .arinc-mobile-tab-btn {
+        flex: 1 !important;
+        height: 32px !important;
+        line-height: 30px !important;
+        border-radius: 6px !important;
+        border: 1px solid var(--border-color) !important;
+        background: var(--bg-secondary) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 5px !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+    }
+
+    .arinc-mobile-tab-btn.active {
+        background: var(--accent-color) !important;
+        border-color: var(--accent-color) !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 5px rgba(59, 130, 246, 0.3) !important;
+    }
+
+    /* 移动端工作区主布局：单栏全宽切换 */
+    .arinc-dense-workbench {
+        flex-direction: column !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .workbench-resizer {
+        display: none !important;
+    }
+
+    .arinc-dense-workbench.mobile-view-words .arinc-dense-words-panel {
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+    }
+
+    .arinc-dense-workbench.mobile-view-words .arinc-dense-detail-panel {
+        display: none !important;
+    }
+
+    .arinc-dense-workbench.mobile-view-detail .arinc-dense-words-panel {
+        display: none !important;
+    }
+
+    .arinc-dense-workbench.mobile-view-detail .arinc-dense-detail-panel {
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+    }
+
+    .mobile-back-words-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 3px !important;
+        margin-right: 4px !important;
+        flex-shrink: 0 !important;
+        height: 28px !important;
+        padding: 0 6px !important;
+        font-size: 11px !important;
+        background: rgba(59, 130, 246, 0.12) !important;
+        color: var(--accent-color) !important;
+        border: 1px solid rgba(59, 130, 246, 0.25) !important;
+    }
+
+    /* 8. 标号字核心控制栏 (移动端两行自适应) */
+    .dense-word-primary-bar {
+        height: auto !important;
+        min-height: 40px !important;
+        flex-wrap: wrap !important;
+        padding: 6px 8px !important;
+        gap: 6px !important;
+    }
+
+    .prominent-label-card {
+        padding: 0 4px 0 6px !important;
+        height: 28px !important;
+    }
+
+    .prominent-octal-input {
+        width: 38px !important;
+        font-size: 13.5px !important;
+    }
+
+    .prominent-word-name-box {
+        flex: 1 1 120px !important;
+        min-width: 100px !important;
+    }
+
+    .prominent-word-name-input {
+        height: 28px !important;
+        font-size: 13px !important;
+        padding: 0 6px !important;
+    }
+
+    .dense-row-actions {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+        margin-left: 0 !important;
+        margin-top: 2px !important;
+    }
+
+    .dense-row-actions .dense-btn {
+        flex: 1 !important;
+        height: 28px !important;
+        justify-content: center !important;
+        font-size: 11px !important;
+    }
+
+    /* 9. 字段卡片在手机上的紧凑流式展示 */
+    .dense-field-card {
+        padding: 6px 8px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .field-card-header {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        padding: 4px 6px !important;
+    }
+
+    .field-card-header-left {
+        width: 100% !important;
+        gap: 6px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .field-card-name-wrap {
+        flex: 1 1 130px !important;
+        min-width: 110px !important;
+    }
+
+    .field-card-name-input {
+        height: 28px !important;
+        font-size: 12.5px !important;
+    }
+
+    .field-card-header-dict {
+        flex: 1 1 90px !important;
+        min-width: 80px !important;
+        max-width: 100% !important;
+    }
+
+    .field-card-header-right {
+        width: 100% !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+    }
+
+    .field-card-props-flow {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 5px !important;
+    }
+
+    .field-card-cell {
+        min-width: 0 !important;
+        flex: none !important;
+    }
+
+    .field-card-cell-remark {
+        grid-column: 1 / -1 !important;
+        width: 100% !important;
+    }
+
+    .field-card-input, .field-card-select {
+        height: 28px !important;
+        line-height: 26px !important;
+        font-size: 12px !important;
+    }
+
+    /* 10. 弹窗在手机上的全屏自适应 */
+    .modal-content {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        max-height: 90vh !important;
+        padding: 0 !important;
+        margin: 10px !important;
+        border-radius: 12px !important;
+    }
+
+    .check-modal-body,
+    .export-modal-body {
+        padding: 12px 14px !important;
+    }
+
+    .check-modal-body .codegen-top-strip {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        padding: 8px 10px !important;
+    }
+
+    .modal-actions {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .modal-actions .btn {
+        flex: 1 !important;
+        justify-content: center !important;
+    }
+
+    /* 11. 同步中心手机自适应 */
+    .sync-status-grid {
+        grid-template-columns: 1fr !important;
+        gap: 6px !important;
+    }
+
+    .sync-flow-indicator {
+        transform: rotate(90deg) !important;
+        margin: 2px 0 !important;
+    }
+
+    .sync-dir-card {
+        padding: 8px 10px !important;
+    }
+
+    .sync-dir-desc {
+        font-size: 11px !important;
+    }
+
+    .sync-metrics-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    /* 12. 协议版本对比双栏移动端折叠与自适应 */
+    .diff-dual-word-header-row,
+    .diff-dual-32bit-grid-row,
+    .diff-signal-pair-row {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    .vm-diff-catalog-panel {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}

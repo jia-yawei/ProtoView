@@ -24,9 +24,16 @@
 
     // DOM 元素引用
     let btnSerialBack, serialToolbarProtoTitle, badgeSerialBaud, badgeSerialParity,
-        serialPacketSelect,
-        btnAddSerialPacket, btnDuplicateSerialPacket, btnDeleteSerialPacket, btnViewSerialProps,
+        serialPacketSelectWrap, serialPacketSelect, btnRenameSerialPacket,
+        btnMenuRenameSerialPacket, serialPacketRenameBox, serialPacketRenameInput,
+        btnSerialPacketRenameConfirm, btnSerialPacketRenameCancel,
+        btnAddSerialPacket, btnMenuAddSerialPacket, btnDuplicateSerialPacket, btnDeleteSerialPacket, btnViewSerialProps,
         btnSerialExportJson, btnSerialSave;
+
+    // 撤销/重做、5态保存状态与草稿横幅
+    let btnSerialUndo, btnSerialRedo, serialSyncStatusBadge, serialDraftBanner,
+        btnSerialDraftDiscard, btnSerialDraftSave;
+    let serialUndoRedo = null;
 
     let serialTimelineTotalBadge, serialPacketName, serialPacketCmd,
         serialPacketDirection, serialPacketPeriodItem, serialPacketPeriod, serialByteTimeline;
@@ -49,13 +56,36 @@
         serialToolbarProtoTitle = document.getElementById('serial-toolbar-proto-title');
         badgeSerialBaud = document.getElementById('badge-serial-baud');
         badgeSerialParity = document.getElementById('badge-serial-parity');
+        serialPacketSelectWrap = document.getElementById('serial-packet-select-wrap');
         serialPacketSelect = document.getElementById('serial-packet-select');
+        btnRenameSerialPacket = document.getElementById('btn-rename-serial-packet');
+        btnMenuRenameSerialPacket = document.getElementById('btn-menu-rename-serial-packet');
+        serialPacketRenameBox = document.getElementById('serial-packet-rename-box');
+        serialPacketRenameInput = document.getElementById('serial-packet-rename-input');
+        btnSerialPacketRenameConfirm = document.getElementById('btn-serial-packet-rename-confirm');
+        btnSerialPacketRenameCancel = document.getElementById('btn-serial-packet-rename-cancel');
         btnAddSerialPacket = document.getElementById('btn-add-serial-packet');
+        btnMenuAddSerialPacket = document.getElementById('btn-menu-add-serial-packet');
         btnDuplicateSerialPacket = document.getElementById('btn-duplicate-serial-packet');
         btnDeleteSerialPacket = document.getElementById('btn-delete-serial-packet');
         btnViewSerialProps = document.getElementById('btn-view-serial-props');
         btnSerialExportJson = document.getElementById('btn-serial-export') || document.getElementById('btn-serial-export-json');
         btnSerialSave = document.getElementById('btn-serial-save');
+
+        btnSerialUndo = document.getElementById('btn-serial-undo');
+        btnSerialRedo = document.getElementById('btn-serial-redo');
+        serialSyncStatusBadge = document.getElementById('serial-sync-status-badge');
+        serialDraftBanner = document.getElementById('serial-draft-banner');
+        btnSerialDraftDiscard = document.getElementById('btn-serial-draft-discard');
+        btnSerialDraftSave = document.getElementById('btn-serial-draft-save');
+
+        if (!serialUndoRedo && ProtoView.UndoRedo) {
+            serialUndoRedo = ProtoView.UndoRedo.create({ maxDepth: 50 });
+            serialUndoRedo.setChangeListener(({ canUndo, canRedo }) => {
+                if (btnSerialUndo) btnSerialUndo.disabled = !canUndo;
+                if (btnSerialRedo) btnSerialRedo.disabled = !canRedo;
+            });
+        }
 
         serialTimelineTotalBadge = document.getElementById('serial-timeline-total-badge');
         serialPacketName = document.getElementById('serial-packet-name');
@@ -98,6 +128,74 @@
         btnPresetSerialBits = document.getElementById('btn-preset-serial-bits');
     }
 
+    // 撤销/重做与自动草稿辅助函数
+    function captureSerialMutation(actionName = '编辑') {
+        if (serialUndoRedo && currentSerialProtocol) {
+            serialUndoRedo.push(currentSerialProtocol, actionName);
+        }
+        if (ProtoView.ArchiveManager && currentSerialProtocol) {
+            ProtoView.ArchiveManager.markProtocolModified(currentSerialProtocol);
+            if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
+        }
+        triggerSerialDraftSave();
+    }
+
+    function triggerSerialDraftSave() {
+        if (!currentSerialProtocol) return;
+        if (ProtoView.SaveStatus && serialSyncStatusBadge) {
+            ProtoView.SaveStatus.renderBadge(serialSyncStatusBadge, 'unsaved');
+        }
+        if (ProtoView.DraftManager) {
+            ProtoView.DraftManager.scheduleAutoSave(currentSerialProtocol, (draft) => {
+                if (serialDraftBanner) serialDraftBanner.style.display = 'flex';
+                const timeEl = document.getElementById('serial-draft-time');
+                if (timeEl) timeEl.textContent = '刚刚';
+            });
+        }
+    }
+
+    function performSerialUndo() {
+        if (!serialUndoRedo || !currentSerialProtocol) return;
+        const restored = serialUndoRedo.undo(currentSerialProtocol);
+        if (restored) {
+            currentSerialProtocol = restored;
+            getCurrentSerialPacket();
+            if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
+            renderSerialByteTimeline();
+            renderSerialBytesList();
+            renderSelectedSerialFieldInspector();
+            triggerSerialDraftSave();
+            showToast('已撤销操作 (Undo)', 'info');
+        }
+    }
+
+    function performSerialRedo() {
+        if (!serialUndoRedo || !currentSerialProtocol) return;
+        const restored = serialUndoRedo.redo(currentSerialProtocol);
+        if (restored) {
+            currentSerialProtocol = restored;
+            getCurrentSerialPacket();
+            if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
+            renderSerialByteTimeline();
+            renderSerialBytesList();
+            renderSelectedSerialFieldInspector();
+            triggerSerialDraftSave();
+            showToast('已重做操作 (Redo)', 'info');
+        }
+    }
+
     // 辅助：安全获取当前选中的数据包
     function getCurrentSerialPacket() {
         if (!currentSerialProtocol || !currentSerialProtocol.packets || currentSerialProtocol.packets.length === 0) {
@@ -134,6 +232,50 @@
         }
 
         const p = currentSerialProtocol;
+        window.currentSerialProtocol = currentSerialProtocol;
+
+        if (ProtoView.ArchiveManager) {
+            ProtoView.ArchiveManager.ensureProtocolVersion(p);
+        } else if (ProtoView.VersionManager) {
+            ProtoView.VersionManager.ensureProtocolVersion(p);
+        }
+        const verInfo = ProtoView.ArchiveManager
+            ? ProtoView.ArchiveManager.getVersionDisplayInfo(p)
+            : { versionText: p.version || 'v1.0', baseVersion: p.version || 'v1.0', isArchived: Boolean(p.isArchived), isModified: false, statusLabel: p.isArchived ? '已归档' : '未归档', statusClass: p.isArchived ? 'is-archived' : 'not-archived', versionPillClass: 'proto-version-pill', tooltip: '' };
+
+        const serialVerPill = document.getElementById('serial-ver-pill');
+        const serialArchiveBadge = document.getElementById('serial-archive-badge');
+        if (serialVerPill) {
+            serialVerPill.textContent = verInfo.versionText;
+            serialVerPill.className = verInfo.versionPillClass;
+            serialVerPill.title = '点击打开协议版本管理中心与版本发展历程';
+            serialVerPill.onclick = () => {
+                if (window.openProtocolVersionModal) window.openProtocolVersionModal(p);
+                else if (window.openProtocolDiffModal) window.openProtocolDiffModal(p);
+            };
+        }
+        if (serialArchiveBadge) {
+            serialArchiveBadge.className = `proto-archive-badge ${verInfo.statusClass}`;
+            serialArchiveBadge.innerHTML = `<i class="fa-solid ${verInfo.isArchived ? 'fa-box-archive' : (verInfo.isModified ? 'fa-pen-to-square' : 'fa-folder-open')}"></i> ${verInfo.statusLabel}`;
+            serialArchiveBadge.title = verInfo.tooltip;
+            serialArchiveBadge.onclick = () => {
+                if (window.handleProtocolArchive) window.handleProtocolArchive(p);
+            };
+        }
+
+        const btnSerialArchive = document.getElementById('btn-serial-archive');
+        if (btnSerialArchive) {
+            btnSerialArchive.className = `dense-btn ${verInfo.archiveBtnClass || ''}`;
+            btnSerialArchive.disabled = !verInfo.canArchive;
+            btnSerialArchive.style.opacity = verInfo.canArchive ? '1' : '0.65';
+            btnSerialArchive.style.cursor = verInfo.canArchive ? 'pointer' : 'not-allowed';
+            btnSerialArchive.title = verInfo.canArchive ? (verInfo.isModified ? '协议发生修改：点击升版归档' : '首次归档当前协议为正式基准') : '当前协议已归档且无改动，无需重复归档';
+            btnSerialArchive.innerHTML = `<i class="fa-solid ${verInfo.archiveBtnIcon}" style="color:${verInfo.canArchive ? (verInfo.isModified ? 'var(--accent-color)' : '#059669') : 'var(--success)'};"></i> <span>${verInfo.archiveBtnText}</span>`;
+            btnSerialArchive.onclick = () => {
+                if (window.handleProtocolArchive && p) window.handleProtocolArchive(p);
+            };
+        }
+
         if (serialToolbarProtoTitle) {
             serialToolbarProtoTitle.innerHTML = `<i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> ${escapeHTML(p.name || '串口协议')}`;
             serialToolbarProtoTitle.title = (p.product ? `所属产品: ${p.product}\n` : '') + `协议名称: ${p.name || '串口协议'}\n接口类型: ${p.subType || 'RS485'}\n波特率: ${p.baudRate || 115200} bps | 校验: ${p.parity || 'none'}\n方向: ${p.direction || 'Tx'} | 周期: ${p.period || 20}ms`;
@@ -158,7 +300,7 @@
                 const pktPeriod = pkt.period !== undefined ? pkt.period : (p.period || 20);
                 const periodText = isRx ? '' : ` ${pktPeriod}ms`;
                 opt.textContent = pkt.name || '未命名数据包';
-                opt.title = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'}`;
+                opt.title = `[${isRx ? '接收' : '发送'}${periodText}] ${pkt.name || '未命名数据包'}`;
                 if (idx === currentSerialPacketIndex) {
                     opt.selected = true;
                 }
@@ -167,13 +309,36 @@
         }
     }
 
-    // 载入指定串口协议到工作台
+    // 载入指定串口协议到工作台 (自动检测并提示恢复本地草稿)
     async function loadSerialProtocolIntoEditor(id) {
         initDOMElements();
         const p = await (window.dbHelper ? window.dbHelper.getProtocol(id) : null);
         if (!p) return;
 
-        currentSerialProtocol = p;
+        // 检查是否存在更新的本地草稿
+        let isUsingDraft = false;
+        let draftObj = null;
+        if (ProtoView.DraftManager) {
+            draftObj = ProtoView.DraftManager.getDraft(p);
+            if (draftObj && ProtoView.DraftManager.isDraftNewer(draftObj, p)) {
+                currentSerialProtocol = draftObj.data;
+                isUsingDraft = true;
+            } else {
+                currentSerialProtocol = p;
+            }
+        } else {
+            currentSerialProtocol = p;
+        }
+
+        if (!isUsingDraft && ProtoView.ArchiveManager) {
+            ProtoView.ArchiveManager.ensureProtocolVersion(currentSerialProtocol);
+            if (!ProtoView.ArchiveManager.hasChangesAgainstArchived(currentSerialProtocol)) {
+                currentSerialProtocol.isArchived = true;
+                currentSerialProtocol.hasUnarchivedChanges = false;
+                if (ProtoView.DraftManager) ProtoView.DraftManager.clearDraft(currentSerialProtocol);
+            }
+        }
+
         if (!currentSerialProtocol.packets || !Array.isArray(currentSerialProtocol.packets) || currentSerialProtocol.packets.length === 0) {
             currentSerialProtocol.packets = [
                 {
@@ -195,10 +360,42 @@
         }
         currentSerialFieldIndex = 0;
 
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
         updateSerialToolbarProtocolInfo();
         renderSerialByteTimeline();
         renderSerialBytesList();
         renderSelectedSerialFieldInspector();
+
+        // 联动草稿横幅提示与 5 态保存状态指示徽章
+        if (serialDraftBanner) {
+            if (isUsingDraft) {
+                serialDraftBanner.style.display = 'flex';
+                const timeEl = document.getElementById('serial-draft-time');
+                if (timeEl && draftObj) {
+                    timeEl.textContent = ProtoView.DraftManager.formatRelativeTime(draftObj.savedAt);
+                }
+            } else {
+                serialDraftBanner.style.display = 'none';
+            }
+        }
+
+        if (ProtoView.SaveStatus && serialSyncStatusBadge) {
+            if (isUsingDraft) {
+                ProtoView.SaveStatus.renderBadge(serialSyncStatusBadge, 'unsaved');
+                if (ProtoView.DraftManager) ProtoView.DraftManager.setUnsaved(true);
+            } else {
+                const initialStatus = p._fromCloud ? 'cloud_synced' : 'saved_local';
+                ProtoView.SaveStatus.renderBadge(serialSyncStatusBadge, initialStatus, { lastSavedTime: p._cloudUpdated });
+                if (ProtoView.DraftManager) ProtoView.DraftManager.setUnsaved(false);
+            }
+        }
+
+        if (serialUndoRedo) {
+            serialUndoRedo.reset();
+        }
     }
 
     // 聚焦并红色高亮闪烁特定字段卡片
@@ -733,26 +930,45 @@
                     bitBadge.innerHTML = `<i class="fa-solid fa-sliders"></i> bit${sBit}${bCount > 1 ? `~bit${eBit}` : ''} (${bCount}b)`;
                 }
                 renderSerialBytesList();
+                triggerSerialDraftSave();
+            };
+
+            const onFieldPropCommit = (propName) => {
+                captureSerialMutation(`修改${propName || '字段属性'}`);
+                triggerSerialDraftSave();
             };
 
             inName.addEventListener('input', onCardChange);
-            inType.addEventListener('change', onCardChange);
+            inName.addEventListener('change', () => onFieldPropCommit('字段名'));
+            inType.addEventListener('change', () => { onCardChange(); onFieldPropCommit('类型'); });
             inStart.addEventListener('input', onCardChange);
+            inStart.addEventListener('change', () => onFieldPropCommit('起始位'));
             inBitCount.addEventListener('input', onCardChange);
+            inBitCount.addEventListener('change', () => onFieldPropCommit('位长度'));
             inRes.addEventListener('input', onCardChange);
+            inRes.addEventListener('change', () => onFieldPropCommit('分辨率'));
             inOffset.addEventListener('input', onCardChange);
+            inOffset.addEventListener('change', () => onFieldPropCommit('精度'));
             inMin.addEventListener('input', onCardChange);
+            inMin.addEventListener('change', () => onFieldPropCommit('量程'));
             inMax.addEventListener('input', onCardChange);
+            inMax.addEventListener('change', () => onFieldPropCommit('量程'));
             inUnit.addEventListener('input', onCardChange);
-            if (inRemark) inRemark.addEventListener('input', onCardChange);
+            inUnit.addEventListener('change', () => onFieldPropCommit('单位'));
+            if (inRemark) {
+                inRemark.addEventListener('input', onCardChange);
+                inRemark.addEventListener('change', () => onFieldPropCommit('备注'));
+            }
 
             const btnDict = card.querySelector('.btn-edit-field-dict');
             if (btnDict) {
                 btnDict.addEventListener('click', () => {
                     if (typeof window.openDictModal === 'function') {
                         window.openDictModal(sig, `字段 [${sig.name || sig.bitRange || '未命名字段'}]`, () => {
+                            captureSerialMutation('修改字段字典');
                             renderSerialFieldCards(field);
                             renderSerialBytesList();
+                            triggerSerialDraftSave();
                         });
                     }
                 });
@@ -761,6 +977,7 @@
             const btnClone = card.querySelector('.btn-clone-serial-sig');
             if (btnClone) {
                 btnClone.addEventListener('click', () => {
+                    captureSerialMutation('克隆字段卡片');
                     const cloned = JSON.parse(JSON.stringify(sig));
                     cloned.name = sig.name ? `${sig.name}_副本` : '新字段';
                     cloned.key = `sig_${Date.now().toString().slice(-6)}`;
@@ -783,6 +1000,7 @@
                     field.signals.splice(sIdx + 1, 0, cloned);
                     renderSerialFieldCards(field);
                     renderSerialBytesList();
+                    triggerSerialDraftSave();
                     showToast(`已克隆字段「${cloned.name}」(自动顺延起始位: bit${cloned.startBit})`, 'success');
                 });
             }
@@ -790,9 +1008,11 @@
             const btnDel = card.querySelector('.btn-del-serial-sig');
             if (btnDel) {
                 btnDel.addEventListener('click', () => {
+                    captureSerialMutation('删除字段卡片');
                     field.signals.splice(sIdx, 1);
                     renderSerialFieldCards(field);
                     renderSerialBytesList();
+                    triggerSerialDraftSave();
                     showToast('已删除字段卡片', 'info');
                 });
             }
@@ -809,6 +1029,8 @@
             return;
         }
         if (!field.signals) field.signals = [];
+
+        captureSerialMutation('添加字段卡片');
 
         let nextStart = 0;
         let defaultCount = 8;
@@ -845,6 +1067,7 @@
         field.signals.push(newSig);
         renderSerialFieldCards(field);
         renderSerialBytesList();
+        triggerSerialDraftSave();
         showToast(`已添加新字段卡片 (自动计算起始位: bit${nextStart})！`, 'success');
     }
 
@@ -854,6 +1077,7 @@
             alert('请先在左侧列表中选中一个单字节！');
             return;
         }
+        captureSerialMutation('预设8Bits');
         const presets = [
             { key: 'bit_0', startBit: 0, bitCount: 1, length: 1, bitRange: 'bit0', name: '电源使能状态', dataType: 'bool', dict: { "0": "关断", "1": "开启" }, resolution: '', precision: '', min: '', max: '', unit: '', remark: '' },
             { key: 'bit_1', startBit: 1, bitCount: 1, length: 1, bitRange: 'bit1', name: '工作运行准备', dataType: 'bool', dict: { "0": "未就绪", "1": "就绪" }, resolution: '', precision: '', min: '', max: '', unit: '', remark: '' },
@@ -867,6 +1091,7 @@
         field.signals = presets;
         renderSerialFieldCards(field);
         renderSerialBytesList();
+        triggerSerialDraftSave();
         showToast('已为当前字节填充 8 个独立 Bit (bit0 ~ bit7) 状态开关卡片！', 'success');
     }
 
@@ -874,6 +1099,7 @@
     function autoAssignSerialOffsets() {
         const pkt = getCurrentSerialPacket();
         if (!pkt || !pkt.fields || pkt.fields.length === 0) return;
+        captureSerialMutation('重排字节偏移');
         pkt.fields.forEach((f, idx) => {
             f.byteOffset = idx;
             f.byteCount = 1;
@@ -881,7 +1107,12 @@
         renderSerialByteTimeline();
         renderSerialBytesList();
         renderSelectedSerialFieldInspector();
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
         updateSerialToolbarProtocolInfo();
+        triggerSerialDraftSave();
         showToast('已按照列表当前顺序顺排字节序号 (从 Byte 0 连续排布)！', 'success');
     }
 
@@ -917,6 +1148,8 @@
                     return;
                 }
             }
+
+            captureSerialMutation('添加字节');
 
             if (!pkt.fields) pkt.fields = [];
 
@@ -964,7 +1197,12 @@
             renderSerialByteTimeline();
             renderSerialBytesList();
             renderSelectedSerialFieldInspector();
-            updateSerialToolbarProtocolInfo();
+            if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
+            triggerSerialDraftSave();
 
             setTimeout(() => {
                 const activeTr = serialBytesList ? serialBytesList.querySelector('.dense-word-row.selected') : null;
@@ -989,6 +1227,8 @@
         const field = getCurrentSerialField();
         if (!pkt || !field) return;
 
+        captureSerialMutation('克隆字节');
+
         const cloned = JSON.parse(JSON.stringify(field));
         cloned.name = `${field.name || '字节'}_副本`;
         cloned.key = `byte_${Date.now().toString().slice(-4)}`;
@@ -1000,18 +1240,35 @@
         renderSerialByteTimeline();
         renderSerialBytesList();
         renderSelectedSerialFieldInspector();
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
         updateSerialToolbarProtocolInfo();
+        triggerSerialDraftSave();
         showToast(`已成功克隆字节「${cloned.name}」`, 'success');
     }
 
-    function deleteSerialField(idx) {
+    async function deleteSerialField(idx) {
         const targetIdx = (idx !== undefined && idx !== null) ? Number(idx) : currentSerialFieldIndex;
         const pkt = getCurrentSerialPacket();
         if (!pkt || !pkt.fields || pkt.fields.length === 0) return;
 
         const f = pkt.fields[targetIdx];
         if (!f) return;
-        if (!confirm(`确定要删除字节「${f.name || `Byte ${f.byteOffset}`}」吗？`)) return;
+
+        const ok = await (ProtoView.showConfirm ? ProtoView.showConfirm({
+            title: '删除字节确认',
+            icon: 'fa-trash-can',
+            type: 'danger',
+            message: `确定要删除字节「${f.name || `Byte ${f.byteOffset}`}」吗？`,
+            detail: '删除后，该单字节及其包含的所有位段字段定义都将被移除。',
+            confirmText: '确认删除',
+            cancelText: '取消'
+        }) : Promise.resolve(confirm(`确定要删除字节「${f.name || `Byte ${f.byteOffset}`}」吗？`)));
+        if (!ok) return;
+
+        captureSerialMutation('删除字节');
 
         pkt.fields.splice(targetIdx, 1);
         if (currentSerialFieldIndex >= pkt.fields.length) {
@@ -1021,7 +1278,12 @@
         renderSerialByteTimeline();
         renderSerialBytesList();
         renderSelectedSerialFieldInspector();
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
         updateSerialToolbarProtocolInfo();
+        triggerSerialDraftSave();
         showToast('字节已删除', 'info');
     }
 
@@ -1031,6 +1293,8 @@
         const newIdx = currentSerialFieldIndex + delta;
         if (newIdx < 0 || newIdx >= pkt.fields.length) return;
 
+        captureSerialMutation('移动字节');
+
         const tmp = pkt.fields[currentSerialFieldIndex];
         pkt.fields[currentSerialFieldIndex] = pkt.fields[newIdx];
         pkt.fields[newIdx] = tmp;
@@ -1039,6 +1303,7 @@
         renderSerialByteTimeline();
         renderSerialBytesList();
         renderSelectedSerialFieldInspector();
+        triggerSerialDraftSave();
 
         setTimeout(() => {
             const activeTr = serialBytesList ? serialBytesList.querySelector('.dense-word-row.selected') : null;
@@ -1051,6 +1316,8 @@
     // 数据包操作：切换、添加、克隆、删除
     function addSerialPacket() {
         if (!currentSerialProtocol) return;
+        if (typeof finishRenameSerialPacket === 'function') finishRenameSerialPacket(false);
+        captureSerialMutation('添加数据包');
         if (!currentSerialProtocol.packets) currentSerialProtocol.packets = [];
 
         const count = currentSerialProtocol.packets.length;
@@ -1070,15 +1337,22 @@
         currentSerialPacketIndex = currentSerialProtocol.packets.length - 1;
         currentSerialFieldIndex = 0;
 
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
         updateSerialToolbarProtocolInfo();
         renderSerialByteTimeline();
         renderSerialBytesList();
         renderSelectedSerialFieldInspector();
+        triggerSerialDraftSave();
         showToast(`已新建数据包「${newPkt.name}」`, 'success');
     }
 
     function duplicateCurrentSerialPacket() {
         if (!currentSerialProtocol || !currentSerialProtocol.packets || !currentSerialProtocol.packets[currentSerialPacketIndex]) return;
+
+        captureSerialMutation('克隆数据包');
 
         const src = currentSerialProtocol.packets[currentSerialPacketIndex];
         const cloned = JSON.parse(JSON.stringify(src));
@@ -1095,22 +1369,38 @@
         currentSerialPacketIndex = currentSerialPacketIndex + 1;
         currentSerialFieldIndex = 0;
 
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
         updateSerialToolbarProtocolInfo();
         renderSerialByteTimeline();
         renderSerialBytesList();
         renderSelectedSerialFieldInspector();
+        triggerSerialDraftSave();
         showToast(`已成功克隆数据包「${cloned.name}」`, 'success');
     }
 
-    function deleteCurrentSerialPacket() {
+    async function deleteCurrentSerialPacket() {
         if (!currentSerialProtocol || !currentSerialProtocol.packets) return;
         if (currentSerialProtocol.packets.length <= 1) {
-            alert('协议至少需要保留一个数据包！');
+            showToast('协议至少需要保留一个数据包，不能删除！', 'warning');
             return;
         }
 
         const pkt = currentSerialProtocol.packets[currentSerialPacketIndex];
-        if (!confirm(`确定要删除当前数据包「${pkt.name || pkt.cmd}」吗？`)) return;
+        const ok = await (ProtoView.showConfirm ? ProtoView.showConfirm({
+            title: '删除数据包确认',
+            icon: 'fa-trash-can',
+            type: 'danger',
+            message: `确定要删除当前数据包「${pkt.name || pkt.cmd}」吗？`,
+            detail: '删除后，该数据包内部包含的所有字节与位段字段定义都将被彻底移除。',
+            confirmText: '确认删除',
+            cancelText: '取消'
+        }) : Promise.resolve(confirm(`确定要删除当前数据包「${pkt.name || pkt.cmd}」吗？`)));
+        if (!ok) return;
+
+        captureSerialMutation('删除数据包');
 
         currentSerialProtocol.packets.splice(currentSerialPacketIndex, 1);
         if (currentSerialPacketIndex >= currentSerialProtocol.packets.length) {
@@ -1118,18 +1408,53 @@
         }
         currentSerialFieldIndex = 0;
 
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
         updateSerialToolbarProtocolInfo();
         renderSerialByteTimeline();
         renderSerialBytesList();
         renderSelectedSerialFieldInspector();
+        triggerSerialDraftSave();
         showToast('数据包已删除', 'info');
     }
+
+    // 直接修改串口数据包名称 (原生输入，杜绝新增容器与遮挡位移)
+    function renameCurrentSerialPacket() {
+        const activePkt = getCurrentSerialPacket();
+        if (!activePkt) return;
+        const oldName = activePkt.name || `数据包 ${currentSerialPacketIndex + 1}`;
+        const newName = prompt('请输入数据包名称：', oldName);
+        if (newName === null) return;
+        const trimmed = newName.trim();
+        if (!trimmed || trimmed === oldName) return;
+        captureSerialMutation('重命名数据包');
+        activePkt.name = trimmed;
+        if (serialPacketName) serialPacketName.value = trimmed;
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+        updateSerialToolbarProtocolInfo();
+        triggerSerialDraftSave();
+        showToast(`已将数据包重命名为「${trimmed}」`, 'success');
+    }
+
+    // 向后兼容保留方法名
+    function startRenameSerialPacket() {
+        renameCurrentSerialPacket();
+    }
+    function finishRenameSerialPacket() {}
 
     // 确保当前有串口协议处于载入状态
     async function ensureSerialProtocolLoaded() {
         initDOMElements();
         if (currentSerialProtocol && currentSerialProtocol.packets && currentSerialProtocol.packets.length > 0) {
-            updateSerialToolbarProtocolInfo();
+            if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
             renderSerialByteTimeline();
             renderSerialBytesList();
             renderSelectedSerialFieldInspector();
@@ -1142,42 +1467,128 @@
             await loadSerialProtocolIntoEditor(serialProto.id);
         } else {
             currentSerialProtocol = null;
-            updateSerialToolbarProtocolInfo();
+            if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
             renderSerialByteTimeline();
             renderSerialBytesList();
             renderSelectedSerialFieldInspector();
         }
     }
 
-    // 保存当前串口协议
-    async function saveCurrentSerialProtocol() {
+    // 保存当前串口协议 (支持 5 态状态提示、并发冲突仲裁与重试)
+    async function saveCurrentSerialProtocol(forceOverwrite = false) {
         if (!currentSerialProtocol) return;
+
+        if (ProtoView.SaveStatus && serialSyncStatusBadge) {
+            ProtoView.SaveStatus.renderBadge(serialSyncStatusBadge, 'pending_sync');
+        }
+
+        if (ProtoView.ArchiveManager && currentSerialProtocol) {
+            // 保存动作仅为数据持久化，不应盲目将已归档无修改的协议改为“修改中”
+            if (!ProtoView.ArchiveManager.hasChangesAgainstArchived(currentSerialProtocol)) {
+                currentSerialProtocol.isArchived = true;
+                currentSerialProtocol.hasUnarchivedChanges = false;
+            }
+        }
+
+        // 同步当前包的修改
+        const activePkt = getCurrentSerialPacket();
+        if (activePkt && serialPacketName) {
+            activePkt.name = serialPacketName.value.trim() || activePkt.name;
+        }
 
         currentSerialProtocol.updatedAt = new Date().toISOString();
 
-        // 本地工作目录与云端同步处理
-        let cloudRes = { ok: true };
-        if (ProtoView.WorkspaceSync) {
-            cloudRes = await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(currentSerialProtocol);
-        }
-
+        // 1. 本地数据库先行保存
         const id = await window.dbHelper.saveProtocol(currentSerialProtocol);
         currentSerialProtocol.id = id;
 
-        if (btnSerialSave) {
-            const origHTML = btnSerialSave.innerHTML;
-            if (cloudRes.ok) {
-                btnSerialSave.innerHTML = `<i class="fa-solid fa-check"></i> 云端已同步!`;
+        // 2. 云端原生同步
+        let cloudRes = { ok: true };
+        if (ProtoView.WorkspaceSync) {
+            cloudRes = await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(currentSerialProtocol, {
+                expectedUpdated: currentSerialProtocol._cloudUpdated || 0,
+                force: forceOverwrite
+            });
+        }
+
+        // 3. 处理两台设备同时修改引起的云端并发冲突
+        if (cloudRes.conflict) {
+            if (ProtoView.ConflictManager) {
+                const choice = await ProtoView.ConflictManager.resolve(currentSerialProtocol, cloudRes);
+                if (choice === 'overwrite') {
+                    return await saveCurrentSerialProtocol(true);
+                } else if (choice === 'pull') {
+                    if (ProtoView.DraftManager) ProtoView.DraftManager.clearDraft(currentSerialProtocol);
+                    await ProtoView.WorkspaceSync.syncCloudProtocols(false);
+                    await loadSerialProtocolIntoEditor(currentSerialProtocol.id);
+                    showToast('已拉取云端最新版本并重载至工作台', 'info');
+                    return;
+                } else if (choice === 'copy') {
+                    const copyProto = JSON.parse(JSON.stringify(currentSerialProtocol));
+                    delete copyProto.id;
+                    delete copyProto._cloudKey;
+                    copyProto.name = `${currentSerialProtocol.name}_本地副本`;
+                    const newId = await window.dbHelper.saveProtocol(copyProto);
+                    if (ProtoView.DraftManager) ProtoView.DraftManager.clearDraft(currentSerialProtocol);
+                    await loadSerialProtocolIntoEditor(newId);
+                    await saveCurrentSerialProtocol(false);
+                    showToast(`已将本地修改另存为新协议「${copyProto.name}」`, 'success');
+                    return;
+                } else {
+                    if (ProtoView.SaveStatus && serialSyncStatusBadge) {
+                        ProtoView.SaveStatus.renderBadge(serialSyncStatusBadge, 'saved_local');
+                    }
+                    return;
+                }
+            }
+        }
+
+        // 4. 同步成功或失败状态反馈
+        if (cloudRes.ok) {
+            if (ProtoView.SaveStatus && serialSyncStatusBadge) {
+                ProtoView.SaveStatus.renderBadge(serialSyncStatusBadge, cloudRes.isLocal ? 'saved_local' : 'cloud_synced', {
+                    lastSavedTime: Date.now()
+                });
+            }
+            if (ProtoView.DraftManager) {
+                ProtoView.DraftManager.clearDraft(currentSerialProtocol);
+            }
+            if (serialDraftBanner) serialDraftBanner.style.display = 'none';
+
+            if (btnSerialSave) {
+                const origHTML = btnSerialSave.innerHTML;
+                btnSerialSave.innerHTML = `<i class="fa-solid fa-check"></i> ` + (cloudRes.isLocal ? '本地已保存!' : '云端已同步!');
                 btnSerialSave.style.backgroundColor = 'var(--success)';
-            } else {
+                setTimeout(() => {
+                    btnSerialSave.innerHTML = origHTML;
+                    btnSerialSave.style.backgroundColor = '';
+                }, 1600);
+            }
+        } else {
+            if (ProtoView.SaveStatus && serialSyncStatusBadge) {
+                ProtoView.SaveStatus.renderBadge(serialSyncStatusBadge, 'sync_failed', {
+                    errorMsg: cloudRes.error,
+                    onRetry: () => saveCurrentSerialProtocol(forceOverwrite)
+                });
+            }
+            if (btnSerialSave) {
+                const origHTML = btnSerialSave.innerHTML;
                 btnSerialSave.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 仅本地保存`;
                 btnSerialSave.style.backgroundColor = 'var(--warning)';
-                showToast(`本地已保存，但云端同步失败: ${cloudRes.error}`, 'warning');
+                setTimeout(() => {
+                    btnSerialSave.innerHTML = origHTML;
+                    btnSerialSave.style.backgroundColor = '';
+                }, 1800);
             }
-            setTimeout(() => {
-                btnSerialSave.innerHTML = origHTML;
-                btnSerialSave.style.backgroundColor = '';
-            }, 1800);
+            showToast(`本地已保存，但云端同步未成功: ${cloudRes.error} (支持点击状态栏重试)`, 'warning');
+        }
+
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
         }
 
         updateSerialToolbarProtocolInfo();
@@ -1208,6 +1619,44 @@
         if (btnSerialMobileTabPackets) btnSerialMobileTabPackets.addEventListener('click', () => setMobileSerialView('packets'));
         if (btnSerialMobileTabDetail) btnSerialMobileTabDetail.addEventListener('click', () => setMobileSerialView('detail'));
         if (btnSerialMobileBackPackets) btnSerialMobileBackPackets.addEventListener('click', () => setMobileSerialView('packets'));
+
+        if (btnSerialUndo) {
+            btnSerialUndo.addEventListener('click', performSerialUndo);
+        }
+        if (btnSerialRedo) {
+            btnSerialRedo.addEventListener('click', performSerialRedo);
+        }
+
+        if (btnSerialDraftDiscard) {
+            btnSerialDraftDiscard.addEventListener('click', async () => {
+                if (!currentSerialProtocol) return;
+                const ok = await (ProtoView.showConfirm ? ProtoView.showConfirm({
+                    title: '放弃未保存草稿',
+                    icon: 'fa-rotate-left',
+                    type: 'warning',
+                    message: '确定要放弃本地自动保存的草稿吗？',
+                    detail: '将重新加载数据库已保存的干净版本，本次会话的所有未保存编辑将被放弃。',
+                    confirmText: '确认放弃草稿',
+                    cancelText: '保留草稿'
+                }) : Promise.resolve(confirm('确定要放弃本地自动保存的草稿吗？将重新加载数据库已保存的版本。')));
+
+                if (ok) {
+                    if (ProtoView.DraftManager) {
+                        ProtoView.DraftManager.clearDraft(currentSerialProtocol);
+                    }
+                    if (serialDraftBanner) serialDraftBanner.style.display = 'none';
+                    if (currentSerialProtocol.id) {
+                        await loadSerialProtocolIntoEditor(currentSerialProtocol.id);
+                    }
+                    showToast('已放弃本地草稿，恢复至数据库版本', 'info');
+                }
+            });
+        }
+        if (btnSerialDraftSave) {
+            btnSerialDraftSave.addEventListener('click', () => {
+                saveCurrentSerialProtocol();
+            });
+        }
 
         if (btnSerialBack) {
             btnSerialBack.addEventListener('click', () => {
@@ -1253,12 +1702,35 @@
                 renderSerialByteTimeline();
                 renderSerialBytesList();
                 renderSelectedSerialFieldInspector();
+                if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+                    ProtoView.ActiveSession.set(currentSerialProtocol);
+                }
                 updateSerialToolbarProtocolInfo();
+            });
+        }
+
+        if (btnRenameSerialPacket) {
+            btnRenameSerialPacket.addEventListener('click', renameCurrentSerialPacket);
+        }
+
+        if (btnMenuRenameSerialPacket) {
+            btnMenuRenameSerialPacket.addEventListener('click', () => {
+                const moreDropdown = document.getElementById('serial-more-dropdown');
+                if (moreDropdown) moreDropdown.classList.remove('active');
+                renameCurrentSerialPacket();
             });
         }
 
         if (btnAddSerialPacket) {
             btnAddSerialPacket.addEventListener('click', addSerialPacket);
+        }
+
+        if (btnMenuAddSerialPacket) {
+            btnMenuAddSerialPacket.addEventListener('click', () => {
+                const moreDropdown = document.getElementById('serial-more-dropdown');
+                if (moreDropdown) moreDropdown.classList.remove('active');
+                addSerialPacket();
+            });
         }
 
         if (btnDuplicateSerialPacket) {
@@ -1274,7 +1746,16 @@
                 const pkt = getCurrentSerialPacket();
                 if (!pkt) return;
                 pkt.name = e.target.value.trim();
-                updateSerialToolbarProtocolInfo();
+                if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
+                triggerSerialDraftSave();
+            });
+            serialPacketName.addEventListener('change', () => {
+                captureSerialMutation('修改数据包名称');
+                triggerSerialDraftSave();
             });
         }
 
@@ -1282,14 +1763,20 @@
             serialPacketDirection.addEventListener('change', (e) => {
                 const pkt = getCurrentSerialPacket();
                 if (!pkt) return;
+                captureSerialMutation('更改数据包方向');
                 const newDir = e.target.value === 'Rx' ? 'Rx' : 'Tx';
                 pkt.direction = newDir;
                 if (!serialPacketPeriodItem) serialPacketPeriodItem = document.getElementById('serial-packet-period-item');
                 if (serialPacketPeriodItem) {
                     serialPacketPeriodItem.style.display = (newDir === 'Tx') ? 'flex' : 'none';
                 }
-                updateSerialToolbarProtocolInfo();
+                if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
                 renderSerialByteTimeline();
+                triggerSerialDraftSave();
             });
         }
 
@@ -1298,7 +1785,16 @@
                 const pkt = getCurrentSerialPacket();
                 if (!pkt) return;
                 pkt.period = Number(e.target.value) || 20;
-                updateSerialToolbarProtocolInfo();
+                if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentSerialProtocol);
+        }
+
+        updateSerialToolbarProtocolInfo();
+                triggerSerialDraftSave();
+            });
+            serialPacketPeriod.addEventListener('change', () => {
+                captureSerialMutation('修改数据包周期');
+                triggerSerialDraftSave();
             });
         }
 
@@ -1355,6 +1851,11 @@
                 field.name = e.target.value.trim();
                 renderSerialByteTimeline();
                 renderSerialBytesList();
+                triggerSerialDraftSave();
+            });
+            serialFieldName.addEventListener('change', () => {
+                captureSerialMutation('修改字节名称');
+                triggerSerialDraftSave();
             });
         }
 
@@ -1364,6 +1865,11 @@
                 if (!field) return;
                 field.key = e.target.value.trim();
                 renderSerialBytesList();
+                triggerSerialDraftSave();
+            });
+            serialFieldKey.addEventListener('change', () => {
+                captureSerialMutation('修改字节标识');
+                triggerSerialDraftSave();
             });
         }
 
@@ -1401,6 +1907,11 @@
                 if (!field) return;
                 field.fixedHex = e.target.value.trim().toUpperCase();
                 renderSerialBytesList();
+                triggerSerialDraftSave();
+            });
+            serialPropFixedHex.addEventListener('change', () => {
+                captureSerialMutation('修改默认Hex');
+                triggerSerialDraftSave();
             });
         }
 
@@ -1496,10 +2007,14 @@
         addSerialPacket,
         duplicateCurrentSerialPacket,
         deleteCurrentSerialPacket,
+        startRenameSerialPacket,
+        finishRenameSerialPacket,
         ensureSerialProtocolLoaded,
         saveCurrentSerialProtocol,
         updateSerialToolbarProtocolInfo,
         setMobileSerialView,
+        undo: performSerialUndo,
+        redo: performSerialRedo,
         bindEvents: bindSerialEvents
     };
 
@@ -1508,6 +2023,8 @@
 
     // 向后兼容挂载到 window
     global.loadSerialProtocolIntoEditor = loadSerialProtocolIntoEditor;
+    global.performSerialUndo = performSerialUndo;
+    global.performSerialRedo = performSerialRedo;
     global.renderSerialByteTimeline = renderSerialByteTimeline;
     global.renderSerialBytesList = renderSerialBytesList;
     global.renderSelectedSerialFieldInspector = renderSelectedSerialFieldInspector;
@@ -1525,6 +2042,9 @@
     global.addSerialPacket = addSerialPacket;
     global.duplicateCurrentSerialPacket = duplicateCurrentSerialPacket;
     global.deleteCurrentSerialPacket = deleteCurrentSerialPacket;
+    global.renameCurrentSerialPacket = renameCurrentSerialPacket;
+    global.startRenameSerialPacket = startRenameSerialPacket;
+    global.finishRenameSerialPacket = finishRenameSerialPacket;
     global.ensureSerialProtocolLoaded = ensureSerialProtocolLoaded;
     global.saveCurrentSerialProtocol = saveCurrentSerialProtocol;
     global.setMobileSerialView = setMobileSerialView;

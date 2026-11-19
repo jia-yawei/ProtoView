@@ -246,7 +246,51 @@
                 showToast((data && data.error) || '读取系统数据失败', 'error');
             }
         } catch (e) {
-            showToast('请求监控服务异常: ' + e.message, 'error');
+            const isLocal = ProtoView.Auth && typeof ProtoView.Auth.isLocalDevEnv === 'function' ? ProtoView.Auth.isLocalDevEnv() : false;
+            if (isLocal) {
+                try {
+                    const localProtos = await (window.dbHelper ? window.dbHelper.getAllProtocols() : []);
+                    const localProducts = await (window.dbHelper ? window.dbHelper.getAllProducts() : []);
+                    const typeDist = { ARINC429: 0, Serial: 0, CAN: 0 };
+                    localProtos.forEach(p => {
+                        const t = p.type === 'ARINC429' ? 'ARINC429' : (p.type === 'CAN' ? 'CAN' : 'Serial');
+                        typeDist[t] = (typeDist[t] || 0) + 1;
+                    });
+                    const mockData = {
+                        success: true,
+                        overview: {
+                            totalUsers: 1,
+                            activeSessions: 1,
+                            totalProtocols: localProtos.length,
+                            totalProducts: localProducts.length,
+                            totalStorageBytes: JSON.stringify(localProtos).length,
+                            typeDistribution: typeDist
+                        },
+                        bindings: {
+                            d1: { connected: false, desc: '本地离线沙箱 (使用浏览器 IndexedDB 存储)' },
+                            r2: { configured: false, desc: '本地离线模式' },
+                            cfApi: { configured: false, desc: '本地离线模式' }
+                        },
+                        quotaHealth: {
+                            mode: 'local_dev'
+                        },
+                        users: [
+                            { username: 'admin', isAdmin: true, created_at: Date.now() },
+                            { username: 'dev', isAdmin: false, created_at: Date.now() }
+                        ]
+                    };
+                    adminStatsData = mockData;
+                    renderOverviewKPIs(mockData.overview);
+                    renderBindingsStatus(mockData.bindings, mockData.quotaHealth);
+                    renderQuotaHealth(mockData.quotaHealth);
+                    renderUsersTable(mockData.users);
+                    showToast('本地离线开发环境：已呈现本地 IndexedDB 资产统计', 'info');
+                } catch(mockErr) {
+                    showToast('本地离线统计生成异常: ' + mockErr.message, 'warning');
+                }
+            } else {
+                showToast('请求监控服务异常: ' + e.message, 'error');
+            }
         } finally {
             if (btnRefreshAdmin) {
                 btnRefreshAdmin.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> 刷新数据`;

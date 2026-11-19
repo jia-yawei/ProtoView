@@ -55,6 +55,7 @@
                 mainSidebar.classList.toggle('collapsed');
                 const isCollapsed = mainSidebar.classList.contains('collapsed');
                 localStorage.setItem('protoview_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+                window._sidebarAutoCollapsedByViewer = false;
             });
         }
     }
@@ -93,10 +94,38 @@
             modalBackdropMouseDownTarget = null;
         });
 
-        // 按 ESC 关闭
+        // 通用下拉菜单 (如 [··· 更多]) 切换与点击外部自动关闭
+        document.addEventListener('click', (e) => {
+            const trigger = e.target.closest('.dense-dropdown-trigger');
+            const allDropdowns = document.querySelectorAll('.dense-dropdown');
+
+            if (trigger) {
+                const parentDropdown = trigger.closest('.dense-dropdown');
+                const isActive = parentDropdown && parentDropdown.classList.contains('active');
+                allDropdowns.forEach(d => d.classList.remove('active'));
+                if (parentDropdown && !isActive) {
+                    parentDropdown.classList.add('active');
+                }
+                return;
+            }
+
+            // 点击菜单项后自动关闭下拉菜单
+            if (e.target.closest('.dense-dropdown-item')) {
+                allDropdowns.forEach(d => d.classList.remove('active'));
+                return;
+            }
+
+            // 点击下拉菜单外部关闭
+            if (!e.target.closest('.dense-dropdown')) {
+                allDropdowns.forEach(d => d.classList.remove('active'));
+            }
+        });
+
+        // 按 ESC 关闭弹窗及下拉菜单
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
+                document.querySelectorAll('.dense-dropdown.active').forEach(d => d.classList.remove('active'));
             }
         });
 
@@ -120,6 +149,14 @@
                     return;
                 }
 
+                const versionView = document.getElementById('protocol-version-view');
+                if (versionView && versionView.classList.contains('active')) {
+                    if (ProtoView.Utils && ProtoView.Utils.showToast) {
+                        ProtoView.Utils.showToast('当前处于协议版本管理中心；若需编辑协议，请点击右上角「进入工作台」', 'info');
+                    }
+                    return;
+                }
+
                 const serialView = document.getElementById('serial-view');
                 if (serialView && serialView.classList.contains('active')) {
                     if (typeof window.saveCurrentSerialProtocol === 'function') {
@@ -138,6 +175,45 @@
 
                 if (typeof window.saveCurrentArincProtocol === 'function') {
                     window.saveCurrentArincProtocol();
+                }
+            }
+        });
+
+        // Ctrl + Z / Ctrl + Y (Ctrl + Shift + Z) 撤销与重做全局快捷键
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+                const key = e.key.toLowerCase();
+                const isUndo = (key === 'z' && !e.shiftKey);
+                const isRedo = (key === 'y' && !e.shiftKey) || (key === 'z' && e.shiftKey);
+
+                if (!isUndo && !isRedo) return;
+
+                const activeTag = document.activeElement ? document.activeElement.tagName : '';
+                const isInput = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
+
+                // 如果光标正在输入框内打字，让浏览器原生处理局部文字撤销；若在工作台上则触发整步结构撤销/重做
+                if (isInput) return;
+
+                const arincView = document.getElementById('arinc429-view');
+                if (arincView && arincView.classList.contains('active')) {
+                    e.preventDefault();
+                    if (isUndo && typeof window.performArincUndo === 'function') {
+                        window.performArincUndo();
+                    } else if (isRedo && typeof window.performArincRedo === 'function') {
+                        window.performArincRedo();
+                    }
+                    return;
+                }
+
+                const serialView = document.getElementById('serial-view');
+                if (serialView && serialView.classList.contains('active')) {
+                    e.preventDefault();
+                    if (isUndo && typeof window.performSerialUndo === 'function') {
+                        window.performSerialUndo();
+                    } else if (isRedo && typeof window.performSerialRedo === 'function') {
+                        window.performSerialRedo();
+                    }
+                    return;
                 }
             }
         });
@@ -171,6 +247,10 @@
 
             if (viewId === 'protocol-view') {
                 if (typeof window.loadProtocols === 'function') window.loadProtocols();
+            } else if (viewId === 'protocol-version-view') {
+                if (ProtoView.VersionManager && typeof ProtoView.VersionManager.initView === 'function') {
+                    ProtoView.VersionManager.initView();
+                }
             } else if (viewId === 'arinc429-view') {
                 if (typeof window.loadArincProtocolsForSelect === 'function') window.loadArincProtocolsForSelect();
                 if (typeof window.setMobileArincView === 'function' && window.innerWidth <= 768) {
@@ -206,7 +286,9 @@
         // 未登录状态：清空本地旧缓存以防泄露历史数据，登录前仅呈现登录准入门户
         const loggedIn = ProtoView.Auth && ProtoView.Auth.isLoggedIn ? ProtoView.Auth.isLoggedIn() : false;
         if (!loggedIn) {
-            if (window.dbHelper) {
+            const isLocal = ProtoView.Auth && typeof ProtoView.Auth.isLocalDevEnv === 'function' ? ProtoView.Auth.isLocalDevEnv() : false;
+            // 本地离线开发环境不抹除本地数据，防止调试刷新页面时丢失本地草稿
+            if (!isLocal && window.dbHelper) {
                 await window.dbHelper.clearAllProtocols();
                 await window.dbHelper.clearAllProducts();
             }
@@ -217,7 +299,8 @@
         const currentUser = ProtoView.Auth && ProtoView.Auth.getCurrentUser ? ProtoView.Auth.getCurrentUser() : null;
         const isAdmin = currentUser && (currentUser.isAdmin || currentUser.username.toLowerCase() === 'admin');
         if (isAdmin) {
-            if (window.dbHelper) {
+            const isLocal = ProtoView.Auth && typeof ProtoView.Auth.isLocalDevEnv === 'function' ? ProtoView.Auth.isLocalDevEnv() : false;
+            if (!isLocal && window.dbHelper) {
                 await window.dbHelper.clearAllProtocols();
                 await window.dbHelper.clearAllProducts();
             }

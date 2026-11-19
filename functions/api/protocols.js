@@ -533,6 +533,43 @@ export async function onRequestPost(context) {
         const safeName = (body.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
         const key = `ws:${workspace}:proto:${safeName}`;
 
+        // 多设备并发冲突检测：若指定了基础时间戳且未声明强制覆盖，检查云端是否有更新版本
+        const forceOverwrite = body.force === true;
+        const expectedUpdated = Number(body._expectedUpdated || body._baseCloudUpdated || 0);
+
+        if (!forceOverwrite && expectedUpdated > 0) {
+            let existingUpdated = 0;
+            if (db) {
+                try {
+                    const row = await db.prepare("SELECT updated_at FROM protocols WHERE key = ?").bind(key).first();
+                    if (row && row.updated_at) {
+                        existingUpdated = Number(row.updated_at);
+                    }
+                } catch(e) {}
+            }
+            if (!existingUpdated && bucket) {
+                try {
+                    const obj = await bucket.get(key);
+                    if (obj) {
+                        const m = obj.customMetadata || {};
+                        if (m.updateTime) existingUpdated = Number(m.updateTime);
+                        else if (obj.uploaded) existingUpdated = new Date(obj.uploaded).getTime();
+                    }
+                } catch(e) {}
+            }
+            if (existingUpdated > (expectedUpdated + 1500)) {
+                return new Response(JSON.stringify({
+                    success: false,
+                    conflict: true,
+                    cloudUpdated: existingUpdated,
+                    error: "检测到云端存在较新版本，该协议可能已被其他设备修改！"
+                }), {
+                    status: 409,
+                    headers
+                });
+            }
+        }
+
         body._cloudKey = key;
         body._cloudWorkspace = workspace;
         body._cloudOwner = authUser ? authUser.username : workspace;

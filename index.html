@@ -6,10 +6,29 @@
     <title>航空通信总线协议管理平台 | ProtoView</title>
     <!-- 引入 Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- 引入 FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- 引入自定义样式 -->
-    <link rel="stylesheet" href="css/style.css">
+    <!-- 引入 FontAwesome (优先采用国内极速 BootCDN 镜像，并配备多源动态容灾，彻底杜绝国外 CDN 超时/被墙导致图标大面积消失) -->
+    <link rel="stylesheet" id="fa-stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        // FontAwesome 自动容灾探测：若主 CDN 发生网络超时或受阻，秒级自动平滑切换至备用源
+        (function() {
+            var faLink = document.getElementById('fa-stylesheet');
+            if (!faLink) return;
+            var fallbacks = [
+                'https://cdnjs.loli.net/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+                'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css',
+                'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+            ];
+            var fIdx = 0;
+            faLink.onerror = function() {
+                if (fIdx < fallbacks.length) {
+                    console.warn('[ProtoView] FontAwesome 主 CDN 加载失败，正在自动切换至备用源: ' + fallbacks[fIdx]);
+                    faLink.href = fallbacks[fIdx++];
+                }
+            };
+        })();
+    </script>
+    <!-- 引入自定义样式 (增加版本后缀强制穿透缓存) -->
+    <link rel="stylesheet" href="css/style.css?v=20261119_11">
     
     <!-- Dexie.js 简化 IndexedDB -->
     <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
@@ -49,6 +68,19 @@
             <div class="portal-tab-bar">
                 <button type="button" class="portal-tab-btn active" id="tab-auth-login">登 录</button>
                 <button type="button" class="portal-tab-btn" id="tab-auth-register">注 册</button>
+            </div>
+
+            <!-- 本地离线开发专属免推提示条 (仅在 localhost / 127.0.0.1 显示) -->
+            <div class="portal-local-dev-banner" id="portal-local-dev-banner" style="display:none; margin: -4px 0 14px 0; padding: 10px 14px; background: rgba(16, 185, 129, 0.08); border: 1px dashed rgba(16, 185, 129, 0.4); border-radius: 8px; font-size: 12px; color: #059669; line-height: 1.4;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <div>
+                        <span style="font-weight: 700; color: #10b981;"><i class="fa-solid fa-laptop-code"></i> 本地开发环境已就绪</span>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">已启用离线免配置沙箱，无需推送到 Cloudflare 即可调试</div>
+                    </div>
+                    <button type="button" class="btn btn-xs" id="btn-quick-dev-login" style="background:#10b981; color:#fff; border:none; padding:4px 10px; border-radius:4px; font-weight:700; cursor:pointer; white-space:nowrap;" title="以本地开发者账号秒进系统">
+                        <i class="fa-solid fa-bolt"></i> 免密秒进
+                    </button>
+                </div>
             </div>
 
             <!-- 登录表单 -->
@@ -133,52 +165,127 @@
             </div>
 
             <!-- 主导航菜单与快捷工作空间 -->
-            <nav class="nav-menu">
-                <div class="nav-section-title sidebar-text">工作空间</div>
-                <button class="nav-item active" data-view="protocol-view" id="nav-btn-protocol" title="通信协议管理库">
+            <nav class="nav-menu" id="sidebar-nav-menu">
+                <!-- 1. 工作空间与总线协议分类导航 -->
+                <div class="nav-section-title sidebar-text">总线协议</div>
+                <button class="nav-item active" data-bus-type="all" data-view="protocol-view" id="nav-bus-all" title="全部通信协议">
                     <span class="nav-icon-wrap"><i class="fa-solid fa-layer-group"></i></span>
-                    <span class="sidebar-text">协议管理库</span>
+                    <span class="sidebar-text">全部协议</span>
+                    <span class="sidebar-mini-name">全部</span>
                     <span class="nav-item-badge" id="sidebar-proto-count-badge">0</span>
+                </button>
+                <button class="nav-item" data-bus-type="ARINC429" data-view="protocol-view" id="nav-bus-arinc429" title="ARINC 429 航空总线通信协议">
+                    <span class="nav-icon-wrap"><i class="fa-solid fa-plane-departure" style="color:var(--accent-color);"></i></span>
+                    <span class="sidebar-text">ARINC 429</span>
+                    <span class="sidebar-mini-name">429</span>
+                    <span class="nav-item-badge" id="sidebar-count-arinc429">0</span>
+                </button>
+                <button class="nav-item" data-bus-type="SERIAL" data-view="protocol-view" id="nav-bus-serial" title="串口总线通信协议 (UART / RS422 / RS485)">
+                    <span class="nav-icon-wrap"><i class="fa-solid fa-bolt" style="color:#f59e0b;"></i></span>
+                    <span class="sidebar-text">串口总线</span>
+                    <span class="sidebar-mini-name">串口</span>
+                    <span class="nav-item-badge" id="sidebar-count-serial">0</span>
+                </button>
+                <button class="nav-item" data-bus-type="CAN" data-view="protocol-view" id="nav-bus-can" title="CAN 工业总线协议">
+                    <span class="nav-icon-wrap"><i class="fa-solid fa-network-wired" style="color:#10b981;"></i></span>
+                    <span class="sidebar-text">CAN 总线</span>
+                    <span class="sidebar-mini-name">CAN</span>
+                    <span class="nav-item-badge" id="sidebar-count-can">0</span>
                 </button>
                 <button class="nav-item" data-view="admin-view" id="nav-btn-admin" style="display: none;" title="系统监控与后台管理">
                     <span class="nav-icon-wrap"><i class="fa-solid fa-gauge-high"></i></span>
                     <span class="sidebar-text">系统监控后台</span>
+                    <span class="sidebar-mini-name">监控</span>
                 </button>
 
-                <!-- 快捷工具区 (提升侧边栏饱满度与操控效率) -->
-                <div class="nav-section-title sidebar-text nav-shortcuts-header" style="margin-top: 14px;">快捷工具</div>
-                <button type="button" class="nav-quick-btn sidebar-shortcut" id="sidebar-btn-new-proto" onclick="if(window.openCreateProtocolModal){window.openCreateProtocolModal();}else if(window.openCreate429Modal){window.openCreate429Modal();}" title="创建新通信协议">
-                    <span class="nav-icon-wrap"><i class="fa-solid fa-plus"></i></span>
-                    <span class="sidebar-text">新建通信协议</span>
+                <!-- 折叠态专用优雅分隔条 (展开时隐藏) -->
+                <div class="sidebar-collapsed-divider"></div>
+
+                <!-- 2. 产品型号目录树 (支持整行折叠收拢与微搜索过滤，确保下方工具箱不被挤出首屏) -->
+                <div class="nav-section-header sidebar-text" id="sidebar-product-header" style="margin-top: 10px; cursor: pointer;" title="点击折叠/展开产品型号列表">
+                    <div class="nsh-title-box">
+                        <i class="fa-solid fa-chevron-down nsh-chevron" id="sidebar-prod-tree-chevron"></i>
+                        <span class="nav-section-title" style="padding: 0;">产品型号</span>
+                        <span class="sidebar-prod-count-pill" id="sidebar-prod-total-count">0</span>
+                    </div>
+                    <button type="button" class="btn-sidebar-add-prod" id="btn-sidebar-add-prod" onclick="event.stopPropagation(); if(window.openProductModal){window.openProductModal();}" title="新建产品型号">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+                <div class="sidebar-product-section-body" id="sidebar-product-section-body">
+                    <!-- 快速微搜索过滤框 (当型号较多时极速过滤) -->
+                    <div class="sidebar-prod-search-wrap" id="sidebar-prod-search-wrap" style="display: none;">
+                        <i class="fa-solid fa-magnifying-glass sps-icon"></i>
+                        <input type="text" id="sidebar-product-search" class="sidebar-prod-search-input" placeholder="过滤产品型号..." autocomplete="off">
+                        <button type="button" class="sps-clear-btn" id="btn-clear-sidebar-prod-search" style="display: none;" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <!-- 独立限高滚动容器 (绝不会无限拉长挤占工具箱) -->
+                    <div class="sidebar-product-tree" id="sidebar-product-tree">
+                        <!-- 由 JS 动态渲染各产品条目 -->
+                    </div>
+                </div>
+
+                <!-- 3. 工程工具箱 -->
+                <div class="nav-section-title sidebar-text" style="margin-top: 12px;">工程工具箱</div>
+                <button type="button" class="nav-tool-btn" id="sidebar-tool-export" onclick="if(window.openProtocolExportModal){window.openProtocolExportModal();}" title="统一导出中心：导出 JSON、PDF 规格书、Markdown">
+                    <span class="nav-icon-wrap"><i class="fa-solid fa-file-export" style="color:#0ea5e9;"></i></span>
+                    <span class="sidebar-text">导出规格中心</span>
+                    <span class="sidebar-mini-name">导出</span>
                 </button>
-                <button type="button" class="nav-quick-btn sidebar-shortcut" id="sidebar-btn-new-product" onclick="if(window.openProductModal){window.openProductModal();}" title="创建产品型号">
-                    <span class="nav-icon-wrap"><i class="fa-solid fa-cubes"></i></span>
-                    <span class="sidebar-text">新建产品型号</span>
+                <button type="button" class="nav-tool-btn" id="sidebar-tool-import" onclick="document.getElementById('arinc-file-input').click()" title="导入协议：从本地选择 .json 协议文件">
+                    <span class="nav-icon-wrap"><i class="fa-solid fa-file-import" style="color:#8b5cf6;"></i></span>
+                    <span class="sidebar-text">导入协议文件</span>
+                    <span class="sidebar-mini-name">导入</span>
                 </button>
-                <button type="button" class="nav-quick-btn sidebar-shortcut" id="sidebar-btn-sync-cloud" onclick="if(window.ProtoView && window.ProtoView.WorkspaceSync){window.ProtoView.WorkspaceSync.syncCloudProtocols(true);}" title="立即从云端拉取同步最新数据">
-                    <span class="nav-icon-wrap"><i class="fa-solid fa-arrows-rotate"></i></span>
-                    <span class="sidebar-text">同步云端数据</span>
+                <button type="button" class="nav-tool-btn" id="sidebar-tool-check" onclick="if(window.runProtocolHealthCheck){window.runProtocolHealthCheck();}" title="协议静态合规与健康度全面体检">
+                    <span class="nav-icon-wrap"><i class="fa-solid fa-stethoscope" style="color:#ec4899;"></i></span>
+                    <span class="sidebar-text">协议合规体检</span>
+                    <span class="sidebar-mini-name">体检</span>
                 </button>
+
             </nav>
 
-            <!-- 侧边栏底部：高质感整合型用户卡片与操作栏 (集成主题切换与退出) -->
+            <!-- 5. 侧边栏：当前活跃协议会话卡 (Active Session) -->
+            <div class="sidebar-active-session" id="sidebar-active-session" style="display: none;">
+                <div class="sas-header">
+                    <span class="sas-label"><i class="fa-solid fa-clock-rotate-left"></i> 当前协议</span>
+                    <span class="sas-type-tag" id="sas-type-tag">429</span>
+                </div>
+                <div class="sas-body">
+                    <div class="sas-title" id="sas-title" title="协议名称">未打开协议</div>
+                    <div class="sas-meta">
+                        <span class="sas-ver" id="sas-ver">v1.0</span>
+                        <span class="sas-status" id="sas-status">已归档</span>
+                    </div>
+                </div>
+                <div class="sas-actions">
+                    <button type="button" class="sas-btn sas-btn-workbench" id="sas-btn-edit" title="继续编辑该协议"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
+                    <button type="button" class="sas-btn sas-btn-viewer" id="sas-btn-view" title="进入只读查阅模式"><i class="fa-solid fa-eye"></i> 查阅</button>
+                </div>
+            </div>
+
+            <!-- 侧边栏底部：紧凑工程状态栏 (整合用户身份、本地/云端存储状态、一键同步、主题切换与认证) -->
             <div class="sidebar-footer">
-                <div class="sidebar-user-card" id="sidebar-user-card" title="点击可切换账号">
+                <div class="sidebar-user-card" id="sidebar-user-card" title="点击切换账号或登录">
                     <div class="sidebar-user-avatar" id="sidebar-user-avatar">
-                        <i class="fa-solid fa-user"></i>
+                        <i class="fa-solid fa-laptop-code"></i>
                     </div>
                     <div class="sidebar-user-info">
-                        <span class="sidebar-user-name" id="sidebar-user-name">未登录</span>
-                        <div class="sidebar-user-status" id="sidebar-user-status">
-                            <i class="fa-solid fa-circle"></i> <span>未登录</span>
+                        <span class="sidebar-user-name" id="sidebar-user-name">本地工作区</span>
+                        <div class="sidebar-user-status" id="sidebar-user-status" title="当前数据持久化于本地 IndexedDB；可点击右侧图标同步至云端">
+                            <i class="fa-solid fa-database" style="color:#10b981; font-size:9px;"></i>
+                            <span>本地存储就绪</span>
                         </div>
                     </div>
                     <div class="sidebar-user-actions">
+                        <button type="button" class="sidebar-action-btn" id="sidebar-quick-sync-btn" title="立即从云端拉取同步最新数据">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
                         <button type="button" class="sidebar-action-btn" id="theme-toggle" title="切换深色/浅色模式">
                             <i class="fa-solid fa-moon"></i>
                         </button>
-                        <button type="button" class="sidebar-action-btn btn-logout-action" id="btn-sidebar-auth-action" title="退出登录">
-                            <i class="fa-solid fa-right-from-bracket"></i>
+                        <button type="button" class="sidebar-action-btn btn-logout-action" id="btn-sidebar-auth-action" title="前往登录">
+                            <i class="fa-solid fa-arrow-right-to-bracket"></i>
                         </button>
                     </div>
                 </div>
@@ -188,7 +295,7 @@
         <!-- 主内容区 -->
         <main class="main-content">
             
-            <!-- 视图 1：协议管理库 -->
+            <!-- 视图 1：协议管理库 (极简高密度主面板) -->
             <section id="protocol-view" class="view-section active">
                 <header class="view-header compact-view-header">
                     <div class="view-header-title-box">
@@ -196,14 +303,13 @@
                         <span class="view-header-desc">集中管理 ARINC 429、CAN 及串口总线通信协议</span>
                     </div>
                     <div class="view-header-actions">
-                        <button class="btn btn-secondary btn-sm" id="btn-cloud-refresh" title="从 Cloudflare 云端同步并刷新协议">
-                            <i class="fa-solid fa-arrows-rotate"></i> 刷新协议
-                        </button>
-                        <button class="btn btn-secondary btn-sm" id="btn-create-product" title="新建产品型号，在产品下归类和管理多包通信协议">
-                            <i class="fa-solid fa-cubes"></i> 新建产品
-                        </button>
-                        <button class="btn btn-secondary btn-sm" id="btn-main-import" onclick="document.getElementById('arinc-file-input').click()" title="从电脑硬盘选择已保存的 .json 协议文件导入">
-                            <i class="fa-solid fa-file-import"></i> 导入协议文件
+                        <div class="product-search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="product-proto-search" placeholder="搜索协议、设备或标号..." autocomplete="off">
+                            <button type="button" class="btn-clear-search" id="btn-clear-product-search" style="display:none;" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm btn-toggle-collapse-all" id="btn-toggle-collapse-all" title="全部折叠 / 全部展开产品卡片" style="display:none;">
+                            <i class="fa-solid fa-angles-up" id="icon-collapse-all"></i> <span id="btn-collapse-all-text">全部折叠</span>
                         </button>
                         <button class="btn btn-primary btn-sm" id="btn-create-protocol" onclick="if(window.openCreateProtocolModal){window.openCreateProtocolModal();}else if(window.openCreate429Modal){window.openCreate429Modal();}">
                             <i class="fa-solid fa-plus"></i> 新建协议
@@ -211,21 +317,9 @@
                     </div>
                 </header>
 
-                <!-- 产品分组快捷筛选与搜索过滤条 -->
-                <div class="product-filter-bar" id="product-filter-bar">
-                    <div class="product-tabs" id="product-tabs-container">
-                        <!-- 动态渲染: 全部产品、各产品胶囊标签 -->
-                    </div>
-                    <div class="product-filter-right-actions">
-                        <button type="button" class="btn btn-secondary btn-xs btn-toggle-collapse-all" id="btn-toggle-collapse-all" title="全部折叠 / 全部展开产品卡片">
-                            <i class="fa-solid fa-angles-up" id="icon-collapse-all"></i> <span id="btn-collapse-all-text">全部折叠</span>
-                        </button>
-                        <div class="product-search-box">
-                            <i class="fa-solid fa-magnifying-glass"></i>
-                            <input type="text" id="product-proto-search" placeholder="搜索产品、协议、设备或标号..." autocomplete="off">
-                            <button type="button" class="btn-clear-search" id="btn-clear-product-search" style="display:none;" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                    </div>
+                <!-- 隐藏保留胶囊容器以供内部兼容防空 -->
+                <div id="product-filter-bar" style="display:none;">
+                    <div id="product-tabs-container"></div>
                 </div>
 
                 <!-- 协议列表展示区 -->
@@ -246,6 +340,15 @@
                             <span class="viewer-proto-title" id="viewer-proto-title">通信协议</span>
                             <span class="viewer-badge-product" id="viewer-product-badge" style="display:none;"></span>
                             <span class="viewer-type-pill" id="viewer-type-badge">ARINC 429</span>
+
+                            <!-- 规范版本自由切换下拉控件 -->
+                            <div class="viewer-version-select-wrap" id="viewer-version-select-wrap" title="切换查阅协议的不同版本或历史归档快照">
+                                <label for="viewer-version-select" class="vvs-label"><i class="fa-solid fa-code-branch"></i> 版本:</label>
+                                <select id="viewer-version-select" class="viewer-version-select"></select>
+                            </div>
+
+                            <span class="proto-version-pill" id="viewer-ver-pill" style="cursor:pointer;" onclick="if(window.openProtocolVersionView && window.currentViewerProtocol){window.openProtocolVersionView(window.currentViewerProtocol);}else if(window.openProtocolDiffModal && window.currentViewerProtocol){window.openProtocolDiffModal(window.currentViewerProtocol);}" title="版本号：点击打开协议版本管理">v1.0</span>
+                            <span class="proto-archive-badge not-archived" id="viewer-archive-badge" style="cursor:pointer;" onclick="if(window.handleProtocolArchive && window.currentViewerProtocol){window.handleProtocolArchive(window.currentViewerProtocol);}" title="归档状态：点击进行归档">未归档</span>
                             <span class="viewer-readonly-tag"><i class="fa-solid fa-eye"></i> 只读查阅模式</span>
                         </div>
                     </div>
@@ -254,7 +357,7 @@
                     <div class="viewer-tb-search">
                         <div class="viewer-search-wrapper">
                             <i class="fa-solid fa-magnifying-glass viewer-search-icon"></i>
-                            <input type="text" id="viewer-field-search" class="viewer-search-input" placeholder="输入字段名、位段(如 B12)、八进制(如 203)、单位或枚举释义秒级查找..." autocomplete="off">
+                            <input type="text" id="viewer-field-search" class="viewer-search-input" style="padding-left: 42px !important;" placeholder="输入字段名、位段(如 B12)、八进制(如 203)、单位或枚举释义秒级查找..." autocomplete="off">
                             <button type="button" class="viewer-search-clear" id="btn-clear-viewer-search" style="display:none;" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
                         </div>
                         <span class="viewer-match-pill" id="viewer-match-count" style="display:none;"></span>
@@ -263,22 +366,66 @@
                     <!-- 顶部右侧：数据包切换、导出与一键切换编辑工作台 -->
                     <div class="viewer-tb-actions">
                         <select id="viewer-packet-select" class="dense-select-xs" style="display:none; min-width: 135px; max-width: 200px; font-weight: 700;" title="切换数据包"></select>
+                        <button type="button" class="dense-btn" id="btn-viewer-diff" onclick="if(window.openProtocolVersionView && window.currentViewerProtocol){window.openProtocolVersionView(window.currentViewerProtocol);}else if(window.openProtocolDiffModal && window.currentViewerProtocol){window.openProtocolDiffModal(window.currentViewerProtocol);}" title="打开协议版本管理：查看版本历程与对比差异"><i class="fa-solid fa-code-branch" style="color:var(--accent-color);"></i> 版本管理</button>
+                        <button type="button" class="dense-btn" id="btn-viewer-check" onclick="if(window.runProtocolHealthCheck){window.runProtocolHealthCheck();}else if(ProtoView.Controllers && ProtoView.Controllers.Arinc && ProtoView.Controllers.Arinc.runProtocolHealthCheck){ProtoView.Controllers.Arinc.runProtocolHealthCheck();}" title="对当前通信协议进行静态合规与健康度全面体检"><i class="fa-solid fa-stethoscope" style="color:var(--accent-color);"></i> 检查</button>
                         <button type="button" class="dense-btn" id="btn-viewer-export" onclick="window.openProtocolExportModal && window.openProtocolExportModal()" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 导出</button>
                         <button type="button" class="dense-btn dense-btn-primary" id="btn-viewer-edit-workbench" title="切换到编辑工作台以修改协议定义与标号字"><i class="fa-solid fa-pen-ruler"></i> 进入编辑工作台</button>
                     </div>
                 </header>
+
+                <!-- 归档修改中提示横幅：当查阅基于已归档版本的修改中工作副本时醒目显示 -->
+                <div class="viewer-unarchived-banner" id="viewer-unarchived-banner" style="display: none;">
+                    <div class="vub-left">
+                        <i class="fa-solid fa-pen-to-square vub-icon"></i>
+                        <span class="vub-text" id="viewer-unarchived-text">当前查阅内容为基于 <b>v1.0</b> 的最新修改工作副本（包含未归档改动）</span>
+                    </div>
+                    <div class="vub-actions">
+                        <button type="button" class="btn-vub-action btn-vub-diff" id="btn-viewer-banner-diff" title="打开协议版本管理中心，查看版本发展历程与比对差异">
+                            <i class="fa-solid fa-code-branch"></i> 版本管理 (<span id="vub-diff-base-ver">v1.0</span>)
+                        </button>
+                        <button type="button" class="btn-vub-action btn-vub-revert" id="btn-viewer-banner-revert" title="放弃未归档修改，一键还原回上次归档的干净版本">
+                            <i class="fa-solid fa-rotate-left"></i> 还原到 <span id="vub-revert-base-ver">v1.0</span>
+                        </button>
+                        <button type="button" class="btn-vub-action btn-vub-archive" id="btn-viewer-banner-archive" title="将当前修改正式升版并归档">
+                            <i class="fa-solid fa-box-archive"></i> 升版归档
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 历史版本查阅提示横幅：当查阅历史快照版本时醒目提示当前为只读快照 -->
+                <div class="viewer-snapshot-banner" id="viewer-snapshot-banner" style="display: none;">
+                    <div class="vsb-left">
+                        <i class="fa-solid fa-clock-rotate-left vsb-icon"></i>
+                        <span class="vsb-text" id="viewer-snapshot-text">正在查阅历史归档快照 <b>v1.0</b>（只读快照）</span>
+                    </div>
+                    <div class="vsb-actions">
+                        <button type="button" class="btn-vsb-action btn-vsb-switch-working" id="btn-viewer-switch-working" title="一键切回最新工作副本进行查阅或编辑">
+                            <i class="fa-solid fa-arrow-turn-up"></i> 切回最新工作副本
+                        </button>
+                        <button type="button" class="btn-vsb-action btn-vsb-diff" id="btn-viewer-snapshot-diff" title="打开协议版本管理中心，查看版本演进历程与比对差异">
+                            <i class="fa-solid fa-code-branch"></i> 版本比对
+                        </button>
+                    </div>
+                </div>
 
                 <!-- 查阅中心主工作区 (双栏布局：左侧导航目录 + 右侧工程规格书阅读器) -->
                 <div class="viewer-main-container">
                     <!-- 左侧：标号字 / 字节导航清单 -->
                     <aside class="viewer-catalog-panel">
                         <div class="viewer-catalog-header">
-                            <span class="viewer-catalog-title"><i class="fa-solid fa-layer-group"></i> 协议字目录导航</span>
+                            <span class="viewer-catalog-title"><i class="fa-solid fa-layer-group"></i> 目录导航</span>
+                            <!-- 数据包切换下拉框 (支持多包极速切换) -->
+                            <div class="viewer-catalog-packet-wrap" id="viewer-catalog-packet-wrap">
+                                <select id="viewer-catalog-packet-select" class="dense-select-xs" title="切换当前查阅的数据包"></select>
+                            </div>
                         </div>
                         <div class="viewer-catalog-list" id="viewer-words-catalog">
                             <!-- JS 动态渲染各标号字卡片 -->
                         </div>
                     </aside>
+
+                    <!-- 目录宽度拖拽调宽手柄 -->
+                    <div class="workbench-resizer" id="viewer-catalog-resizer" title="左右拖动调整目录宽度"></div>
 
                     <!-- 右侧：选中的标号字完整 ICD 规格书 -->
                     <main class="viewer-reader-deck">
@@ -312,48 +459,107 @@
                     <div class="dense-tb-left">
                         <button type="button" class="dense-btn" id="btn-arinc-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 列表</button>
                         <span class="dense-tb-title" id="toolbar-proto-title" title="ARINC 429 通信协议"><i class="fa-solid fa-plane-departure" style="color: var(--accent-color);"></i> 429 协议</span>
+
+                        <span class="dense-tb-divider" style="height: 18px; margin: 0 4px;"></span>
+
+                        <!-- 429 数据包切换与方向周期：紧贴协议名称，杜绝断层空白与重叠遮挡 -->
+                        <div class="dense-tb-packet-selector" id="arinc-packet-selector-strip" style="display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;">
+                            <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px; flex: 0 0 auto;" title="429 数据包切换">
+                                <i class="fa-solid fa-box-archive"></i>
+                            </span>
+                            <!-- 常态展示：选包、加号、重命名，排布紧贴且自然清晰，完美对齐工控习惯 -->
+                            <div id="arinc-packet-select-wrap" style="display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin: 0; padding: 0;">
+                                <select id="arinc-packet-select" class="dense-select-xs" style="font-weight: 700; width: 130px; min-width: 105px; max-width: 165px; flex: 0 0 auto; margin: 0;" title="切换当前编辑的 429 数据包 (双击可直接重命名)" ondblclick="if(window.renameCurrentArincPacket){window.renameCurrentArincPacket();}"></select>
+                                <button type="button" class="dense-btn dense-btn-primary" id="btn-add-arinc-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" title="新建 429 数据包"><i class="fa-solid fa-plus"></i></button>
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-rename-arinc-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" onclick="if(window.renameCurrentArincPacket){window.renameCurrentArincPacket();}else if(window.ProtoView&&window.ProtoView.renameCurrentArincPacket){window.ProtoView.renameCurrentArincPacket();}" title="直接修改当前数据包名称"><i class="fa-solid fa-pen-to-square"></i></button>
+                            </div>
+
+                            <span class="dense-tb-divider" style="display: inline-block; width: 1px; min-width: 1px; max-width: 1px; height: 16px; margin: 0 6px; flex: 0 0 1px; background: var(--border-color);"></span>
+
+                            <div class="dense-form-item" title="该包通信方向 (严格单向：要么发送要么接收)" style="margin: 0; padding: 0; flex: 0 0 auto; display: inline-flex; align-items: center;">
+                                <select id="arinc-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 84px; min-width: 84px; max-width: 84px; flex: 0 0 84px; margin: 0;">
+                                    <option value="Tx">发送</option>
+                                    <option value="Rx">接收</option>
+                                </select>
+                            </div>
+                            <div class="dense-form-item" id="arinc-packet-period-item" title="发送通讯周期 (ms)" style="margin: 0 0 0 2px; padding: 0; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px;">
+                                <label for="arinc-packet-period" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;">
+                                    <i class="fa-regular fa-clock" style="color: var(--text-secondary); font-size: 11px;"></i>
+                                    <span style="font-size: 11px;">周期:</span>
+                                </label>
+                                <input type="number" id="arinc-packet-period" class="dense-input-xs" style="width: 48px; min-width: 48px; flex: 0 0 48px; margin: 0;" min="1" max="10000" placeholder="20">
+                                <span style="font-size: 11px; color: var(--text-secondary); flex: 0 0 auto;">ms</span>
+                            </div>
+                            <!-- 隐藏重复的包名标签，但保留输入框以确保 JS 兼容 -->
+                            <div class="dense-form-item" style="display: none !important;">
+                                <input type="text" id="arinc-packet-name" class="dense-input-xs" style="width: 105px;" placeholder="数据包名称" title="当前 429 数据包业务名称 (如: 主航电发送包 / 传感器接收包)">
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- 顶部中央：429 数据包切换与管理 (精简高密度，消除视觉拥挤) -->
-                    <div class="dense-tb-packet-selector" id="arinc-packet-selector-strip">
-                        <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px;" title="429 数据包切换">
-                            <i class="fa-solid fa-box-archive"></i>
-                        </span>
-                        <select id="arinc-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 135px; max-width: 200px;" title="切换当前编辑的 429 数据包"></select>
-                        <button type="button" class="dense-btn dense-btn-xs" id="btn-add-arinc-packet" title="添加新数据包"><i class="fa-solid fa-plus"></i> 新包</button>
-                        <button type="button" class="dense-btn dense-btn-xs" id="btn-duplicate-arinc-packet" title="克隆当前数据包及其标号字"><i class="fa-solid fa-copy"></i></button>
-                        <button type="button" class="dense-btn dense-btn-danger dense-btn-xs" id="btn-delete-arinc-packet" title="删除当前数据包"><i class="fa-solid fa-trash"></i></button>
-
-                        <span class="dense-tb-divider"></span>
-
-                        <div class="dense-form-item" title="该包通信方向 (严格单向：要么发送要么接收)">
-                            <select id="arinc-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 68px;">
-                                <option value="Tx">Tx (发)</option>
-                                <option value="Rx">Rx (收)</option>
-                            </select>
-                        </div>
-                        <div class="dense-form-item" id="arinc-packet-period-item" title="发送通讯周期 (ms)">
-                            <label for="arinc-packet-period" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 2px;">
-                                <i class="fa-regular fa-clock" style="color: var(--text-secondary); font-size: 11px;"></i>
-                                <span style="font-size: 11px;">周期:</span>
-                            </label>
-                            <input type="number" id="arinc-packet-period" class="dense-input-xs" style="width: 48px;" min="1" max="10000" placeholder="20">
-                            <span style="font-size: 11px; color: var(--text-secondary);">ms</span>
-                        </div>
-                        <div class="dense-form-item">
-                            <input type="text" id="arinc-packet-name" class="dense-input-xs" style="width: 105px;" placeholder="数据包名称" title="当前 429 数据包业务名称 (如: 主航电发送包 / 传感器接收包)">
-                        </div>
-                    </div>
+                    <div class="dense-tb-spacer"></div>
 
                     <div class="dense-tb-actions">
-                        <button type="button" class="dense-btn" id="btn-arinc-switch-viewer" onclick="window.openProtocolViewer && window.openProtocolViewer(window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Arinc && window.ProtoView.Controllers.Arinc.getCurrentProtocol ? window.ProtoView.Controllers.Arinc.getCurrentProtocol() : null)" title="切换至只读查阅模式：清晰查看位域拓扑与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
-                        <button type="button" class="dense-btn" id="btn-arinc-check" title="对当前协议进行静态合规与健康度全面体检"><i class="fa-solid fa-stethoscope" style="color:var(--accent-color);"></i> 检查</button>
-                        <button type="button" class="dense-btn" id="btn-view-arinc-props" title="查看或修改当前协议属性"><i class="fa-solid fa-sliders"></i> 属性</button>
-                        <input type="file" id="arinc-file-input" accept=".json" style="display:none">
-                        <button type="button" class="dense-btn" id="btn-arinc-export" onclick="window.openProtocolExportModal && window.openProtocolExportModal()" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 导出</button>
+                        <!-- 协议版本与归档状态药丸 (紧凑状态呈现) -->
+                        <div class="dense-version-group" id="arinc-version-group" title="协议版本与归档状态">
+                            <span class="proto-version-pill" id="arinc-ver-pill" onclick="if(window.openProtocolVersionView && window.currentArincProtocol){window.openProtocolVersionView(window.currentArincProtocol);}else if(window.openProtocolVersionModal && window.currentArincProtocol){window.openProtocolVersionModal(window.currentArincProtocol);}" title="版本号：点击打开协议版本管理与发展历程">v1.0</span>
+                            <span class="proto-archive-badge not-archived" id="arinc-archive-badge" onclick="if(window.handleProtocolArchive && window.currentArincProtocol){window.handleProtocolArchive(window.currentArincProtocol);}" title="归档状态：点击进行归档">未归档</span>
+                        </div>
+
+                        <!-- 归档按钮 (直接外显在顶栏，不在更多里面，符合操作习惯) -->
+                        <button type="button" class="dense-btn" id="btn-arinc-archive" onclick="if(window.handleProtocolArchive && window.currentArincProtocol){window.handleProtocolArchive(window.currentArincProtocol);}" title="归档当前协议：未归档直接归档当前版本，已归档可升版并建立冻结快照">
+                            <i class="fa-solid fa-box-archive" style="color:#059669;"></i> <span>归档</span>
+                        </button>
+
+                        <!-- 查阅模式 (高频核心切换，保留在外侧) -->
+                        <button type="button" class="dense-btn" id="btn-arinc-switch-viewer" title="切换至只读查阅模式：清晰查看位域拓扑与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
+
+                        <!-- [··· 更多] 下拉菜单：收纳属性、版本管理及数据包复制/删除 (归档已提取至外侧) -->
+                        <div class="dense-dropdown" id="arinc-more-dropdown">
+                            <button type="button" class="dense-btn dense-dropdown-trigger" id="btn-arinc-more-toggle" title="更多协议与数据包操作">
+                                <i class="fa-solid fa-ellipsis"></i> 更多 <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                            </button>
+                            <div class="dense-dropdown-menu" id="arinc-more-menu">
+                                <div class="dense-dropdown-header">协议操作</div>
+                                <button type="button" class="dense-dropdown-item" id="btn-view-arinc-props" title="查看或修改当前协议属性">
+                                    <i class="fa-solid fa-sliders"></i><span>协议属性配置</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-arinc-diff" onclick="if(window.openProtocolVersionView && window.currentArincProtocol){window.openProtocolVersionView(window.currentArincProtocol);}else if(window.openProtocolVersionModal && window.currentArincProtocol){window.openProtocolVersionModal(window.currentArincProtocol);}" title="查看协议版本演进历程与比对差异">
+                                    <i class="fa-solid fa-code-branch" style="color:var(--accent-color);"></i><span>协议版本管理</span>
+                                </button>
+                                <div class="dense-dropdown-divider"></div>
+                                <div class="dense-dropdown-header">数据包操作</div>
+                                <button type="button" class="dense-dropdown-item" id="btn-menu-add-arinc-packet" title="添加新 429 数据包">
+                                    <i class="fa-solid fa-plus" style="color: var(--accent-color);"></i><span>新增数据包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-menu-rename-arinc-packet" title="重命名当前 429 数据包">
+                                    <i class="fa-solid fa-pen-to-square"></i><span>重命名当前包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-duplicate-arinc-packet" title="克隆当前数据包及其标号字">
+                                    <i class="fa-solid fa-copy"></i><span>克隆当前数据包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item item-danger" id="btn-delete-arinc-packet" title="删除当前数据包">
+                                    <i class="fa-solid fa-trash"></i><span>删除当前数据包</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <input type="file" id="arinc-file-input" accept=".json,.xml,.xlsx,.xls" style="display:none">
                         <button type="button" class="dense-btn dense-btn-primary" id="btn-arinc-save" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                     </div>
                 </header>
+
+                <!-- 草稿自动恢复通知条 -->
+                <div class="workbench-draft-banner" id="arinc-draft-banner" style="display:none;">
+                    <div class="wdb-left">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        <span>已自动恢复本地未保存草稿 (最后编辑于 <b id="arinc-draft-time">刚才</b>)</span>
+                    </div>
+                    <div class="wdb-actions">
+                        <button type="button" class="btn-draft-action btn-draft-discard" id="btn-arinc-draft-discard" title="放弃草稿并恢复到最近一次持久化的版本">放弃草稿</button>
+                        <button type="button" class="btn-draft-action btn-draft-save" id="btn-arinc-draft-save" title="立即保存当前草稿到本地与云端">立即保存</button>
+                    </div>
+                </div>
 
                 <!-- 移动端专属：标号字 / 字段详情 视窗切换标签条 (仅在手机等窄屏显示) -->
                 <div class="arinc-mobile-tab-bar" id="arinc-mobile-tab-bar">
@@ -436,14 +642,14 @@
                             <!-- 3. 划分模式指示徽章 -->
                             <span class="dense-mode-indicator-pill" id="detail-mode-badge">经典航电模式</span>
 
-                            <!-- 4. 协议统一周期与方向 (只读) -->
-                            <div class="dense-form-item meta-item-period" id="word-period-container">
+                            <!-- 4. 协议统一周期与方向 (顶栏已有对应控件，此处隐藏消除重复) -->
+                            <div class="dense-form-item meta-item-period" id="word-period-container" style="display: none !important;">
                                 <label>发送周期:</label>
                                 <span class="dense-readonly-tag dense-period-tag" id="word-period-badge" title="继承自当前数据包发送周期" style="cursor: pointer;">20ms</span>
                             </div>
-                            <div class="dense-form-item meta-item-direction">
+                            <div class="dense-form-item meta-item-direction" style="display: none !important;">
                                 <label>方向:</label>
-                                <span class="dense-readonly-tag dense-dir-tag dir-tx" id="word-direction-badge" title="继承自协议属性 (只读)">Tx (发)</span>
+                                <span class="dense-readonly-tag dense-dir-tag dir-tx" id="word-direction-badge" title="继承自协议属性 (只读)">发送</span>
                             </div>
 
                             <!-- 5. 操作按钮 -->
@@ -550,10 +756,6 @@
                             <div class="dsim-binary" id="sim-binary-output">
                                 0000 0000 0000 0000 0000 0000 0000 0000
                             </div>
-                            <div class="dsim-right">
-                                <input type="text" id="sim-decoder-input" class="dsim-input" placeholder="输入 32-bit Hex (如 E01A832B)" maxlength="8">
-                                <button class="dense-btn dense-btn-xs" id="btn-sim-decode"><i class="fa-solid fa-play"></i> 解码测试</button>
-                            </div>
                         </div>
 
                     </div>
@@ -567,46 +769,106 @@
                     <div class="dense-tb-left">
                         <button type="button" class="dense-btn" id="btn-serial-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 列表</button>
                         <span class="dense-tb-title" id="serial-toolbar-proto-title" title="串口总线通信协议"><i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 串口协议</span>
+
+                        <span class="dense-tb-divider" style="height: 18px; margin: 0 4px;"></span>
+
+                        <!-- 串口数据包切换与方向周期：紧贴协议名称，杜绝断层空白与重叠遮挡 -->
+                        <div class="dense-tb-packet-selector" id="serial-packet-selector-strip" style="display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;">
+                            <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px; flex: 0 0 auto;" title="串口数据包切换">
+                                <i class="fa-solid fa-box-archive"></i>
+                            </span>
+                            <!-- 常态展示：选包、加号、重命名，排布紧贴且自然清晰，完美对齐工控习惯 -->
+                            <div id="serial-packet-select-wrap" style="display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin: 0; padding: 0;">
+                                <select id="serial-packet-select" class="dense-select-xs" style="font-weight: 700; width: 130px; min-width: 105px; max-width: 165px; flex: 0 0 auto; margin: 0;" title="切换当前编辑的数据包 (双击可直接重命名)" ondblclick="if(window.renameCurrentSerialPacket){window.renameCurrentSerialPacket();}"></select>
+                                <button type="button" class="dense-btn dense-btn-primary" id="btn-add-serial-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" title="新建串口数据包"><i class="fa-solid fa-plus"></i></button>
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-rename-serial-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" onclick="if(window.renameCurrentSerialPacket){window.renameCurrentSerialPacket();}else if(window.ProtoView&&window.ProtoView.renameCurrentSerialPacket){window.ProtoView.renameCurrentSerialPacket();}" title="直接修改当前数据包名称"><i class="fa-solid fa-pen-to-square"></i></button>
+                            </div>
+
+                            <span class="dense-tb-divider" style="display: inline-block; width: 1px; min-width: 1px; max-width: 1px; height: 16px; margin: 0 6px; flex: 0 0 1px; background: var(--border-color);"></span>
+
+                            <div class="dense-form-item" title="该包通信方向 (严格单向：要么发送要么接收)" style="margin: 0; padding: 0; flex: 0 0 auto; display: inline-flex; align-items: center;">
+                                <select id="serial-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 84px; min-width: 84px; max-width: 84px; flex: 0 0 84px; margin: 0;">
+                                    <option value="Tx">发送</option>
+                                    <option value="Rx">接收</option>
+                                </select>
+                            </div>
+                            <div class="dense-form-item" id="serial-packet-period-item" title="发送通讯周期 (ms)" style="margin: 0 0 0 2px; padding: 0; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px;">
+                                <label for="serial-packet-period" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;">
+                                    <i class="fa-regular fa-clock" style="color: var(--text-secondary); font-size: 11px;"></i>
+                                    <span style="font-size: 11px;">周期:</span>
+                                </label>
+                                <input type="number" id="serial-packet-period" class="dense-input-xs" style="width: 48px; min-width: 48px; flex: 0 0 48px; margin: 0;" min="1" max="10000" placeholder="20">
+                                <span style="font-size: 11px; color: var(--text-secondary); flex: 0 0 auto;">ms</span>
+                            </div>
+                            <!-- 隐藏重复的包名标签，但保留输入框以确保 JS 兼容 -->
+                            <div class="dense-form-item" style="display: none !important;">
+                                <input type="text" id="serial-packet-name" class="dense-input-xs" style="width: 105px;" placeholder="数据包名称" title="当前数据包业务名称 (如 遥测状态上报包)">
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- 顶部中央：当前数据包切换下拉与包名/发送周期定义 (精简高密度，消除视觉拥挤) -->
-                    <div class="dense-tb-packet-selector" id="serial-packet-selector-strip">
-                        <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px;" title="串口数据包切换">
-                            <i class="fa-solid fa-box-archive"></i>
-                        </span>
-                        <select id="serial-packet-select" class="dense-select-xs" style="font-weight: 700; min-width: 135px; max-width: 200px;" title="切换当前编辑的数据包"></select>
-                        <button type="button" class="dense-btn dense-btn-xs" id="btn-add-serial-packet" title="添加新数据包"><i class="fa-solid fa-plus"></i> 新包</button>
-                        <button type="button" class="dense-btn dense-btn-xs" id="btn-duplicate-serial-packet" title="克隆当前数据包"><i class="fa-solid fa-copy"></i></button>
-                        <button type="button" class="dense-btn dense-btn-danger dense-btn-xs" id="btn-delete-serial-packet" title="删除当前数据包"><i class="fa-solid fa-trash"></i></button>
-
-                        <span class="dense-tb-divider"></span>
-
-                        <div class="dense-form-item" title="该包通信方向 (严格单向：要么发送要么接收)">
-                            <select id="serial-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 68px;">
-                                <option value="Tx">Tx (发)</option>
-                                <option value="Rx">Rx (收)</option>
-                            </select>
-                        </div>
-                        <div class="dense-form-item" id="serial-packet-period-item" title="发送通讯周期 (ms)">
-                            <label for="serial-packet-period" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 2px;">
-                                <i class="fa-regular fa-clock" style="color: var(--text-secondary); font-size: 11px;"></i>
-                                <span style="font-size: 11px;">周期:</span>
-                            </label>
-                            <input type="number" id="serial-packet-period" class="dense-input-xs" style="width: 48px;" min="1" max="10000" placeholder="20">
-                            <span style="font-size: 11px; color: var(--text-secondary);">ms</span>
-                        </div>
-                        <div class="dense-form-item">
-                            <input type="text" id="serial-packet-name" class="dense-input-xs" style="width: 105px;" placeholder="数据包名称" title="当前数据包业务名称 (如 遥测状态上报包)">
-                        </div>
-                    </div>
+                    <div class="dense-tb-spacer"></div>
 
                     <div class="dense-tb-actions">
-                        <button type="button" class="dense-btn" id="btn-serial-switch-viewer" onclick="window.openProtocolViewer && window.openProtocolViewer(window.ProtoView && window.ProtoView.Controllers && window.ProtoView.Controllers.Serial && window.ProtoView.Controllers.Serial.getCurrentProtocol ? window.ProtoView.Controllers.Serial.getCurrentProtocol() : null)" title="切换至只读查阅模式：清晰查看数据包字节与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
-                        <button type="button" class="dense-btn" id="btn-view-serial-props" title="查看或修改串口物理参数 (接口类型、波特率、校验、周期等)"><i class="fa-solid fa-sliders"></i> 属性</button>
-                        <button type="button" class="dense-btn" id="btn-serial-export" onclick="window.openProtocolExportModal && window.openProtocolExportModal()" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 导出</button>
+                        <!-- 协议版本与归档状态药丸 (紧凑状态呈现) -->
+                        <div class="dense-version-group" id="serial-version-group" title="协议版本与归档状态">
+                            <span class="proto-version-pill" id="serial-ver-pill" onclick="if(window.openProtocolVersionView && window.currentSerialProtocol){window.openProtocolVersionView(window.currentSerialProtocol);}else if(window.openProtocolVersionModal && window.currentSerialProtocol){window.openProtocolVersionModal(window.currentSerialProtocol);}" title="版本号：点击打开协议版本管理与发展历程">v1.0</span>
+                            <span class="proto-archive-badge not-archived" id="serial-archive-badge" onclick="if(window.handleProtocolArchive && window.currentSerialProtocol){window.handleProtocolArchive(window.currentSerialProtocol);}" title="归档状态：点击进行归档">未归档</span>
+                        </div>
+
+                        <!-- 归档按钮 (直接外显在顶栏，不在更多里面，符合操作习惯) -->
+                        <button type="button" class="dense-btn" id="btn-serial-archive" onclick="if(window.handleProtocolArchive && window.currentSerialProtocol){window.handleProtocolArchive(window.currentSerialProtocol);}" title="归档当前协议：未归档直接归档当前版本，已归档可升版并建立冻结快照">
+                            <i class="fa-solid fa-box-archive" style="color:#059669;"></i> <span>归档</span>
+                        </button>
+
+                        <!-- 查阅模式 (高频核心切换，保留在外侧) -->
+                        <button type="button" class="dense-btn" id="btn-serial-switch-viewer" title="切换至只读查阅模式：清晰查看数据包字节与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
+
+                        <!-- [··· 更多] 下拉菜单：收纳属性、版本管理及数据包复制/删除 (归档已提取至外侧) -->
+                        <div class="dense-dropdown" id="serial-more-dropdown">
+                            <button type="button" class="dense-btn dense-dropdown-trigger" id="btn-serial-more-toggle" title="更多协议与数据包操作">
+                                <i class="fa-solid fa-ellipsis"></i> 更多 <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                            </button>
+                            <div class="dense-dropdown-menu" id="serial-more-menu">
+                                <div class="dense-dropdown-header">协议操作</div>
+                                <button type="button" class="dense-dropdown-item" id="btn-view-serial-props" title="查看或修改串口物理参数 (接口类型、波特率、校验、周期等)">
+                                    <i class="fa-solid fa-sliders"></i><span>串口物理属性</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-serial-diff" onclick="if(window.openProtocolVersionView && window.currentSerialProtocol){window.openProtocolVersionView(window.currentSerialProtocol);}else if(window.openProtocolVersionModal && window.currentSerialProtocol){window.openProtocolVersionModal(window.currentSerialProtocol);}" title="查看协议版本演进历程与比对差异">
+                                    <i class="fa-solid fa-code-branch" style="color:var(--accent-color);"></i><span>协议版本管理</span>
+                                </button>
+                                <div class="dense-dropdown-divider"></div>
+                                <div class="dense-dropdown-header">数据包操作</div>
+                                <button type="button" class="dense-dropdown-item" id="btn-menu-add-serial-packet" title="添加新串口数据包">
+                                    <i class="fa-solid fa-plus" style="color: var(--accent-color);"></i><span>新增数据包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-menu-rename-serial-packet" title="重命名当前串口数据包">
+                                    <i class="fa-solid fa-pen-to-square"></i><span>重命名当前包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-duplicate-serial-packet" title="克隆当前数据包">
+                                    <i class="fa-solid fa-copy"></i><span>克隆当前数据包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item item-danger" id="btn-delete-serial-packet" title="删除当前数据包">
+                                    <i class="fa-solid fa-trash"></i><span>删除当前数据包</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <button type="button" class="dense-btn dense-btn-primary" id="btn-serial-save" onclick="window.saveCurrentSerialProtocol && window.saveCurrentSerialProtocol()" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
                     </div>
                 </header>
+
+                <!-- 草稿自动恢复通知条 -->
+                <div class="workbench-draft-banner" id="serial-draft-banner" style="display:none;">
+                    <div class="wdb-left">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        <span>已自动恢复本地未保存草稿 (最后编辑于 <b id="serial-draft-time">刚才</b>)</span>
+                    </div>
+                    <div class="wdb-actions">
+                        <button type="button" class="btn-draft-action btn-draft-discard" id="btn-serial-draft-discard" title="放弃草稿并恢复到最近一次持久化的版本">放弃草稿</button>
+                        <button type="button" class="btn-draft-action btn-draft-save" id="btn-serial-draft-save" title="立即保存当前草稿到本地与云端">立即保存</button>
+                    </div>
+                </div>
 
                 <!-- 移动端专属 Tab 切换条 (仅窄屏显示) -->
                 <div class="arinc-mobile-tab-bar" id="serial-mobile-tab-bar">
@@ -1045,6 +1307,141 @@
                 </div>
             </section>
 
+            <!-- 视图 5：通信协议版本对比与管理中心 (参考查阅器布局：左侧 Label 目录与过滤 + 右侧上一版 vs 当前版双栏对照) -->
+            <section id="protocol-version-view" class="view-section">
+                <!-- 顶栏：高密度对比工具栏 (完全聚焦协议变化，不显示升版归档操作) -->
+                <header class="viewer-dense-toolbar vm-top-toolbar">
+                    <div class="viewer-tb-left">
+                        <button type="button" class="dense-btn" id="btn-vm-back" title="返回上一个页面">
+                            <i class="fa-solid fa-arrow-left"></i> 列表
+                        </button>
+                        <div class="viewer-title-group" style="display: flex; align-items: center; gap: 8px;">
+                            <span class="viewer-proto-title" style="display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-code-compare" style="color: var(--accent-color);"></i> 协议版本对比
+                            </span>
+                            <span class="vm-badge-type" id="vm-current-proto-badge" style="font-size: 11px; padding: 1px 7px; border-radius: 4px; font-weight: 600; background: rgba(59, 130, 246, 0.1); color: var(--accent-color); border: 1px solid rgba(59, 130, 246, 0.25);">ARINC 429</span>
+                            <span id="vm-current-proto-name" style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                            <span class="vm-badge-product" id="vm-current-proto-product" style="display:none; font-size: 11px; padding: 1px 7px; border-radius: 4px; font-weight: 600; background: rgba(100, 116, 139, 0.1); color: var(--text-secondary); border: 1px solid rgba(100, 116, 139, 0.25);"></span>
+
+                            <!-- 版本对比基准与目标选择器 -->
+                            <div class="vm-diff-selector-deck" title="自由选择基准版本与对比版本">
+                                <span class="vm-diff-sel-label"><i class="fa-solid fa-clock-rotate-left"></i> 基准:</span>
+                                <select id="vm-diff-base-select" class="dense-select-xs vm-diff-select" title="选择作为对比基准的上一版本或历史版本"></select>
+                                <span class="vm-diff-vs-arrow"><i class="fa-solid fa-arrow-right-long"></i></span>
+                                <span class="vm-diff-sel-label"><i class="fa-solid fa-bullseye"></i> 目标:</span>
+                                <select id="vm-diff-target-select" class="dense-select-xs vm-diff-select" title="选择当前版本或对比目标"></select>
+                            </div>
+
+                            <!-- 顶部三维指标芯片：修改了 X 个 Label · 涉及 Y 个信号 · 共 Z 项属性变更 · 破坏性 vs 兼容 -->
+                            <div class="vdt-stats" id="vm-diff-stats-box">
+                                <span class="vdt-metric-chip chip-labels" id="vdt-metric-labels" title="发生变更/增删的标号字数量"><i class="fa-solid fa-layer-group"></i> <b>0</b> 个 Label</span>
+                                <span class="vdt-metric-chip chip-signals" id="vdt-metric-signals" title="发生变更/增删的信号总数"><i class="fa-solid fa-cube"></i> <b>0</b> 个信号</span>
+                                <span class="vdt-metric-chip chip-attrs" id="vdt-metric-attrs" title="所有属性变更项总数"><i class="fa-solid fa-list-check"></i> <b>0</b> 项属性变更</span>
+                                <span class="vdt-metric-chip chip-breaking" id="vdt-metric-breaking" title="破坏性变更：位段偏移、数据类型改变、信号删除"><i class="fa-solid fa-triangle-exclamation"></i> <b>0</b> 破坏性</span>
+                                <span class="vdt-metric-chip chip-compatible" id="vdt-metric-compatible" title="兼容变更：新增信号、修改名称或备注"><i class="fa-solid fa-shield-halved"></i> <b>0</b> 兼容</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 顶栏右侧：版本历程、查阅模式、进入工作台 -->
+                    <div class="viewer-tb-actions" style="display: flex; align-items: center; gap: 8px;">
+                        <!-- 隐藏保留元素以供向后兼容 -->
+                        <select id="vm-protocol-select" style="display: none;"></select>
+                        <span id="vm-current-ver-pill" style="display: none;"></span>
+                        <span id="vm-current-archive-badge" style="display: none;"></span>
+                        <span id="vm-diff-count-badge" style="display: none;">0 处变更</span>
+
+                        <button type="button" class="dense-btn" id="btn-vm-open-timeline" title="查看该协议的版本发展历程时间轴与提交记录">
+                            <i class="fa-solid fa-timeline" style="color: var(--accent-color);"></i> 版本历程
+                        </button>
+                        <button type="button" class="dense-btn" id="btn-vm-goto-viewer" title="在只读模式中查阅当前协议">
+                            <i class="fa-solid fa-eye" style="color: var(--accent-color);"></i> 查阅模式
+                        </button>
+                        <button type="button" class="dense-btn dense-btn-primary" id="btn-vm-goto-workbench" title="切换到编辑工作台以修改协议">
+                            <i class="fa-solid fa-pen-ruler"></i> 进入工作台
+                        </button>
+                    </div>
+                </header>
+
+                <!-- 场景提示条：当对比包含未归档工作副本时提供提示 -->
+                <div class="vm-unarchived-warning-banner" id="vm-unarchived-banner" style="display: none;">
+                    <div class="uwb-left">
+                        <i class="fa-solid fa-pen-to-square uwb-icon"></i>
+                        <span class="uwb-compact-text">目标版本为 <b>当前未归档工作副本</b> vs 上一归档基准 [<span id="uwb-base-ver">v1.0</span>]</span>
+                    </div>
+                    <div class="uwb-actions">
+                        <button type="button" class="btn btn-xs btn-secondary" id="btn-uwb-workbench" title="返回编辑工作台进行修改">
+                            <i class="fa-solid fa-pen-ruler"></i> 进入工作台
+                        </button>
+                        <button type="button" class="btn btn-xs btn-danger-outline" id="btn-uwb-revert" title="放弃当前未归档改动，一键还原至已归档版本">
+                            <i class="fa-solid fa-rotate-left"></i> 放弃修改
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 主体布局：与协议查看视图一致 (左侧目录导航 + 调宽手柄 + 右侧上一版 vs 当前版双栏对照) -->
+                <div class="vm-diff-main-container" id="vm-diff-main-container">
+                    <!-- 左侧：标号字 / 字节导航目录 (支持 全部 / 仅变化 过滤与搜索) -->
+                    <aside class="vm-diff-catalog-panel" id="vm-diff-catalog-panel">
+                        <div class="vm-diff-catalog-header">
+                            <!-- 过滤胶囊：全部 vs 仅变化 -->
+                            <div class="vm-diff-filter-group" role="tablist">
+                                <button type="button" class="btn-diff-filter active" id="btn-diff-filter-all" title="查看该协议下的所有标号字/字节">
+                                    <i class="fa-solid fa-layer-group"></i> 全部 (<span id="diff-filter-count-all">0</span>)
+                                </button>
+                                <button type="button" class="btn-diff-filter" id="btn-diff-filter-changed" title="只查看两版之间存在差异、新增或删除的标号字/字节">
+                                    <i class="fa-solid fa-bolt"></i> 仅变化 (<span id="diff-filter-count-changed">0</span>)
+                                </button>
+                            </div>
+
+                            <!-- 搜索过滤框 -->
+                            <div class="vm-diff-search-box">
+                                <i class="fa-solid fa-magnifying-glass vm-diff-search-icon"></i>
+                                <input type="text" id="vm-diff-label-search" class="dense-input-sm vm-diff-search-input" placeholder="过滤标号(如203)或名称..." autocomplete="off">
+                                <button type="button" class="btn-clear-search" id="btn-clear-diff-search" style="display:none;" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- 目录列表项容器 -->
+                        <div class="vm-diff-catalog-list" id="vm-diff-catalog-list">
+                            <!-- 由 JS 渲染 Label 目录列表 -->
+                        </div>
+                    </aside>
+
+                    <!-- 分栏拖拽调宽手柄 -->
+                    <div class="workbench-resizer" id="vm-diff-catalog-resizer" title="左右拖动调整标号字目录宽度"></div>
+
+                    <!-- 右侧：上一版 vs 当前版 双栏对照主工作区 -->
+                    <main class="vm-diff-dual-deck" id="vm-diff-dual-deck">
+                        <!-- 双栏顶部标识条 (左列上一版协议，右列当前版本协议) -->
+                        <div class="vm-diff-columns-bar" id="vm-diff-columns-bar">
+                            <div class="vdd-head-col vdd-head-base">
+                                <div class="vdd-head-left">
+                                    <span class="vdd-tag tag-base"><i class="fa-solid fa-clock-rotate-left"></i> 上一版协议 (Base)</span>
+                                    <span class="vdd-ver-title" id="dch-base-name">基准版本</span>
+                                </div>
+                                <span class="vdd-meta-desc" id="dch-base-meta">-</span>
+                            </div>
+                            <div class="vdd-columns-divider">
+                                <i class="fa-solid fa-arrows-left-right"></i>
+                            </div>
+                            <div class="vdd-head-col vdd-head-target">
+                                <div class="vdd-head-left">
+                                    <span class="vdd-tag tag-target"><i class="fa-solid fa-bullseye"></i> 当前版本协议 (Target)</span>
+                                    <span class="vdd-ver-title" id="dch-target-name">当前版本</span>
+                                </div>
+                                <span class="vdd-meta-desc" id="dch-target-meta">-</span>
+                            </div>
+                        </div>
+
+                        <!-- 选定 Label 的左右双栏对照主内容区 (摘要头 + 32-Bit 位域 + 字段卡片列表) -->
+                        <div class="vm-diff-deck-body" id="vm-diff-deck-body">
+                            <!-- 由 JS 渲染选定 Label 的左右对照结构 -->
+                        </div>
+                    </main>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -1105,6 +1502,16 @@
                         <div class="form-group">
                             <label for="proto-form-desc">协议备注说明 <span style="font-size: 11px; font-weight: normal; color: var(--text-secondary);">(可选)</span></label>
                             <input type="text" id="proto-form-desc" placeholder="可选：填写协议版本号、通道分配要求、电气规范说明等...">
+                        </div>
+                        <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label for="proto-form-version">初始版本号</label>
+                                <input type="text" id="proto-form-version" placeholder="如: v1.0" value="v1.0">
+                            </div>
+                            <div>
+                                <label for="proto-form-csci"><i class="fa-solid fa-code-branch" style="color:var(--accent-color);"></i> 关联软件配置项 (CSCI)</label>
+                                <input type="text" id="proto-form-csci" placeholder="如: FC_App v2.1.0" autocomplete="off">
+                            </div>
                         </div>
 
                         <!-- 分组 2A：ARINC 429 专有参数 -->
@@ -1280,10 +1687,15 @@
     <div class="modal" id="protocol-export-modal">
         <div class="modal-content" style="max-width: 1100px; width: 95vw; height: 92vh; display: flex; flex-direction: column;">
             <div class="modal-header" style="padding: 12px 20px;">
-                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap;">
                     <h2 style="margin: 0; font-size: 1.15rem; white-space: nowrap;"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 协议规格书与数据导出中心</h2>
                     <span id="export-modal-proto-badge" class="viewer-type-pill pill-arinc">ARINC 429</span>
-                    <span id="export-modal-proto-name" style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                    <span id="export-modal-proto-name" style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                    <!-- 导出版本选择控件 -->
+                    <div class="export-modal-version-wrap" id="export-modal-version-wrap" style="display: inline-flex; align-items: center; gap: 5px; margin-left: 6px;">
+                        <span style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap;"><i class="fa-solid fa-code-branch" style="color: var(--accent-color);"></i> 导出版本:</span>
+                        <select id="export-modal-version-select" class="dense-select-xs" style="font-weight: 700; max-width: 220px; height: 26px; border-radius: 4px;" title="选择要导出的协议版本或历史快照"></select>
+                    </div>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <div class="btn-group" style="display: flex; background: var(--bg-hover); border-radius: 4px; padding: 2px;">
@@ -1709,20 +2121,152 @@ CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
         </div>
     </div>
 
-    <!-- 模块化架构分层脚本 -->
-    <script src="js/core.js"></script>
-    <script src="js/db.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/workspace-sync.js"></script>
-    <script src="js/parser.js"></script>
-    <script src="js/arinc429.js"></script>
-    <script src="js/serial.js"></script>
-    <script src="js/product-ctrl.js"></script>
-    <script src="js/arinc-ctrl.js"></script>
-    <script src="js/serial-ctrl.js"></script>
-    <script src="js/admin-ctrl.js"></script>
-    <script src="js/viewer-ctrl.js"></script>
-    <script src="js/export-ctrl.js"></script>
-    <script src="js/app.js"></script>
+    <!-- 弹窗 10：两台设备同时修改云端版本冲突处理弹窗 -->
+    <div class="modal" id="protocol-conflict-modal">
+        <div class="modal-content glass-effect" style="max-width: 580px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 14px 20px;">
+                <h2 style="color: #ef4444; font-size: 16px; margin: 0; display:flex; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> 云端版本冲突警告
+                </h2>
+                <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body-scroll" style="padding: 18px 20px; font-size: 13px; line-height: 1.6;">
+                <p style="margin: 0 0 12px 0; color: var(--text-primary); font-size: 13.5px;">
+                    检测到通信协议「<strong id="conflict-proto-name" style="color:var(--accent-color);">协议名称</strong>」在云端已被其他设备更新！
+                </p>
+                <div class="conflict-meta-box" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; display:flex; flex-direction:column; gap:6px;">
+                    <div><i class="fa-solid fa-laptop" style="color:var(--accent-color); width:16px;"></i> 本地版本基准时间: <b id="conflict-local-time">-</b></div>
+                    <div><i class="fa-solid fa-cloud" style="color:#f59e0b; width:16px;"></i> 云端最新提交时间: <b id="conflict-cloud-time">-</b></div>
+                </div>
+                <p style="color: var(--text-secondary); margin: 0 0 14px 0; font-size: 12px;">
+                    为防止直接覆盖造成他人工作成果丢失，请选择处理策略：
+                </p>
+                <div class="conflict-options" style="display:flex; flex-direction:column; gap:10px;">
+                    <button type="button" class="btn btn-secondary" id="btn-conflict-pull" style="justify-content:flex-start; text-align:left; padding:10px 14px; border-radius:6px;">
+                        <div>
+                            <div style="font-weight:600; color:var(--text-primary);"><i class="fa-solid fa-cloud-arrow-down" style="color:var(--accent-color);"></i> 拉取云端最新版本 (放弃当前本地未保存改动)</div>
+                            <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">以其他设备的最新云端内容为准重新载入。</div>
+                        </div>
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="btn-conflict-save-copy" style="justify-content:flex-start; text-align:left; padding:10px 14px; border-radius:6px;">
+                        <div>
+                            <div style="font-weight:600; color:var(--text-primary);"><i class="fa-solid fa-copy" style="color:#8b5cf6;"></i> 另存为新协议副本 (两端均保留)</div>
+                            <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">将当前设备的修改另存为独立新协议，互不影响。</div>
+                        </div>
+                    </button>
+                    <button type="button" class="btn btn-danger" id="btn-conflict-overwrite" style="justify-content:flex-start; text-align:left; padding:10px 14px; border-radius:6px;">
+                        <div>
+                            <div style="font-weight:600; color:#ef4444;"><i class="fa-solid fa-triangle-exclamation"></i> 强制覆盖云端版本 (覆盖他人修改)</div>
+                            <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">以当前设备的本地修改为准，直接推送到云端覆盖旧版本。</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display:flex; justify-content:flex-end;">
+                <button type="button" class="btn btn-secondary close-modal-btn">暂不处理</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 11：已归档协议升版归档弹窗 (Protocol Archive & Version Bump Modal) -->
+    <div class="modal" id="protocol-archive-modal">
+        <div class="modal-content glass-effect" style="max-width: 520px; width: 92vw;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 14px 20px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-box-archive" style="color:var(--accent-color); font-size: 1.1rem;"></i>
+                    <h2 style="font-size: 15px; margin: 0;">协议升版归档</h2>
+                    <span id="archive-modal-proto-name" style="font-size: 13px; font-weight: 700; color: var(--accent-color); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                </div>
+                <button type="button" class="close-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="protocol-archive-form">
+                <div class="modal-body-scroll" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+                    <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; background: rgba(59, 130, 246, 0.08); padding: 10px 12px; border-radius: 6px; border-left: 3px solid var(--accent-color);">
+                        当前协议此前已归档（版本 <b id="archive-current-ver" style="color:var(--accent-color);">v1.0</b>）。按照版本管理规范，本次修改并重新归档必须升版，系统将生成不可变的历史冻结版本节点。
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label for="archive-next-ver-input" style="font-weight: 600; font-size: 12.5px; margin-bottom: 6px; display: block;">
+                            新归档版本号 <span class="req-star" style="color:var(--danger);">*</span>
+                        </label>
+                        <input type="text" id="archive-next-ver-input" required placeholder="如：v1.1" style="height: 38px; font-family: 'JetBrains Mono', Consolas, monospace; font-weight: 700; font-size: 14px;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label for="archive-comment-input" style="font-weight: 600; font-size: 12.5px; margin-bottom: 6px; display: block;">
+                            版本变更日志 / 提交说明 (Commit Message)
+                        </label>
+                        <input type="text" id="archive-comment-input" placeholder="简述本次版本重要变更 (如: 新增配电控制指令包与过欠压保护告警字段)" style="height: 38px; font-size: 12.5px;">
+                    </div>
+                </div>
+
+                <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" class="btn btn-secondary close-modal-btn">取消</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-archive-submit"><i class="fa-solid fa-box-archive"></i> 确认升版并归档</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 弹窗：协议版本发展历程时间轴 (Git-like Commit Log & Rollback Modal) -->
+    <div class="modal" id="protocol-timeline-modal">
+        <div class="modal-content" style="max-width: 620px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-timeline" style="color:var(--accent-color);"></i> 协议版本演进历程</h2>
+                <button type="button" class="close-modal" id="btn-close-timeline-modal" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 14px 18px;">
+                <div class="vm-timeline-scroll" id="vm-timeline-container">
+                    <!-- 动态渲染 Git-like 时间轴卡片节点 -->
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 18px;">
+                <span class="dense-hint" id="vm-history-count" style="font-weight: 600; color: var(--text-secondary);">共 0 个版本</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-close-timeline-footer">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 12：系统统一自定义确认弹窗 (取代原生浏览器 confirm，现代企业级工控弹窗) -->
+    <div class="modal" id="global-confirm-modal" style="z-index: 1050;">
+        <div class="modal-content glass-effect" style="max-width: 490px; width: 92vw; border-radius: 10px; overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,0.22);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 14px 20px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div id="gcm-icon-box" style="width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 15px; background: rgba(59, 130, 246, 0.12); color: var(--accent-color);">
+                        <i class="fa-solid fa-circle-question" id="gcm-icon"></i>
+                    </div>
+                    <h2 id="gcm-title" style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">操作确认</h2>
+                </div>
+                <button type="button" class="close-modal" id="gcm-btn-close" title="取消"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body-scroll" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;">
+                <div id="gcm-message" style="font-size: 14px; font-weight: 600; color: var(--text-primary); line-height: 1.55;">
+                    请确认是否继续此操作？
+                </div>
+                <div id="gcm-detail" style="font-size: 12px; color: var(--text-secondary); line-height: 1.6; background: var(--bg-primary); padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border-color); white-space: pre-wrap; display: none;">
+                </div>
+            </div>
+            <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: var(--bg-secondary);">
+                <button type="button" class="btn btn-secondary btn-sm" id="gcm-btn-cancel" style="padding: 6px 16px; font-size: 12.5px;">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" id="gcm-btn-confirm" style="padding: 6px 18px; font-size: 12.5px; font-weight: 600;">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模块化架构分层脚本 (强制穿透静态缓存) -->
+    <script src="js/core.js?v=20261119_11"></script>
+    <script src="js/db.js?v=20261119_11"></script>
+    <script src="js/auth.js?v=20261119_11"></script>
+    <script src="js/draft-sync.js?v=20261119_11"></script>
+    <script src="js/workspace-sync.js?v=20261119_11"></script>
+    <script src="js/parser.js?v=20261119_11"></script>
+    <script src="js/arinc429.js?v=20261119_11"></script>
+    <script src="js/serial.js?v=20261119_11"></script>
+    <script src="js/product-ctrl.js?v=20261119_11"></script>
+    <script src="js/arinc-ctrl.js?v=20261119_11"></script>
+    <script src="js/serial-ctrl.js?v=20261119_11"></script>
+    <script src="js/admin-ctrl.js?v=20261119_11"></script>
+    <script src="js/viewer-ctrl.js?v=20261119_11"></script>
+    <script src="js/export-ctrl.js?v=20261119_11"></script>
+    <script src="js/version-diff.js?v=20261119_11"></script>
+    <script src="js/app.js?v=20261119_11"></script>
 </body>
 </html>

@@ -1,0 +1,372 @@
+/* ========================================================
+   串口通信协议工程工作台 (Serial / RS485 / RS422 / UART) 专用样式
+   ======================================================== */
+.dense-input-xs {
+    height: 24px !important;
+    line-height: 22px !important;
+    padding: 0 6px !important;
+    font-size: 11.5px !important;
+    border-radius: 4px !important;
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    box-sizing: border-box !important;
+}
+
+.dense-select-xs {
+    height: 24px !important;
+    line-height: 22px !important;
+    padding: 0 18px 0 6px !important;
+    font-size: 11.5px !important;
+    border-radius: 4px !important;
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    box-sizing: border-box !important;
+}
+
+#serial-packet-select-wrap {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    width: auto !important;
+    min-width: auto !important;
+    max-width: none !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+#serial-packet-select {
+    width: 130px !important;
+    min-width: 105px !important;
+    max-width: 165px !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+#btn-rename-serial-packet,
+#btn-add-serial-packet {
+    width: 24px !important;
+    min-width: 24px !important;
+    max-width: 24px !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+    line-height: 22px !important;
+    padding: 0 !important;
+    flex: 0 0 24px !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+}
+
+#serial-packet-direction {
+    width: 84px !important;
+    min-width: 84px !important;
+    max-width: 84px !important;
+    flex: 0 0 84px !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+.mono-input, .mono-val {
+    font-family: 'JetBrains Mono', Consolas, monospace !important;
+}
+
+/* 报文字节流时序全景带 (Byte Stream Timeline Visualizer) */
+.serial-visualizer-strip {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 6px 12px;
+    margin-bottom: 6px;
+}
+
+.sv-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sv-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sv-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sv-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sv-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.sv-metric {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--accent-color);
+    background: rgba(59, 130, 246, 0.1);
+    padding: 1px 8px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.serial-timeline-scroll {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 3px 2px 6px;
+}
+
+.serial-timeline-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 68px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.serial-timeline-block:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.serial-timeline-block.active {
+    box-shadow: 0 0 0 2px var(--accent-color);
+    font-weight: 700;
+}
+
+.serial-timeline-block .stb-span {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.serial-timeline-block .stb-name {
+    font-size: 11px;
+    margin-top: 2px;
+    white-space: nowrap;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.serial-timeline-block .stb-hex {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 10px;
+    opacity: 0.85;
+    margin-top: 2px;
+}
+
+/* 角色颜色分类 */
+.role-header { background: rgba(59, 130, 246, 0.12); color: #2563eb; border-color: rgba(59, 130, 246, 0.35); }
+[data-theme="dark"] .role-header { background: rgba(59, 130, 246, 0.22); color: #60a5fa; border-color: rgba(59, 130, 246, 0.45); }
+
+.role-addr { background: rgba(168, 85, 247, 0.12); color: #9333ea; border-color: rgba(168, 85, 247, 0.35); }
+[data-theme="dark"] .role-addr { background: rgba(168, 85, 247, 0.22); color: #c084fc; border-color: rgba(168, 85, 247, 0.45); }
+
+.role-cmd { background: rgba(249, 115, 22, 0.12); color: #ea580c; border-color: rgba(249, 115, 22, 0.35); }
+[data-theme="dark"] .role-cmd { background: rgba(249, 115, 22, 0.22); color: #fbbf24; border-color: rgba(249, 115, 22, 0.45); }
+
+.role-length { background: rgba(6, 182, 212, 0.12); color: #0891b2; border-color: rgba(6, 182, 212, 0.35); }
+[data-theme="dark"] .role-length { background: rgba(6, 182, 212, 0.22); color: #38bdf8; border-color: rgba(6, 182, 212, 0.45); }
+
+.role-data { background: rgba(16, 185, 129, 0.12); color: #16a34a; border-color: rgba(16, 185, 129, 0.35); }
+[data-theme="dark"] .role-data { background: rgba(16, 185, 129, 0.22); color: #34d399; border-color: rgba(16, 185, 129, 0.45); }
+
+.role-bitfield { background: rgba(245, 158, 11, 0.12); color: #d97706; border-color: rgba(245, 158, 11, 0.35); }
+[data-theme="dark"] .role-bitfield { background: rgba(245, 158, 11, 0.22); color: #fbbf24; border-color: rgba(245, 158, 11, 0.45); }
+
+.role-checksum { background: rgba(236, 72, 153, 0.12); color: #db2777; border-color: rgba(236, 72, 153, 0.35); }
+[data-theme="dark"] .role-checksum { background: rgba(236, 72, 153, 0.22); color: #f472b6; border-color: rgba(236, 72, 153, 0.45); }
+
+.role-tail { background: rgba(100, 116, 139, 0.12); color: #475569; border-color: rgba(100, 116, 139, 0.35); }
+[data-theme="dark"] .role-tail { background: rgba(100, 116, 139, 0.22); color: #94a3b8; border-color: rgba(100, 116, 139, 0.45); }
+
+.role-reserved { background: rgba(156, 163, 175, 0.12); color: #6b7280; border-color: rgba(156, 163, 175, 0.35); }
+
+/* 字段属性流式网格配置条 */
+.serial-field-props-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.015);
+    border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .serial-field-props-grid {
+    background: rgba(255, 255, 255, 0.015);
+}
+
+.s-prop-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.s-prop-cell label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* 状态字 Bit 位域细分表格 */
+.serial-bitfield-section {
+    padding: 0;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.serial-bitfield-table-wrap {
+    overflow-x: auto;
+    padding: 6px 12px 10px;
+}
+
+.serial-bitfield-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.serial-bitfield-table th, .serial-bitfield-table td {
+    border: 1px solid var(--border-color);
+    padding: 5px 8px;
+    text-align: left;
+}
+
+.serial-bitfield-table th {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.span-badge {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(234, 88, 12, 0.08);
+    color: #ea580c;
+    border: 1px solid rgba(234, 88, 12, 0.25);
+    display: inline-block;
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .span-badge {
+    background: rgba(249, 115, 22, 0.15);
+    color: #fb923c;
+    border-color: rgba(249, 115, 22, 0.35);
+}
+
+.serial-role-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+/* 报文 Hex 段着色 */
+.serial-sim-colored-hex {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding: 2px 4px;
+}
+
+.hex-seg {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 700;
+    display: inline-block;
+    letter-spacing: 0.5px;
+    font-size: 11.5px;
+}
+
+.serial-decode-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.serial-decode-metric {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: center;
+}
+
+.serial-decode-metric-val {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 3px;
+}
+
+.serial-decode-metric-lbl {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.serial-fields-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.serial-fields-table th, .serial-fields-table td {
+    border: 1px solid var(--border-color);
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.serial-fields-table th {
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 11.5px;
+}

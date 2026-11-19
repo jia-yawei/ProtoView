@@ -129,7 +129,7 @@ const dbHelper = {
         const list = getLSProtocols();
         if (data.id) {
             data.id = Number(data.id);
-            const idx = list.findIndex(p => p.id === data.id);
+            const idx = list.findIndex(p => p.id === data.id || String(p.id) === String(data.id));
             if (idx >= 0) {
                 list[idx] = data;
             } else {

@@ -43,8 +43,16 @@
         badgeProtoParity, btnViewArincProps, btnArincNew, btnArincTemplates,
         btnArincImport, arincFileInput, btnArincExport, btnArincSave;
 
-    // 429 多数据包工具栏引用 (对齐串口：支持多包切换、添加、克隆、删除、方向、周期、包名)
-    let arincPacketSelect, btnAddArincPacket, btnDuplicateArincPacket,
+    // 撤销/重做与5态保存同步状态指示、草稿恢复栏引用
+    let btnArincUndo, btnArincRedo, arincSyncStatusBadge, arincDraftBanner,
+        btnArincDraftDiscard, btnArincDraftSave;
+    let arincUndoRedo = null;
+
+    // 429 多数据包工具栏引用 (对齐串口：支持多包切换、添加、克隆、删除、方向、周期、包名及行内重命名)
+    let arincPacketSelectWrap, arincPacketSelect, btnRenameArincPacket,
+        btnMenuRenameArincPacket, arincPacketRenameBox, arincPacketRenameInput,
+        btnArincPacketRenameConfirm, btnArincPacketRenameCancel,
+        btnAddArincPacket, btnMenuAddArincPacket, btnDuplicateArincPacket,
         btnDeleteArincPacket, arincPacketDirection, arincPacketPeriodItem,
         arincPacketPeriod, arincPacketName;
 
@@ -82,7 +90,7 @@
     let dictEditorModal, dictFieldTargetName, dictItemsTbody,
         btnAddDictRow, btnSaveDict, dictPresetButtons;
 
-    let simHexOutput, btnCopyHex, simBinaryOutput, simDecoderInput, btnSimDecode;
+    let simHexOutput, btnCopyHex, simBinaryOutput;
     let arincTemplatesModal, templateCardsContainer;
 
     let tabBtnExportPreview, tabBtnExportCode, exportPreviewContainer,
@@ -112,9 +120,32 @@
         btnArincExport = document.getElementById('btn-arinc-export');
         btnArincSave = document.getElementById('btn-arinc-save');
 
+        btnArincUndo = document.getElementById('btn-arinc-undo');
+        btnArincRedo = document.getElementById('btn-arinc-redo');
+        arincSyncStatusBadge = document.getElementById('arinc-sync-status-badge');
+        arincDraftBanner = document.getElementById('arinc-draft-banner');
+        btnArincDraftDiscard = document.getElementById('btn-arinc-draft-discard');
+        btnArincDraftSave = document.getElementById('btn-arinc-draft-save');
+
+        if (!arincUndoRedo && ProtoView.UndoRedo) {
+            arincUndoRedo = ProtoView.UndoRedo.create({ maxDepth: 50 });
+            arincUndoRedo.setChangeListener(({ canUndo, canRedo }) => {
+                if (btnArincUndo) btnArincUndo.disabled = !canUndo;
+                if (btnArincRedo) btnArincRedo.disabled = !canRedo;
+            });
+        }
+
         // 429 多数据包工具栏元素
+        arincPacketSelectWrap = document.getElementById('arinc-packet-select-wrap');
         arincPacketSelect = document.getElementById('arinc-packet-select');
+        btnRenameArincPacket = document.getElementById('btn-rename-arinc-packet');
+        btnMenuRenameArincPacket = document.getElementById('btn-menu-rename-arinc-packet');
+        arincPacketRenameBox = document.getElementById('arinc-packet-rename-box');
+        arincPacketRenameInput = document.getElementById('arinc-packet-rename-input');
+        btnArincPacketRenameConfirm = document.getElementById('btn-arinc-packet-rename-confirm');
+        btnArincPacketRenameCancel = document.getElementById('btn-arinc-packet-rename-cancel');
         btnAddArincPacket = document.getElementById('btn-add-arinc-packet');
+        btnMenuAddArincPacket = document.getElementById('btn-menu-add-arinc-packet');
         btnDuplicateArincPacket = document.getElementById('btn-duplicate-arinc-packet');
         btnDeleteArincPacket = document.getElementById('btn-delete-arinc-packet');
         arincPacketDirection = document.getElementById('arinc-packet-direction');
@@ -217,8 +248,6 @@
         simHexOutput = document.getElementById('sim-hex-output');
         btnCopyHex = document.getElementById('btn-copy-hex');
         simBinaryOutput = document.getElementById('sim-binary-output');
-        simDecoderInput = document.getElementById('sim-decoder-input');
-        btnSimDecode = document.getElementById('btn-sim-decode');
 
         arincTemplatesModal = document.getElementById('arinc-templates-modal');
         templateCardsContainer = document.getElementById('template-cards-container');
@@ -313,7 +342,7 @@
                 const pktPeriod = pkt.period !== undefined ? pkt.period : (currentArincProtocol.period || 20);
                 const periodText = isRx ? '' : ` ${pktPeriod}ms`;
                 opt.textContent = pkt.name || '未命名数据包';
-                opt.title = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'} (${pkt.words ? pkt.words.length : 0}个字)`;
+                opt.title = `[${isRx ? '接收' : '发送'}${periodText}] ${pkt.name || '未命名数据包'} (${pkt.words ? pkt.words.length : 0}个字)`;
                 if (idx === currentArincPacketIndex) {
                     opt.selected = true;
                 }
@@ -345,6 +374,8 @@
     // 添加新的 429 数据包
     function addArincPacket() {
         if (!currentArincProtocol) return;
+        if (typeof finishRenameArincPacket === 'function') finishRenameArincPacket(false);
+        captureArincMutation('添加数据包');
         if (!currentArincProtocol.packets) currentArincProtocol.packets = [];
         const newIdx = currentArincProtocol.packets.length + 1;
         const newPkt = {
@@ -362,6 +393,7 @@
         updateSourceFilterOptions();
         renderArincWordsList();
         renderSelectedWordInspector();
+        triggerArincDraftSave();
         showToast(`已创建新 429 数据包「${newPkt.name}」`, 'success');
     }
 
@@ -369,6 +401,7 @@
     function duplicateCurrentArincPacket() {
         const cur = getCurrentArincPacket();
         if (!cur) return;
+        captureArincMutation('克隆数据包');
         const clonePkt = JSON.parse(JSON.stringify(cur));
         clonePkt.key = `pkt_${Date.now()}`;
         clonePkt.name = `${cur.name || '数据包'} (副本)`;
@@ -380,20 +413,30 @@
         updateSourceFilterOptions();
         renderArincWordsList();
         renderSelectedWordInspector();
+        triggerArincDraftSave();
         showToast(`已克隆数据包为「${clonePkt.name}」`, 'success');
     }
 
     // 删除当前 429 数据包
-    function deleteCurrentArincPacket() {
+    async function deleteCurrentArincPacket() {
         if (!currentArincProtocol || !currentArincProtocol.packets) return;
         if (currentArincProtocol.packets.length <= 1) {
             showToast('当前协议至少需要保留一个数据包，不能删除！', 'warning');
             return;
         }
         const cur = getCurrentArincPacket();
-        if (!confirm(`确定要删除当前 429 数据包「${cur.name || '未命名'}」及其下的所有标号字吗？`)) {
-            return;
-        }
+        const ok = await (ProtoView.showConfirm ? ProtoView.showConfirm({
+            title: '删除数据包确认',
+            icon: 'fa-trash-can',
+            type: 'danger',
+            message: `确定要删除当前 429 数据包「${cur.name || '未命名'}」及其下的所有标号字吗？`,
+            detail: '删除后，该数据包及其包含的所有标号字与字段定义将被彻底移除。',
+            confirmText: '确认删除',
+            cancelText: '取消'
+        }) : Promise.resolve(confirm(`确定要删除当前 429 数据包「${cur.name || '未命名'}」及其下的所有标号字吗？`)));
+        if (!ok) return;
+
+        captureArincMutation('删除数据包');
         currentArincProtocol.packets.splice(currentArincPacketIndex, 1);
         if (currentArincPacketIndex >= currentArincProtocol.packets.length) {
             currentArincPacketIndex = currentArincProtocol.packets.length - 1;
@@ -404,8 +447,32 @@
         updateSourceFilterOptions();
         renderArincWordsList();
         renderSelectedWordInspector();
+        triggerArincDraftSave();
         showToast('已成功删除该数据包', 'info');
     }
+
+    // 直接修改 429 数据包名称 (原生输入，绝无多余容器与遮挡位移)
+    function renameCurrentArincPacket() {
+        const activePkt = getCurrentArincPacket();
+        if (!activePkt) return;
+        const oldName = activePkt.name || `数据包 ${currentArincPacketIndex + 1}`;
+        const newName = prompt('请输入数据包名称：', oldName);
+        if (newName === null) return;
+        const trimmed = newName.trim();
+        if (!trimmed || trimmed === oldName) return;
+        captureArincMutation('重命名数据包');
+        activePkt.name = trimmed;
+        if (arincPacketName) arincPacketName.value = trimmed;
+        updateArincPacketToolbar();
+        triggerArincDraftSave();
+        showToast(`已将数据包重命名为「${trimmed}」`, 'success');
+    }
+
+    // 向后兼容保留方法名
+    function startRenameArincPacket() {
+        renameCurrentArincPacket();
+    }
+    function finishRenameArincPacket() {}
 
     // ----------------- 更新顶部工具栏协议信息与属性徽章 (精简显示：与串口对齐) -----------------
     function updateToolbarProtocolInfo() {
@@ -424,6 +491,50 @@
             return;
         }
         const p = currentArincProtocol;
+        window.currentArincProtocol = currentArincProtocol;
+
+        if (ProtoView.ArchiveManager) {
+            ProtoView.ArchiveManager.ensureProtocolVersion(p);
+        } else if (ProtoView.VersionManager) {
+            ProtoView.VersionManager.ensureProtocolVersion(p);
+        }
+        const verInfo = ProtoView.ArchiveManager
+            ? ProtoView.ArchiveManager.getVersionDisplayInfo(p)
+            : { versionText: p.version || 'v1.0', baseVersion: p.version || 'v1.0', isArchived: Boolean(p.isArchived), isModified: false, statusLabel: p.isArchived ? '已归档' : '未归档', statusClass: p.isArchived ? 'is-archived' : 'not-archived', versionPillClass: 'proto-version-pill', tooltip: '' };
+
+        const arincVerPill = document.getElementById('arinc-ver-pill');
+        const arincArchiveBadge = document.getElementById('arinc-archive-badge');
+        if (arincVerPill) {
+            arincVerPill.textContent = verInfo.versionText;
+            arincVerPill.className = verInfo.versionPillClass;
+            arincVerPill.title = '点击打开协议版本管理中心与版本发展历程';
+            arincVerPill.onclick = () => {
+                if (window.openProtocolVersionModal) window.openProtocolVersionModal(p);
+                else if (window.openProtocolDiffModal) window.openProtocolDiffModal(p);
+            };
+        }
+        if (arincArchiveBadge) {
+            arincArchiveBadge.className = `proto-archive-badge ${verInfo.statusClass}`;
+            arincArchiveBadge.innerHTML = `<i class="fa-solid ${verInfo.isArchived ? 'fa-box-archive' : (verInfo.isModified ? 'fa-pen-to-square' : 'fa-folder-open')}"></i> ${verInfo.statusLabel}`;
+            arincArchiveBadge.title = verInfo.tooltip;
+            arincArchiveBadge.onclick = () => {
+                if (window.handleProtocolArchive) window.handleProtocolArchive(p);
+            };
+        }
+
+        const btnArincArchive = document.getElementById('btn-arinc-archive');
+        if (btnArincArchive) {
+            btnArincArchive.className = `dense-btn ${verInfo.archiveBtnClass || ''}`;
+            btnArincArchive.disabled = !verInfo.canArchive;
+            btnArincArchive.style.opacity = verInfo.canArchive ? '1' : '0.65';
+            btnArincArchive.style.cursor = verInfo.canArchive ? 'pointer' : 'not-allowed';
+            btnArincArchive.title = verInfo.canArchive ? (verInfo.isModified ? '协议发生修改：点击升版归档' : '首次归档当前协议为正式基准') : '当前协议已归档且无改动，无需重复归档';
+            btnArincArchive.innerHTML = `<i class="fa-solid ${verInfo.archiveBtnIcon}" style="color:${verInfo.canArchive ? (verInfo.isModified ? 'var(--accent-color)' : '#059669') : 'var(--success)'};"></i> <span>${verInfo.archiveBtnText}</span>`;
+            btnArincArchive.onclick = () => {
+                if (window.handleProtocolArchive && p) window.handleProtocolArchive(p);
+            };
+        }
+
         if (toolbarProtoTitle) {
             // 精简显示：仅展示协议名称，去除冗余前缀
             toolbarProtoTitle.innerHTML = `<i class="fa-solid fa-plane-departure" style="color:var(--accent-color);"></i> ${escapeHTML(p.name || '429 协议')}`;
@@ -439,7 +550,7 @@
             badgeProtoDevice.textContent = `对端: ${p.device || p.source || '未指定'}`;
         }
         if (badgeProtoDir) {
-            badgeProtoDir.textContent = `方向: ${p.direction || 'Tx'}`;
+            badgeProtoDir.textContent = `方向: ${p.direction === 'Rx' ? '接收' : '发送'}`;
         }
         if (badgeProtoSpeed) {
             badgeProtoSpeed.innerHTML = `<i class="fa-solid fa-gauge-high"></i> ${escapeHTML(p.speed || '100kbps')}`;
@@ -483,13 +594,98 @@
         }
     }
 
-    // 载入指定 429 协议到工作台
+    // 撤销/重做与自动草稿辅助函数
+    function captureArincMutation(actionName = '编辑') {
+        if (arincUndoRedo && currentArincProtocol) {
+            arincUndoRedo.push(currentArincProtocol, actionName);
+        }
+        if (ProtoView.ArchiveManager && currentArincProtocol) {
+            ProtoView.ArchiveManager.markProtocolModified(currentArincProtocol);
+            updateToolbarProtocolInfo();
+        }
+        triggerArincDraftSave();
+    }
+
+    function triggerArincDraftSave() {
+        if (!currentArincProtocol) return;
+        if (ProtoView.SaveStatus && arincSyncStatusBadge) {
+            ProtoView.SaveStatus.renderBadge(arincSyncStatusBadge, 'unsaved');
+        }
+        if (ProtoView.DraftManager) {
+            ProtoView.DraftManager.scheduleAutoSave(currentArincProtocol, (draft) => {
+                if (arincDraftBanner) arincDraftBanner.style.display = 'flex';
+                const timeEl = document.getElementById('arinc-draft-time');
+                if (timeEl) timeEl.textContent = '刚刚';
+            });
+        }
+    }
+
+    function performArincUndo() {
+        if (!arincUndoRedo || !currentArincProtocol) return;
+        const restored = arincUndoRedo.undo(currentArincProtocol);
+        if (restored) {
+            currentArincProtocol = restored;
+            getCurrentArincPacket();
+            updateToolbarProtocolInfo();
+            updateArincPacketToolbar();
+            updateSourceFilterOptions();
+            renderArincWordsList();
+            renderSelectedWordInspector();
+            triggerArincDraftSave();
+            showToast('已撤销操作 (Undo)', 'info');
+        }
+    }
+
+    function performArincRedo() {
+        if (!arincUndoRedo || !currentArincProtocol) return;
+        const restored = arincUndoRedo.redo(currentArincProtocol);
+        if (restored) {
+            currentArincProtocol = restored;
+            getCurrentArincPacket();
+            updateToolbarProtocolInfo();
+            updateArincPacketToolbar();
+            updateSourceFilterOptions();
+            renderArincWordsList();
+            renderSelectedWordInspector();
+            triggerArincDraftSave();
+            showToast('已重做操作 (Redo)', 'info');
+        }
+    }
+
+    // 载入指定 429 协议到工作台 (自动检测并提示恢复本地草稿)
     async function loadArincProtocolIntoEditor(id) {
         initDOMElements();
         const p = await (window.dbHelper ? window.dbHelper.getProtocol(id) : null);
         if (!p) return;
 
-        currentArincProtocol = p;
+        // 检查是否存在更新的本地草稿
+        let isUsingDraft = false;
+        let draftObj = null;
+        if (ProtoView.DraftManager) {
+            draftObj = ProtoView.DraftManager.getDraft(p);
+            if (draftObj && ProtoView.DraftManager.isDraftNewer(draftObj, p)) {
+                currentArincProtocol = draftObj.data;
+                isUsingDraft = true;
+            } else {
+                currentArincProtocol = p;
+            }
+        } else {
+            currentArincProtocol = p;
+        }
+
+        if (!isUsingDraft && ProtoView.ArchiveManager) {
+            ProtoView.ArchiveManager.ensureProtocolVersion(currentArincProtocol);
+            if (!ProtoView.ArchiveManager.hasChangesAgainstArchived(currentArincProtocol)) {
+                currentArincProtocol.isArchived = true;
+                currentArincProtocol.hasUnarchivedChanges = false;
+                if (ProtoView.DraftManager) ProtoView.DraftManager.clearDraft(currentArincProtocol);
+            }
+        }
+
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentArincProtocol);
+        }
+
         if (!currentArincProtocol.words) currentArincProtocol.words = [];
         
         // 自动适配多数据包架构
@@ -541,6 +737,34 @@
         updateSourceFilterOptions();
         renderArincWordsList();
         renderSelectedWordInspector();
+
+        // 联动草稿横幅提示与 5 态保存状态指示徽章
+        if (arincDraftBanner) {
+            if (isUsingDraft) {
+                arincDraftBanner.style.display = 'flex';
+                const timeEl = document.getElementById('arinc-draft-time');
+                if (timeEl && draftObj) {
+                    timeEl.textContent = ProtoView.DraftManager.formatRelativeTime(draftObj.savedAt);
+                }
+            } else {
+                arincDraftBanner.style.display = 'none';
+            }
+        }
+
+        if (ProtoView.SaveStatus && arincSyncStatusBadge) {
+            if (isUsingDraft) {
+                ProtoView.SaveStatus.renderBadge(arincSyncStatusBadge, 'unsaved');
+                if (ProtoView.DraftManager) ProtoView.DraftManager.setUnsaved(true);
+            } else {
+                const initialStatus = p._fromCloud ? 'cloud_synced' : 'saved_local';
+                ProtoView.SaveStatus.renderBadge(arincSyncStatusBadge, initialStatus, { lastSavedTime: p._cloudUpdated });
+                if (ProtoView.DraftManager) ProtoView.DraftManager.setUnsaved(false);
+            }
+        }
+
+        if (arincUndoRedo) {
+            arincUndoRedo.reset();
+        }
     }
 
     // 更新来源筛选下拉选项
@@ -567,9 +791,21 @@
         }
     }
 
-    // 保存当前 429 协议
-    async function saveCurrentArincProtocol() {
+    // 保存当前 429 协议 (支持 5 态状态提示、并发冲突仲裁与重试)
+    async function saveCurrentArincProtocol(forceOverwrite = false) {
         if (!currentArincProtocol) return;
+
+        if (ProtoView.SaveStatus && arincSyncStatusBadge) {
+            ProtoView.SaveStatus.renderBadge(arincSyncStatusBadge, 'pending_sync');
+        }
+
+        if (ProtoView.ArchiveManager && currentArincProtocol) {
+            // 保存动作仅为数据持久化，不应盲目将已归档无修改的协议改为“修改中”
+            if (!ProtoView.ArchiveManager.hasChangesAgainstArchived(currentArincProtocol)) {
+                currentArincProtocol.isArchived = true;
+                currentArincProtocol.hasUnarchivedChanges = false;
+            }
+        }
 
         // 同步当前包的修改
         const activePkt = getCurrentArincPacket();
@@ -598,29 +834,91 @@
             });
         }
 
-        // 保存至本地磁盘和云端
-        let cloudRes = { ok: true };
-        if (ProtoView.WorkspaceSync) {
-            cloudRes = await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(currentArincProtocol);
-        }
-
+        // 1. 本地数据库先行保存
+        currentArincProtocol.updatedAt = new Date().toISOString();
         const id = await window.dbHelper.saveProtocol(currentArincProtocol);
         currentArincProtocol.id = id;
 
-        if (btnArincSave) {
-            const originalHTML = btnArincSave.innerHTML;
-            if (cloudRes.ok) {
-                btnArincSave.innerHTML = '<i class="fa-solid fa-check"></i> 云端已同步!';
+        // 2. 云端原生同步
+        let cloudRes = { ok: true };
+        if (ProtoView.WorkspaceSync) {
+            cloudRes = await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(currentArincProtocol, {
+                expectedUpdated: currentArincProtocol._cloudUpdated || 0,
+                force: forceOverwrite
+            });
+        }
+
+        // 3. 处理两台设备同时修改引起的云端并发冲突
+        if (cloudRes.conflict) {
+            if (ProtoView.ConflictManager) {
+                const choice = await ProtoView.ConflictManager.resolve(currentArincProtocol, cloudRes);
+                if (choice === 'overwrite') {
+                    return await saveCurrentArincProtocol(true);
+                } else if (choice === 'pull') {
+                    if (ProtoView.DraftManager) ProtoView.DraftManager.clearDraft(currentArincProtocol);
+                    await ProtoView.WorkspaceSync.syncCloudProtocols(false);
+                    await loadArincProtocolIntoEditor(currentArincProtocol.id);
+                    showToast('已拉取云端最新版本并重载至工作台', 'info');
+                    return;
+                } else if (choice === 'copy') {
+                    const copyProto = JSON.parse(JSON.stringify(currentArincProtocol));
+                    delete copyProto.id;
+                    delete copyProto._cloudKey;
+                    copyProto.name = `${currentArincProtocol.name}_本地副本`;
+                    const newId = await window.dbHelper.saveProtocol(copyProto);
+                    if (ProtoView.DraftManager) ProtoView.DraftManager.clearDraft(currentArincProtocol);
+                    await loadArincProtocolsForSelect();
+                    await loadArincProtocolIntoEditor(newId);
+                    await saveCurrentArincProtocol(false);
+                    showToast(`已将本地修改另存为新协议「${copyProto.name}」`, 'success');
+                    return;
+                } else {
+                    if (ProtoView.SaveStatus && arincSyncStatusBadge) {
+                        ProtoView.SaveStatus.renderBadge(arincSyncStatusBadge, 'saved_local');
+                    }
+                    return;
+                }
+            }
+        }
+
+        // 4. 同步成功或失败状态反馈
+        if (cloudRes.ok) {
+            if (ProtoView.SaveStatus && arincSyncStatusBadge) {
+                ProtoView.SaveStatus.renderBadge(arincSyncStatusBadge, cloudRes.isLocal ? 'saved_local' : 'cloud_synced', {
+                    lastSavedTime: Date.now()
+                });
+            }
+            if (ProtoView.DraftManager) {
+                ProtoView.DraftManager.clearDraft(currentArincProtocol);
+            }
+            if (arincDraftBanner) arincDraftBanner.style.display = 'none';
+
+            if (btnArincSave) {
+                const originalHTML = btnArincSave.innerHTML;
+                btnArincSave.innerHTML = '<i class="fa-solid fa-check"></i> ' + (cloudRes.isLocal ? '本地已保存!' : '云端已同步!');
                 btnArincSave.style.backgroundColor = 'var(--success)';
-            } else {
+                setTimeout(() => {
+                    btnArincSave.innerHTML = originalHTML;
+                    btnArincSave.style.backgroundColor = '';
+                }, 1600);
+            }
+        } else {
+            if (ProtoView.SaveStatus && arincSyncStatusBadge) {
+                ProtoView.SaveStatus.renderBadge(arincSyncStatusBadge, 'sync_failed', {
+                    errorMsg: cloudRes.error,
+                    onRetry: () => saveCurrentArincProtocol(forceOverwrite)
+                });
+            }
+            if (btnArincSave) {
+                const originalHTML = btnArincSave.innerHTML;
                 btnArincSave.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 仅本地保存';
                 btnArincSave.style.backgroundColor = 'var(--warning)';
-                showToast(`本地已保存，但云端同步失败: ${cloudRes.error}`, 'warning');
+                setTimeout(() => {
+                    btnArincSave.innerHTML = originalHTML;
+                    btnArincSave.style.backgroundColor = '';
+                }, 1800);
             }
-            setTimeout(() => {
-                btnArincSave.innerHTML = originalHTML;
-                btnArincSave.style.backgroundColor = '';
-            }, 1800);
+            showToast(`本地已保存，但云端同步未成功: ${cloudRes.error} (支持点击状态栏重试)`, 'warning');
         }
 
         updateToolbarProtocolInfo();
@@ -724,7 +1022,7 @@
                     ${firstMatchedFieldIndex !== -1 ? `<button type="button" class="word-search-match-btn btn-locate-matched-field" data-word-index="${item.originalIndex}" data-field-index="${firstMatchedFieldIndex}" title="点击直接定位并高亮闪烁该字段"><i class="fa-solid fa-magnifying-glass"></i></button>` : ''}
                 </td>
                 <td class="col-dir" style="text-align:center;">
-                    <span class="dense-dir-tag ${dirClass}">${item.direction || 'Tx'}</span>
+                    <span class="dense-dir-tag ${dirClass}">${item.direction === 'Rx' ? '接收' : '发送'}</span>
                 </td>
                 <td class="col-count" style="text-align:center;">
                     <span class="dense-count-pill">${sigCount}</span>
@@ -752,22 +1050,33 @@
 
             const delBtn = tr.querySelector('.word-row-del-btn');
             if (delBtn) {
-                delBtn.addEventListener('click', (e) => {
+                delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const targetIdx = item.originalIndex;
                     const w = currentArincProtocol.words[targetIdx];
                     if (!w) return;
                     const targetName = w.name ? `「${w.name}」` : '';
-                    if (confirm(`确定要删除标号字 [${w.label || '000'}₈] ${targetName} 吗？`)) {
-                        currentArincProtocol.words.splice(targetIdx, 1);
-                        if (currentWordIndex >= currentArincProtocol.words.length) {
-                            currentWordIndex = Math.max(0, currentArincProtocol.words.length - 1);
-                        }
-                        updateSourceFilterOptions();
-                        updateArincPacketToolbar();
-                        renderArincWordsList();
-                        renderSelectedWordInspector();
+                    const ok = await (ProtoView.showConfirm ? ProtoView.showConfirm({
+                        title: '删除标号字确认',
+                        icon: 'fa-trash-can',
+                        type: 'danger',
+                        message: `确定要删除标号字 [${w.label || '000'}₈] ${targetName} 吗？`,
+                        detail: '删除后，该标号字内部包含的所有位段字段定义都将被移除。',
+                        confirmText: '确认删除',
+                        cancelText: '取消'
+                    }) : Promise.resolve(confirm(`确定要删除标号字 [${w.label || '000'}₈] ${targetName} 吗？`)));
+                    if (!ok) return;
+
+                    captureArincMutation('删除标号字');
+                    currentArincProtocol.words.splice(targetIdx, 1);
+                    if (currentWordIndex >= currentArincProtocol.words.length) {
+                        currentWordIndex = Math.max(0, currentArincProtocol.words.length - 1);
                     }
+                    updateSourceFilterOptions();
+                    updateArincPacketToolbar();
+                    renderArincWordsList();
+                    renderSelectedWordInspector();
+                    triggerArincDraftSave();
                 });
             }
 
@@ -791,6 +1100,8 @@
         const newIdx = currentWordIndex + delta;
         if (newIdx < 0 || newIdx >= words.length) return;
 
+        captureArincMutation('移动标号字');
+
         const tmp = words[currentWordIndex];
         words[currentWordIndex] = words[newIdx];
         words[newIdx] = tmp;
@@ -803,6 +1114,7 @@
 
         renderArincWordsList();
         renderSelectedWordInspector();
+        triggerArincDraftSave();
 
         setTimeout(() => {
             const rows = arincWordsList ? arincWordsList.querySelectorAll('tr') : [];
@@ -871,16 +1183,16 @@
         const isTx = protoDir !== 'Rx';
         word.direction = protoDir;
         if (wordDirectionBadge) {
-            wordDirectionBadge.textContent = isTx ? 'Tx (发)' : 'Rx (收)';
+            wordDirectionBadge.textContent = isTx ? '发送' : '接收';
             wordDirectionBadge.className = `dense-readonly-tag dense-dir-tag ${isTx ? 'dir-tx' : 'dir-rx'}`;
-            wordDirectionBadge.title = `继承自当前数据包方向: ${protoDir} (只读)`;
+            wordDirectionBadge.title = `继承自当前数据包方向: ${isTx ? '发送' : '接收'} (只读)`;
         }
 
         const pktPeriod = (curPkt && curPkt.period !== undefined) ? curPkt.period : ((currentArincProtocol && currentArincProtocol.period) || word.period || 20);
         word.period = pktPeriod;
         const wordPeriodContainer = document.getElementById('word-period-container');
         if (wordPeriodContainer) {
-            wordPeriodContainer.style.display = isTx ? 'flex' : 'none';
+            wordPeriodContainer.style.display = 'none';
         }
         if (wordPeriodBadge) {
             wordPeriodBadge.textContent = `${pktPeriod}ms`;
@@ -1260,6 +1572,12 @@
 
                 updateFieldsAllocationSummary(word);
                 updateCompactSim(word);
+                triggerArincDraftSave();
+            };
+
+            const onFieldPropCommit = (propName) => {
+                captureArincMutation(`修改${propName || '字段属性'}`);
+                triggerArincDraftSave();
             };
 
             inType.addEventListener('change', () => {
@@ -1301,29 +1619,44 @@
                     field.endianness = targetEndian;
                 }
                 onCardChange();
+                onFieldPropCommit('类型');
             });
 
             inName.addEventListener('input', onCardChange);
+            inName.addEventListener('change', () => onFieldPropCommit('字段名'));
             inStart.addEventListener('input', onCardChange);
+            inStart.addEventListener('change', () => onFieldPropCommit('起始位'));
             inBitCount.addEventListener('input', onCardChange);
-            inEndian.addEventListener('change', onCardChange);
+            inBitCount.addEventListener('change', () => onFieldPropCommit('位长度'));
+            inEndian.addEventListener('change', () => { onCardChange(); onFieldPropCommit('字节序'); });
             inRes.addEventListener('input', onCardChange);
+            inRes.addEventListener('change', () => onFieldPropCommit('分辨率'));
             inOffset.addEventListener('input', onCardChange);
+            inOffset.addEventListener('change', () => onFieldPropCommit('精度'));
             inMin.addEventListener('input', onCardChange);
+            inMin.addEventListener('change', () => onFieldPropCommit('量程'));
             inMax.addEventListener('input', onCardChange);
+            inMax.addEventListener('change', () => onFieldPropCommit('量程'));
             inUnit.addEventListener('input', onCardChange);
-            if (inRemark) inRemark.addEventListener('input', onCardChange);
+            inUnit.addEventListener('change', () => onFieldPropCommit('单位'));
+            if (inRemark) {
+                inRemark.addEventListener('input', onCardChange);
+                inRemark.addEventListener('change', () => onFieldPropCommit('备注'));
+            }
 
             card.querySelector('.btn-edit-field-dict').addEventListener('click', () => {
                 openDictModal(field, `字段 [${field.name || '未命名字段'}]`, () => {
+                    captureArincMutation('修改字段字典');
                     renderFieldsTable(word);
                     updateCompactSim(word);
+                    triggerArincDraftSave();
                 });
             });
 
             const btnClone = card.querySelector('.btn-clone-field');
             if (btnClone) {
                 btnClone.addEventListener('click', () => {
+                    captureArincMutation('克隆字段');
                     const cloned = JSON.parse(JSON.stringify(field));
                     cloned.name = field.name || '字段';
                     cloned.key = `sig_${Date.now().toString().slice(-6)}`;
@@ -1345,10 +1678,12 @@
                     renderFieldsTable(word);
                     updateCompactSim(word);
                     renderArincWordsList();
+                    triggerArincDraftSave();
                 });
             }
 
             card.querySelector('.btn-del-field').addEventListener('click', () => {
+                captureArincMutation('删除字段');
                 word.signals.splice(fIdx, 1);
                 if (isBitstream && word.signals.length > 0) {
                     word.signals.forEach((s, idx) => {
@@ -1363,6 +1698,7 @@
                 renderFieldsTable(word);
                 updateCompactSim(word);
                 renderArincWordsList();
+                triggerArincDraftSave();
             });
 
             arincFieldsTbody.appendChild(card);
@@ -1386,6 +1722,8 @@
         const word = currentArincProtocol.words[currentWordIndex];
         if (!word) return;
         if (!word.signals) word.signals = [];
+
+        captureArincMutation('添加字段');
 
         const isBitstream = (currentArincProtocol && currentArincProtocol.mode === 'bitstream') || (word.editMode === 'bitstream');
         const defaultStart = isBitstream ? 9 : 11;
@@ -1437,6 +1775,7 @@
         renderFieldsTable(word);
         updateCompactSim(word);
         renderArincWordsList();
+        triggerArincDraftSave();
     }
 
     // ----------------- 通用数据字典弹窗编辑器 -----------------
@@ -1510,6 +1849,11 @@
         lastAddWordTime = now;
 
         if (!currentArincProtocol) return;
+        captureArincMutation('添加标号字');
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentArincProtocol);
+        }
+
         if (!currentArincProtocol.words) currentArincProtocol.words = [];
 
         const usedLabels = new Set(currentArincProtocol.words.map(w => (w.label || '').toString().padStart(3, '0')));
@@ -1590,6 +1934,7 @@
         updateSourceFilterOptions();
         renderArincWordsList();
         renderSelectedWordInspector();
+        triggerArincDraftSave();
         if (window.innerWidth <= 768) {
             setMobileArincView('detail');
         }
@@ -1765,15 +2110,31 @@
     }
 
     // ----------------- ARINC 429 协议工程健康度诊断器 -----------------
-    function runProtocolHealthCheck() {
-        if (!currentArincProtocol) {
-            alert('请先选择或创建一个 429 协议！');
+    function runProtocolHealthCheck(targetProto) {
+        let p = targetProto || currentArincProtocol;
+        if (!p && window.currentViewerProtocol) {
+            p = window.currentViewerProtocol;
+        }
+        if (!p && ProtoView.Controllers && ProtoView.Controllers.Viewer && ProtoView.Controllers.Viewer.getCurrentProtocol) {
+            p = ProtoView.Controllers.Viewer.getCurrentProtocol();
+        }
+        if (!p) {
+            alert('请先选择或打开一个通信协议！');
             return;
         }
 
         const issues = [];
-        const p = currentArincProtocol;
-        const words = p.words || [];
+        let words = [];
+        if (p.packets && Array.isArray(p.packets) && p.packets.length > 0) {
+            p.packets.forEach(pkt => {
+                if (pkt.words && Array.isArray(pkt.words)) {
+                    words.push(...pkt.words);
+                }
+            });
+        }
+        if (words.length === 0 && p.words && Array.isArray(p.words)) {
+            words = p.words;
+        }
 
         if (words.length === 0) {
             issues.push({
@@ -2016,6 +2377,43 @@
         if (btnMobileTabDetail) btnMobileTabDetail.addEventListener('click', () => setMobileArincView('detail'));
         if (btnMobileBackWords) btnMobileBackWords.addEventListener('click', () => setMobileArincView('words'));
 
+        if (btnArincUndo) {
+            btnArincUndo.addEventListener('click', performArincUndo);
+        }
+        if (btnArincRedo) {
+            btnArincRedo.addEventListener('click', performArincRedo);
+        }
+        if (btnArincDraftDiscard) {
+            btnArincDraftDiscard.addEventListener('click', async () => {
+                if (!currentArincProtocol) return;
+                const ok = await (ProtoView.showConfirm ? ProtoView.showConfirm({
+                    title: '放弃未保存草稿',
+                    icon: 'fa-rotate-left',
+                    type: 'warning',
+                    message: '确定要放弃本地自动保存的草稿吗？',
+                    detail: '将重新加载数据库已保存的干净版本，本次会话的所有未保存编辑将被放弃。',
+                    confirmText: '确认放弃草稿',
+                    cancelText: '保留草稿'
+                }) : Promise.resolve(confirm('确定要放弃本地自动保存的草稿吗？将重新加载数据库已保存的版本。')));
+
+                if (ok) {
+                    if (ProtoView.DraftManager) {
+                        ProtoView.DraftManager.clearDraft(currentArincProtocol);
+                    }
+                    if (arincDraftBanner) arincDraftBanner.style.display = 'none';
+                    if (currentArincProtocol.id) {
+                        await loadArincProtocolIntoEditor(currentArincProtocol.id);
+                    }
+                    showToast('已放弃本地草稿，恢复至数据库版本', 'info');
+                }
+            });
+        }
+        if (btnArincDraftSave) {
+            btnArincDraftSave.addEventListener('click', () => {
+                saveCurrentArincProtocol();
+            });
+        }
+
         if (wordLabelOctal) {
             wordLabelOctal.addEventListener('input', (e) => {
                 let val = e.target.value.replace(/[^0-7]/g, '').slice(0, 3);
@@ -2032,7 +2430,12 @@
                     if (detailLabelBadge) detailLabelBadge.textContent = `${val}₈`;
                     renderArincWordsList();
                     updateCompactSim(currentArincProtocol.words[currentWordIndex]);
+                    triggerArincDraftSave();
                 }
+            });
+            wordLabelOctal.addEventListener('change', () => {
+                captureArincMutation('修改Label标号');
+                triggerArincDraftSave();
             });
         }
 
@@ -2042,7 +2445,12 @@
                     currentArincProtocol.words[currentWordIndex].name = e.target.value;
                     if (detailWordTitle) detailWordTitle.textContent = e.target.value || '未命名数据字';
                     renderArincWordsList();
+                    triggerArincDraftSave();
                 }
+            });
+            wordName.addEventListener('change', () => {
+                captureArincMutation('修改数据字名称');
+                triggerArincDraftSave();
             });
         }
 
@@ -2061,19 +2469,23 @@
         if (wordSdi) {
             wordSdi.addEventListener('change', (e) => {
                 if (currentArincProtocol && currentArincProtocol.words && currentArincProtocol.words[currentWordIndex]) {
+                    captureArincMutation('修改SDI');
                     currentArincProtocol.words[currentWordIndex].sdi = Number(e.target.value);
                     updateCompactSim(currentArincProtocol.words[currentWordIndex]);
+                    triggerArincDraftSave();
                 }
             });
         }
 
         const onSsmChange = (e) => {
             if (currentArincProtocol && currentArincProtocol.words && currentArincProtocol.words[currentWordIndex]) {
+                captureArincMutation('修改SSM');
                 const val = Number(e.target.value);
                 currentArincProtocol.words[currentWordIndex].ssm = val;
                 if (wordSsm) wordSsm.value = val;
                 if (bsWordSsm) bsWordSsm.value = val;
                 updateCompactSim(currentArincProtocol.words[currentWordIndex]);
+                triggerArincDraftSave();
             }
         };
         if (wordSsm) wordSsm.addEventListener('change', onSsmChange);
@@ -2147,9 +2559,21 @@
 
         if (arincProtocolSelect) {
             arincProtocolSelect.addEventListener('change', (e) => {
-                if (e.target.value) {
-                    loadArincProtocolIntoEditor(Number(e.target.value));
+                const targetId = Number(e.target.value);
+                if (!targetId) return;
+                const oldId = currentArincProtocol ? currentArincProtocol.id : '';
+                if (ProtoView.DraftManager && ProtoView.DraftManager.hasUnsavedChanges()) {
+                    if (ProtoView.confirmUnsavedNavigation) {
+                        ProtoView.confirmUnsavedNavigation('切换到其他 429 协议', () => {
+                            loadArincProtocolIntoEditor(targetId);
+                        });
+                        if (ProtoView.DraftManager.hasUnsavedChanges()) {
+                            arincProtocolSelect.value = oldId;
+                        }
+                        return;
+                    }
                 }
+                loadArincProtocolIntoEditor(targetId);
             });
         }
 
@@ -2169,8 +2593,28 @@
             });
         }
 
+        if (btnRenameArincPacket) {
+            btnRenameArincPacket.addEventListener('click', renameCurrentArincPacket);
+        }
+
+        if (btnMenuRenameArincPacket) {
+            btnMenuRenameArincPacket.addEventListener('click', () => {
+                const moreDropdown = document.getElementById('arinc-more-dropdown');
+                if (moreDropdown) moreDropdown.classList.remove('active');
+                renameCurrentArincPacket();
+            });
+        }
+
         if (btnAddArincPacket) {
             btnAddArincPacket.addEventListener('click', addArincPacket);
+        }
+
+        if (btnMenuAddArincPacket) {
+            btnMenuAddArincPacket.addEventListener('click', () => {
+                const moreDropdown = document.getElementById('arinc-more-dropdown');
+                if (moreDropdown) moreDropdown.classList.remove('active');
+                addArincPacket();
+            });
         }
 
         if (btnDuplicateArincPacket) {
@@ -2185,6 +2629,7 @@
             arincPacketDirection.addEventListener('change', (e) => {
                 const pkt = getCurrentArincPacket();
                 if (!pkt) return;
+                captureArincMutation('更改数据包方向');
                 const newDir = e.target.value === 'Rx' ? 'Rx' : 'Tx';
                 pkt.direction = newDir;
                 // 一包协议要么是发送要么是接收，绝不共存：包内标号字严格继承该方向
@@ -2199,15 +2644,16 @@
                 }
                 const wordDirBadge = document.getElementById('word-direction-badge');
                 if (wordDirBadge) {
-                    wordDirBadge.textContent = newDir === 'Tx' ? 'Tx (发)' : 'Rx (收)';
+                    wordDirBadge.textContent = newDir === 'Tx' ? '发送' : '接收';
                     wordDirBadge.className = `dense-readonly-tag dense-dir-tag ${newDir === 'Tx' ? 'dir-tx' : 'dir-rx'}`;
                 }
                 const wordPeriodContainer = document.getElementById('word-period-container');
                 if (wordPeriodContainer) {
-                    wordPeriodContainer.style.display = (newDir === 'Tx') ? 'flex' : 'none';
+                    wordPeriodContainer.style.display = 'none';
                 }
                 updateArincPacketToolbar();
                 renderArincWordsList();
+                triggerArincDraftSave();
             });
         }
 
@@ -2226,6 +2672,11 @@
                 if (wordPeriodBadge) {
                     wordPeriodBadge.textContent = `${pkt.period}ms`;
                 }
+                triggerArincDraftSave();
+            });
+            arincPacketPeriod.addEventListener('change', () => {
+                captureArincMutation('修改数据包周期');
+                triggerArincDraftSave();
             });
         }
 
@@ -2241,6 +2692,11 @@
                     arincPacketSelect.options[currentArincPacketIndex].textContent = pkt.name || '未命名数据包';
                     arincPacketSelect.options[currentArincPacketIndex].title = `[${isRx ? 'Rx' : 'Tx'}${periodText}] ${pkt.name || '未命名数据包'} (${pkt.words ? pkt.words.length : 0}个字)`;
                 }
+                triggerArincDraftSave();
+            });
+            arincPacketName.addEventListener('change', () => {
+                captureArincMutation('修改数据包名称');
+                triggerArincDraftSave();
             });
         }
 
@@ -2251,6 +2707,7 @@
         if (btnDuplicateWord) {
             btnDuplicateWord.addEventListener('click', () => {
                 if (!currentArincProtocol || !currentArincProtocol.words || currentArincProtocol.words.length === 0) return;
+                captureArincMutation('克隆标号字');
                 const cur = currentArincProtocol.words[currentWordIndex];
                 const dup = JSON.parse(JSON.stringify(cur));
 
@@ -2290,6 +2747,7 @@
                 updateArincPacketToolbar();
                 renderArincWordsList();
                 renderSelectedWordInspector();
+                triggerArincDraftSave();
                 if (window.innerWidth <= 768) {
                     setMobileArincView('detail');
                 }
@@ -2297,18 +2755,31 @@
         }
 
         if (btnDeleteWord) {
-            btnDeleteWord.addEventListener('click', () => {
+            btnDeleteWord.addEventListener('click', async () => {
                 if (!currentArincProtocol || !currentArincProtocol.words || currentArincProtocol.words.length === 0) return;
-                if (confirm(`确定要删除标号字 [${currentArincProtocol.words[currentWordIndex].label} ${currentArincProtocol.words[currentWordIndex].name}] 吗？`)) {
-                    currentArincProtocol.words.splice(currentWordIndex, 1);
-                    if (currentWordIndex >= currentArincProtocol.words.length) {
-                        currentWordIndex = Math.max(0, currentArincProtocol.words.length - 1);
-                    }
-                    updateSourceFilterOptions();
-                    updateArincPacketToolbar();
-                    renderArincWordsList();
-                    renderSelectedWordInspector();
+                const curWord = currentArincProtocol.words[currentWordIndex];
+                const wName = curWord.name ? `「${curWord.name}」` : '';
+                const ok = await (ProtoView.showConfirm ? ProtoView.showConfirm({
+                    title: '删除标号字确认',
+                    icon: 'fa-trash-can',
+                    type: 'danger',
+                    message: `确定要删除标号字 [${curWord.label} ${wName}] 吗？`,
+                    detail: '删除后，该标号字内部包含的所有位段字段定义都将被移除。',
+                    confirmText: '确认删除',
+                    cancelText: '取消'
+                }) : Promise.resolve(confirm(`确定要删除标号字 [${curWord.label} ${curWord.name}] 吗？`)));
+                if (!ok) return;
+
+                captureArincMutation('删除标号字');
+                currentArincProtocol.words.splice(currentWordIndex, 1);
+                if (currentWordIndex >= currentArincProtocol.words.length) {
+                    currentWordIndex = Math.max(0, currentArincProtocol.words.length - 1);
                 }
+                updateSourceFilterOptions();
+                updateArincPacketToolbar();
+                renderArincWordsList();
+                renderSelectedWordInspector();
+                triggerArincDraftSave();
             });
         }
 
@@ -2320,6 +2791,7 @@
             btnSaveDict.addEventListener('click', () => {
                 if (!activeDictTarget) return;
 
+                captureArincMutation('修改字典');
                 const newDict = {};
                 const rows = dictItemsTbody ? dictItemsTbody.querySelectorAll('tr') : [];
                 rows.forEach(r => {
@@ -2333,6 +2805,7 @@
                 const prop = activeDictTarget.dictProp || 'dict';
                 activeDictTarget.target[prop] = newDict;
                 if (activeDictTarget.callback) activeDictTarget.callback();
+                triggerArincDraftSave();
                 if (dictEditorModal) dictEditorModal.classList.remove('active');
             });
         }
@@ -2414,23 +2887,6 @@
             });
         }
 
-        if (btnSimDecode) {
-            btnSimDecode.addEventListener('click', () => {
-                const raw = simDecoderInput ? simDecoderInput.value.trim().replace(/0x/gi, '') : '';
-                if (raw.length !== 8) {
-                    alert("请输入 8 位 16 进制字符 (32 位 ARINC 字)！");
-                    return;
-                }
-                const word = (currentArincProtocol && currentArincProtocol.words) ? currentArincProtocol.words[currentWordIndex] : {};
-                const res = Arinc429Helper.decodeFullWord(raw, word);
-
-                let msg = `【解码结果】\n标号: ${res.label.octal}₈ (${res.label.hex})\n奇偶校验: ${res.parity.valid ? '正确 (Pass)' : '错误 (Fail)'}\nSSM: ${res.ssm.desc}\nSDI: ${res.sdi.desc}\n\n【字段解析】:\n`;
-                res.signals.forEach(s => {
-                    msg += `• ${s.name}: ${s.formatted} ${s.unit} (Raw: ${s.rawHex})\n`;
-                });
-                alert(msg);
-            });
-        }
 
         if (btnArincImport) {
             btnArincImport.addEventListener('click', () => arincFileInput && arincFileInput.click());
@@ -2607,12 +3063,16 @@
         addArincPacket,
         duplicateCurrentArincPacket,
         deleteCurrentArincPacket,
+        startRenameArincPacket,
+        finishRenameArincPacket,
         openDictModal,
         openExportMdModal,
         exportArincJson,
         importArincJson,
         runProtocolHealthCheck,
         setMobileArincView,
+        undo: performArincUndo,
+        redo: performArincRedo,
         bindEvents: bindArincEvents
     };
 
@@ -2624,6 +3084,8 @@
     global.loadArincProtocolsForSelect = loadArincProtocolsForSelect;
     global.loadArincProtocolIntoEditor = loadArincProtocolIntoEditor;
     global.saveCurrentArincProtocol = saveCurrentArincProtocol;
+    global.performArincUndo = performArincUndo;
+    global.performArincRedo = performArincRedo;
     global.renderArincWordsList = renderArincWordsList;
     global.renderSelectedWordInspector = renderSelectedWordInspector;
     global.renderFieldsTable = renderFieldsTable;
@@ -2636,6 +3098,9 @@
     global.addArincPacket = addArincPacket;
     global.duplicateCurrentArincPacket = duplicateCurrentArincPacket;
     global.deleteCurrentArincPacket = deleteCurrentArincPacket;
+    global.renameCurrentArincPacket = renameCurrentArincPacket;
+    global.startRenameArincPacket = startRenameArincPacket;
+    global.finishRenameArincPacket = finishRenameArincPacket;
     global.openExportMdModal = openExportMdModal;
     global.exportArincJson = exportArincJson;
     global.importArincJson = importArincJson;

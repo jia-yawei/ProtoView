@@ -1,4 +1,4 @@
-/**
+n'g/**
  * @file auth.js
  * @brief ProtoView 多用户账号认证与隔离控制模块 (Cloudflare KV 驱动)
  * @author DeepMind Pair Programming
@@ -44,6 +44,65 @@
         sidebarUserName = document.getElementById('sidebar-user-name');
         sidebarUserStatus = document.getElementById('sidebar-user-status');
         btnSidebarAuthAction = document.getElementById('btn-sidebar-auth-action');
+    }
+
+    // 检测是否处于本地离线开发调试环境 (localhost / 127.0.0.1 / file://)
+    function isLocalDevEnv() {
+        const host = window.location.hostname || '';
+        const proto = window.location.protocol || '';
+        return (
+            proto === 'file:' ||
+            host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '0.0.0.0' ||
+            host.endsWith('.local') ||
+            host.endsWith('.test') ||
+            host.endsWith('.internal') ||
+            host === ''
+        );
+    }
+
+    // 辅助：根据角色跳转主视图
+    function redirectToMainView(user) {
+        const isAdmin = user && (user.isAdmin || user.username.toLowerCase() === 'admin');
+        if (isAdmin) {
+            if (typeof window.switchToView === 'function') {
+                window.switchToView('admin-view');
+            }
+            if (typeof window.loadAdminStats === 'function') {
+                window.loadAdminStats();
+            }
+        } else {
+            if (typeof window.switchToView === 'function') {
+                window.switchToView('protocol-view');
+            }
+        }
+    }
+
+    // 本地离线开发环境 Mock 认证 (免推 Cloudflare 调试核心)
+    async function doLocalDevLogin(username) {
+        const u = (username && String(username).trim()) ? String(username).trim() : 'dev';
+        const isAdmin = u.toLowerCase() === 'admin';
+        const localUser = {
+            username: u,
+            displayName: u,
+            isAdmin: isAdmin,
+            isLocalDev: true
+        };
+        const localToken = 'local_dev_token_' + Date.now();
+        setAuthSession(localUser, localToken);
+        closeAuthModal();
+        showToast(`已进入本地开发调试模式 (当前账号: ${localUser.username}${isAdmin ? ' [管理员]' : ''})`, 'success');
+
+        redirectToMainView(localUser);
+
+        // 本地离线环境：直接激活本地 IndexedDB 协议与产品库
+        if (typeof window.refreshProductDatalist === 'function') await window.refreshProductDatalist();
+        if (typeof window.loadProtocols === 'function') await window.loadProtocols();
+        if (typeof window.loadProtocolsForSelect === 'function') await window.loadProtocolsForSelect();
+        if (typeof window.loadArincProtocolsForSelect === 'function') await window.loadArincProtocolsForSelect();
+        if (typeof window.ensureSerialProtocolLoaded === 'function') await window.ensureSerialProtocolLoaded();
+        return true;
     }
 
     // 获取当前登录用户
@@ -96,6 +155,12 @@
         const user = getCurrentUser();
         const loggedIn = isLoggedIn();
         const isAdmin = loggedIn && user && (user.isAdmin || user.username.toLowerCase() === 'admin');
+
+        // 本地环境提示条自适应显隐
+        const localBanner = document.getElementById('portal-local-dev-banner');
+        if (localBanner) {
+            localBanner.style.display = (!loggedIn && isLocalDevEnv()) ? 'block' : 'none';
+        }
 
         // 同步根节点已登录状态类名 (控制全屏登录页 vs 主应用工作台显示)
         if (loggedIn) {
@@ -169,9 +234,10 @@
                     }
                 }
                 if (sidebarUserStatus) {
+                    const isLocal = (user && user.isLocalDev) || isLocalDevEnv();
                     sidebarUserStatus.innerHTML = isAdmin 
                         ? `<i class="fa-solid fa-crown" style="color:#f59e0b; font-size:10px;"></i> <span style="color:#f59e0b; font-weight:600;">系统管理员</span>`
-                        : `<i class="fa-solid fa-circle" style="color:#10b981; font-size:7px;"></i> <span style="color:var(--text-secondary);">在线 · 已同步</span>`;
+                        : `<i class="fa-solid fa-cloud" style="color:#10b981; font-size:9px;"></i> <span style="color:var(--text-secondary);">${isLocal ? '本地调试模式' : '云端 · 已连接'}</span>`;
                 }
                 if (btnSidebarAuthAction) {
                     btnSidebarAuthAction.innerHTML = `<i class="fa-solid fa-right-from-bracket"></i>`;
@@ -180,19 +246,19 @@
             } else {
                 sidebarUserCard.classList.remove('logged-in');
                 if (sidebarUserName) {
-                    sidebarUserName.textContent = '未登录';
-                    sidebarUserName.title = '请先登录账号';
+                    sidebarUserName.textContent = '本地工作区';
+                    sidebarUserName.title = '单机/本地优先模式 (数据存放在当前浏览器 IndexedDB)';
                 }
                 if (sidebarUserAvatar) {
-                    sidebarUserAvatar.innerHTML = `<i class="fa-solid fa-user"></i>`;
+                    sidebarUserAvatar.innerHTML = `<i class="fa-solid fa-laptop-code"></i>`;
                     sidebarUserAvatar.classList.remove('avatar-admin');
                 }
                 if (sidebarUserStatus) {
-                    sidebarUserStatus.innerHTML = `<i class="fa-solid fa-circle" style="color:var(--text-secondary); opacity:0.6; font-size:7px;"></i> <span>未登录</span>`;
+                    sidebarUserStatus.innerHTML = `<i class="fa-solid fa-database" style="color:#10b981; font-size:9px;"></i> <span>本地存储就绪</span>`;
                 }
                 if (btnSidebarAuthAction) {
                     btnSidebarAuthAction.innerHTML = `<i class="fa-solid fa-arrow-right-to-bracket"></i>`;
-                    btnSidebarAuthAction.title = '前往登录页面';
+                    btnSidebarAuthAction.title = '登录云端账号';
                 }
             }
         }
@@ -237,6 +303,7 @@
 
     // 登录请求
     async function handleLogin(username, password) {
+        const isLocal = isLocalDevEnv();
         try {
             const res = await fetch('/api/auth?action=login', {
                 method: 'POST',
@@ -249,31 +316,27 @@
                 setAuthSession(data.user, data.token);
                 closeAuthModal();
                 showToast(`欢迎回来，${data.user.username}！`, 'success');
+                redirectToMainView(data.user);
 
-                const isAdmin = data.user.isAdmin || data.user.username.toLowerCase() === 'admin';
-                if (isAdmin) {
-                    if (typeof window.switchToView === 'function') {
-                        window.switchToView('admin-view');
-                    }
-                    if (typeof window.loadAdminStats === 'function') {
-                        window.loadAdminStats();
-                    }
-                } else {
-                    if (typeof window.switchToView === 'function') {
-                        window.switchToView('protocol-view');
-                    }
-                }
-                // 所有账号（包括管理员）登录后，均从云端拉取该账号专属的产品与通信协议
+                // 所有账号登录后，从云端拉取该账号专属的产品与通信协议
                 if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
                     await ProtoView.WorkspaceSync.syncCloudProtocols(false);
                 }
                 return true;
             } else {
+                // 如果处于本地开发环境且接口返回 404 或不可用，自动降级为本地离线开发模式
+                if (isLocal && (res.status === 404 || !res.ok)) {
+                    return doLocalDevLogin(username);
+                }
                 const msg = (data && data.error) || '登录失败，请检查账号密码';
                 alert(msg);
                 return false;
             }
         } catch (e) {
+            // 本地静态服务器 (如 Live Server, python http) 无法处理 /api 请求时的优雅降级
+            if (isLocal) {
+                return doLocalDevLogin(username);
+            }
             alert('连接认证服务异常: ' + e.message);
             return false;
         }
@@ -281,6 +344,7 @@
 
     // 注册请求 (仅需用户名与密码)
     async function handleRegister(username, password) {
+        const isLocal = isLocalDevEnv();
         try {
             const res = await fetch('/api/auth?action=register', {
                 method: 'POST',
@@ -293,31 +357,24 @@
                 setAuthSession(data.user, data.token);
                 closeAuthModal();
                 showToast(`账号 [${data.user.username}] 注册成功并已自动登录！`, 'success');
+                redirectToMainView(data.user);
 
-                const isAdmin = data.user.isAdmin || data.user.username.toLowerCase() === 'admin';
-                if (isAdmin) {
-                    if (typeof window.switchToView === 'function') {
-                        window.switchToView('admin-view');
-                    }
-                    if (typeof window.loadAdminStats === 'function') {
-                        window.loadAdminStats();
-                    }
-                } else {
-                    if (typeof window.switchToView === 'function') {
-                        window.switchToView('protocol-view');
-                    }
-                }
-                // 新注册用户拉取云端专属产品与协议
                 if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
                     await ProtoView.WorkspaceSync.syncCloudProtocols(false);
                 }
                 return true;
             } else {
+                if (isLocal && (res.status === 404 || !res.ok)) {
+                    return doLocalDevLogin(username);
+                }
                 const msg = (data && data.error) || '注册失败，请更换用户名重试';
                 alert(msg);
                 return false;
             }
         } catch (e) {
+            if (isLocal) {
+                return doLocalDevLogin(username);
+            }
             alert('连接认证服务异常: ' + e.message);
             return false;
         }
@@ -339,7 +396,7 @@
         }
 
         const token = getToken();
-        if (token) {
+        if (token && !token.startsWith('local_dev_token_')) {
             try {
                 fetch('/api/auth?action=logout', {
                     method: 'POST',
@@ -353,7 +410,9 @@
         }
 
         setAuthSession(null, null);
-        if (window.dbHelper) {
+        const isLocal = isLocalDevEnv();
+        // 关键防护：在本地离线环境下，退出登录不要清空本地 IndexedDB 协议与产品！
+        if (!isLocal && window.dbHelper) {
             await window.dbHelper.clearAllProtocols();
             await window.dbHelper.clearAllProducts();
         }
@@ -374,6 +433,15 @@
         if (!token) {
             updateAuthUI();
             return;
+        }
+
+        // 若是本地开发者 Token 或处于本地离线环境，直接保持本地 Session 有效
+        if (token.startsWith('local_dev_token_') || isLocalDevEnv()) {
+            const u = getCurrentUser();
+            if (u && u.username) {
+                updateAuthUI();
+                return;
+            }
         }
 
         try {
@@ -487,6 +555,29 @@
             });
         });
 
+        // 侧边栏快捷云端数据同步按钮
+        const btnSidebarQuickSync = document.getElementById('sidebar-quick-sync-btn');
+        if (btnSidebarQuickSync) {
+            btnSidebarQuickSync.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (btnSidebarQuickSync.classList.contains('is-syncing')) return;
+                btnSidebarQuickSync.classList.add('is-syncing');
+                try {
+                    if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncCloudProtocols === 'function') {
+                        await ProtoView.WorkspaceSync.syncCloudProtocols(true);
+                    } else {
+                        showToast('正在从本地数据库加载...', 'info');
+                    }
+                } catch (err) {
+                    console.error('云端同步异常:', err);
+                } finally {
+                    setTimeout(() => {
+                        btnSidebarQuickSync.classList.remove('is-syncing');
+                    }, 600);
+                }
+            });
+        }
+
         // 侧边栏用户卡片点击动作
         if (btnSidebarAuthAction) {
             btnSidebarAuthAction.addEventListener('click', (e) => {
@@ -500,8 +591,8 @@
         }
         if (sidebarUserCard) {
             sidebarUserCard.addEventListener('click', (e) => {
-                // 若点击目标或其祖先为主题切换按钮或退出按钮，则不触发账号切换弹窗
-                if (e.target && (e.target.closest('#theme-toggle') || e.target.closest('#btn-sidebar-auth-action'))) {
+                // 若点击目标或其祖先为同步、主题切换按钮或退出按钮，则不触发账号切换弹窗
+                if (e.target && (e.target.closest('#theme-toggle') || e.target.closest('#btn-sidebar-auth-action') || e.target.closest('#sidebar-quick-sync-btn'))) {
                     return;
                 }
                 if (isLoggedIn()) {
@@ -536,6 +627,15 @@
             });
         }
 
+        // 本地开发环境快捷免密秒进按钮
+        const btnQuickDev = document.getElementById('btn-quick-dev-login');
+        if (btnQuickDev) {
+            btnQuickDev.addEventListener('click', (e) => {
+                e.preventDefault();
+                doLocalDevLogin('dev');
+            });
+        }
+
         // 初始更新界面
         updateAuthUI();
         verifyExistingSession();
@@ -543,6 +643,8 @@
 
     // 挂载对外 API
     ProtoView.Auth = {
+        isLocalDevEnv,
+        doLocalDevLogin,
         getCurrentUser,
         getToken,
         isLoggedIn,

@@ -22,6 +22,8 @@
 
     // 内部状态
     let currentExportProtocol = null;
+    let exportRootProtocol = null;
+    let exportVersionChangeBound = false;
     let currentExportMd = '';
     let currentExportHtml = '';
     let currentExportJson = '';
@@ -29,6 +31,7 @@
     // DOM 引用
     let exportModal;
     let exportModalProtoName, exportModalProtoBadge;
+    let exportModalVersionWrap, exportModalVersionSelect;
     let tabBtnPreview, tabBtnCode, tabBtnJson;
     let exportPreviewContainer, exportRenderedPreview;
     let exportCodeContainer, exportMdCodeBlock;
@@ -39,6 +42,8 @@
         exportModal = document.getElementById('protocol-export-modal') || document.getElementById('arinc-export-md-modal');
         exportModalProtoName = document.getElementById('export-modal-proto-name');
         exportModalProtoBadge = document.getElementById('export-modal-proto-badge');
+        exportModalVersionWrap = document.getElementById('export-modal-version-wrap');
+        exportModalVersionSelect = document.getElementById('export-modal-version-select');
 
         tabBtnPreview = document.getElementById('tab-btn-export-view-preview');
         tabBtnCode = document.getElementById('tab-btn-export-view-code');
@@ -193,9 +198,33 @@
 
         // 渲染弹窗头部元数据
         if (exportModalProtoName) {
-            exportModalProtoName.textContent = p.name || '未命名协议';
-            exportModalProtoName.title = p.name || '';
+            const verDisplay = p.version ? ` [${p.version}${p._isHistoricalSnapshot ? ' 历史快照' : ''}]` : '';
+            exportModalProtoName.textContent = (p.name || '未命名协议') + verDisplay;
+            exportModalProtoName.title = (p.name || '') + verDisplay;
         }
+
+        // 尝试捕获 root 协议实体（带有完整的 archivedVersions）
+        let root = p._rootProtocol || null;
+        if (!root) {
+            if (p.archivedVersions && Array.isArray(p.archivedVersions)) {
+                root = p;
+            } else if (p.id) {
+                if (ProtoView.Controllers && ProtoView.Controllers.Viewer && ProtoView.Controllers.Viewer.getRootProtocol) {
+                    const vr = ProtoView.Controllers.Viewer.getRootProtocol();
+                    if (vr && (vr.id === p.id || String(vr.id) === String(p.id))) root = vr;
+                }
+                if (!root && window.currentArincProtocol && String(window.currentArincProtocol.id) === String(p.id)) {
+                    root = window.currentArincProtocol;
+                }
+                if (!root && window.currentSerialProtocol && String(window.currentSerialProtocol.id) === String(p.id)) {
+                    root = window.currentSerialProtocol;
+                }
+            }
+        }
+        if (!root) root = p;
+        exportRootProtocol = root;
+
+        renderExportVersionSelect(p);
 
         if (exportModalProtoBadge) {
             const isArinc = p.type === 'ARINC429';
@@ -321,6 +350,103 @@
         }
     }
 
+    function formatCompactTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return '';
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const h = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${m}-${day} ${h}:${min}`;
+    }
+
+    /**
+     * 渲染导出弹窗顶部的协议版本选择下拉控件
+     */
+    function renderExportVersionSelect(p) {
+        if (!exportModalVersionSelect) exportModalVersionSelect = document.getElementById('export-modal-version-select');
+        if (!exportModalVersionWrap) exportModalVersionWrap = document.getElementById('export-modal-version-wrap');
+        if (!exportModalVersionSelect) return;
+
+        const archives = (exportRootProtocol && Array.isArray(exportRootProtocol.archivedVersions)) ? exportRootProtocol.archivedVersions : [];
+        if (archives.length === 0) {
+            if (exportModalVersionWrap) exportModalVersionWrap.style.display = 'none';
+            return;
+        }
+
+        if (exportModalVersionWrap) exportModalVersionWrap.style.display = 'inline-flex';
+        exportModalVersionSelect.innerHTML = '';
+
+        const isModified = (ProtoView.ArchiveManager && typeof ProtoView.ArchiveManager.hasChangesAgainstArchived === 'function')
+            ? ProtoView.ArchiveManager.hasChangesAgainstArchived(exportRootProtocol)
+            : Boolean(exportRootProtocol.hasUnarchivedChanges);
+
+        // 1. 最新修改工作副本选项
+        const optWorking = document.createElement('option');
+        optWorking.value = '__working__';
+        if (isModified || !exportRootProtocol.isArchived) {
+            optWorking.textContent = `${exportRootProtocol.version || 'v1.0'}* (最新修改副本)`;
+        } else {
+            optWorking.textContent = `${exportRootProtocol.version || 'v1.0'} (正式生效基准)`;
+        }
+        exportModalVersionSelect.appendChild(optWorking);
+
+        // 2. 依次添加各历史归档快照
+        archives.forEach((av, idx) => {
+            if (!isModified && exportRootProtocol.isArchived && idx === 0 && av.version === exportRootProtocol.version) {
+                return;
+            }
+            const opt = document.createElement('option');
+            opt.value = `archived_${idx}`;
+            const timeStr = formatCompactTime(av.archivedAt);
+            const isBase = (idx === 0 && isModified);
+            opt.textContent = `${av.version || 'v1.0'} · ${timeStr} ${isBase ? '(归档基准)' : '(历史快照)'}`;
+            exportModalVersionSelect.appendChild(opt);
+        });
+
+        // 选定当前导出的版本对应的值
+        if (p._isHistoricalSnapshot && p._snapshotIndex !== undefined) {
+            exportModalVersionSelect.value = `archived_${p._snapshotIndex}`;
+        } else {
+            exportModalVersionSelect.value = '__working__';
+        }
+
+        if (!exportVersionChangeBound) {
+            exportVersionChangeBound = true;
+            exportModalVersionSelect.addEventListener('change', (e) => {
+                const val = e.target.value;
+                if (!exportRootProtocol) return;
+                let targetData = exportRootProtocol;
+                if (val.startsWith('archived_')) {
+                    const idx = parseInt(val.replace('archived_', ''), 10);
+                    const av = (exportRootProtocol.archivedVersions && exportRootProtocol.archivedVersions[idx]) ? exportRootProtocol.archivedVersions[idx] : null;
+                    if (av && av.data) {
+                        const snap = JSON.parse(JSON.stringify(av.data));
+                        targetData = Object.assign({}, snap, {
+                            id: exportRootProtocol.id,
+                            name: snap.name || exportRootProtocol.name,
+                            type: snap.type || exportRootProtocol.type,
+                            subType: snap.subType || exportRootProtocol.subType,
+                            product: exportRootProtocol.product || snap.product || '',
+                            device: snap.device || exportRootProtocol.device || '',
+                            version: av.version || snap.version || exportRootProtocol.version,
+                            archivedVersions: exportRootProtocol.archivedVersions,
+                            _isHistoricalSnapshot: true,
+                            _snapshotIndex: idx,
+                            _snapshotVersion: av.version || 'v1.0',
+                            _snapshotDate: av.archivedAt,
+                            _snapshotAuthor: av.author,
+                            _snapshotComment: av.comment,
+                            _rootProtocol: exportRootProtocol
+                        });
+                    }
+                }
+                openProtocolExportModal(targetData);
+            });
+        }
+    }
+
     /**
      * 执行下载 HTML 离线规格卡片
      */
@@ -330,7 +456,9 @@
             return;
         }
         const safeName = (currentExportProtocol.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
-        const fileName = `${safeName}_ICD规范卡片.html`;
+        const verTag = currentExportProtocol.version ? `_${currentExportProtocol.version}` : '';
+        const snapTag = currentExportProtocol._isHistoricalSnapshot ? '_快照' : '';
+        const fileName = `${safeName}${verTag}${snapTag}_ICD规范卡片.html`;
         downloadFile(currentExportHtml, fileName, 'text/html;charset=utf-8');
         showToast(`已成功导出独立 HTML 规范卡片「${fileName}」`, 'success');
     }
@@ -344,7 +472,9 @@
             return;
         }
         const safeName = (currentExportProtocol.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
-        const fileName = `${safeName}_ICD规范说明书.md`;
+        const verTag = currentExportProtocol.version ? `_${currentExportProtocol.version}` : '';
+        const snapTag = currentExportProtocol._isHistoricalSnapshot ? '_快照' : '';
+        const fileName = `${safeName}${verTag}${snapTag}_ICD规范说明书.md`;
         downloadFile(currentExportMd, fileName, 'text/markdown;charset=utf-8');
         showToast(`已成功导出 Markdown 规范「${fileName}」`, 'success');
     }
@@ -368,7 +498,9 @@
             return;
         }
         const safeName = (currentExportProtocol.name || 'protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
-        const fileName = `${safeName}.json`;
+        const verTag = currentExportProtocol.version ? `_${currentExportProtocol.version}` : '';
+        const snapTag = currentExportProtocol._isHistoricalSnapshot ? '_快照' : '';
+        const fileName = `${safeName}${verTag}${snapTag}_工程配置.json`;
         downloadFile(JSON.stringify(currentExportProtocol, null, 2), fileName, 'application/json');
         showToast(`已成功导出协议配置文件「${fileName}」`, 'success');
     }

@@ -109,24 +109,43 @@
     };
 
     // 6. 全局视图路由切换
-    function switchToView(viewId) {
+    function switchToView(viewId, force = false) {
         const currentActive = document.querySelector('.view-section.active');
         if (currentActive && currentActive.id === viewId) {
             return; // 已处于目标视图，避免重复重绘与事件风暴循环
         }
 
+        if (!force && currentActive && (currentActive.id === 'arinc429-view' || currentActive.id === 'serial-view')) {
+            if (ProtoView.DraftManager && ProtoView.DraftManager.hasUnsavedChanges()) {
+                if (typeof ProtoView.confirmUnsavedNavigation === 'function') {
+                    ProtoView.confirmUnsavedNavigation('离开当前编辑页面', () => {
+                        switchToView(viewId, true);
+                    });
+                    return;
+                }
+            }
+        }
+
         const navItems = document.querySelectorAll('.nav-item');
         const viewSections = document.querySelectorAll('.view-section');
 
-        navItems.forEach(nav => nav.classList.remove('active'));
         viewSections.forEach(section => section.classList.remove('active'));
 
-        const navTarget = document.querySelector(`.nav-item[data-view="${viewId}"]`);
-        if (navTarget) {
-            navTarget.classList.add('active');
-        } else if (viewId === 'arinc429-view' || viewId === 'serial-view' || viewId === 'protocol-viewer-view') {
-            const protoNav = document.querySelector(`.nav-item[data-view="protocol-view"]`);
-            if (protoNav) protoNav.classList.add('active');
+        if (viewId === 'protocol-view') {
+            const hasActiveBus = document.querySelector('.nav-item[data-view="protocol-view"].active');
+            if (!hasActiveBus) {
+                navItems.forEach(nav => nav.classList.remove('active'));
+                const allNav = document.getElementById('nav-bus-all') || document.querySelector('.nav-item[data-view="protocol-view"]');
+                if (allNav) allNav.classList.add('active');
+            }
+        } else if (viewId === 'admin-view') {
+            navItems.forEach(nav => nav.classList.remove('active'));
+            const adminNav = document.getElementById('nav-btn-admin');
+            if (adminNav) adminNav.classList.add('active');
+        } else if (viewId === 'protocol-version-view') {
+            navItems.forEach(nav => nav.classList.remove('active'));
+            const diffNav = document.getElementById('sidebar-tool-diff');
+            if (diffNav) diffNav.classList.add('active');
         }
 
         const sectionTarget = document.getElementById(viewId);
@@ -134,21 +153,169 @@
 
         const mainContent = document.querySelector('.main-content');
         if (mainContent) {
-            if (viewId === 'arinc429-view' || viewId === 'serial-view' || viewId === 'protocol-viewer-view') {
+            if (viewId === 'arinc429-view' || viewId === 'serial-view' || viewId === 'protocol-viewer-view' || viewId === 'protocol-version-view') {
                 mainContent.classList.add('dense-workbench-active');
             } else {
                 mainContent.classList.remove('dense-workbench-active');
             }
         }
 
+        // ================= 侧边栏进入协议查阅详情页或版本管理主视图自动折叠与离开恢复 =================
+        const mainSidebar = document.getElementById('main-sidebar');
+        if (mainSidebar) {
+            if (viewId === 'protocol-viewer-view' || viewId === 'protocol-version-view') {
+                // 进入协议查阅详情页或版本管理主视图：自动收起为 Mini Sidebar 窄图标模式 (64px)，将横向宽度最大化释放给主工作区
+                if (!mainSidebar.classList.contains('collapsed')) {
+                    mainSidebar.classList.add('collapsed');
+                    window._sidebarAutoCollapsedByViewer = true;
+                }
+            } else if (viewId === 'protocol-view') {
+                // 返回主协议列表：若此前进入详情页或版本管理页时由系统自动折叠，则无缝恢复展开宽度
+                if (window._sidebarAutoCollapsedByViewer) {
+                    mainSidebar.classList.remove('collapsed');
+                    window._sidebarAutoCollapsedByViewer = false;
+                }
+            }
+        }
+
+        // 刷新侧边栏活跃会话卡片
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.render === 'function') {
+            ProtoView.ActiveSession.render();
+        }
+
         // 发布视图切换事件 (同时传递 viewId 与载荷对象)
         Events.emit('view:changed', viewId);
+    }
+
+    /**
+     * 7. 全局自定义确认弹窗 (Promise 异步化，彻底取代原生浏览器 confirm)
+     * @param {Object} options 
+     *   - title: 弹窗标题 (默认: '操作确认')
+     *   - message: 主提示文案 (粗体核心提示)
+     *   - detail: 补充详细说明或后果警告
+     *   - icon: 图标类名 (如 'fa-box-archive', 'fa-triangle-exclamation')
+     *   - type: 类型 ('primary' | 'warning' | 'danger' | 'archive')
+     *   - confirmText: 确认按钮文字 (默认: '确定')
+     *   - cancelText: 取消按钮文字 (默认: '取消')
+     * @returns {Promise<boolean>}
+     */
+    function showConfirm(options = {}) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('global-confirm-modal');
+            if (!modal) {
+                // 兜底降级
+                const nativeOk = window.confirm((options.message || '') + (options.detail ? ('\n\n' + options.detail) : ''));
+                resolve(nativeOk);
+                return;
+            }
+
+            const titleEl = document.getElementById('gcm-title');
+            const messageEl = document.getElementById('gcm-message');
+            const detailEl = document.getElementById('gcm-detail');
+            const iconEl = document.getElementById('gcm-icon');
+            const iconBox = document.getElementById('gcm-icon-box');
+            const btnConfirm = document.getElementById('gcm-btn-confirm');
+            const btnCancel = document.getElementById('gcm-btn-cancel');
+            const btnClose = document.getElementById('gcm-btn-close');
+
+            const type = options.type || 'primary';
+            const title = options.title || '操作确认';
+            const message = options.message || '请确认是否继续此操作？';
+            const detail = options.detail || '';
+            const confirmText = options.confirmText || '确定';
+            const cancelText = options.cancelText || '取消';
+
+            let iconClass = 'fa-circle-question';
+            let themeColor = 'var(--accent-color)';
+            let boxBg = 'rgba(59, 130, 246, 0.12)';
+            let btnClass = 'btn btn-primary btn-sm';
+
+            if (type === 'danger') {
+                iconClass = options.icon || 'fa-triangle-exclamation';
+                themeColor = '#ef4444';
+                boxBg = 'rgba(239, 68, 68, 0.12)';
+                btnClass = 'btn btn-danger btn-sm';
+            } else if (type === 'warning') {
+                iconClass = options.icon || 'fa-triangle-exclamation';
+                themeColor = '#f59e0b';
+                boxBg = 'rgba(245, 158, 11, 0.12)';
+                btnClass = 'btn btn-primary btn-sm';
+            } else if (type === 'archive') {
+                iconClass = options.icon || 'fa-box-archive';
+                themeColor = 'var(--accent-color)';
+                boxBg = 'rgba(59, 130, 246, 0.15)';
+                btnClass = 'btn btn-primary btn-sm';
+            } else {
+                iconClass = options.icon || 'fa-circle-info';
+            }
+
+            if (titleEl) titleEl.textContent = title;
+            if (messageEl) messageEl.innerHTML = escapeHTML(message).replace(/\n/g, '<br>');
+            if (detailEl) {
+                if (detail) {
+                    detailEl.innerHTML = escapeHTML(detail).replace(/\n/g, '<br>');
+                    detailEl.style.display = 'block';
+                } else {
+                    detailEl.style.display = 'none';
+                }
+            }
+            if (iconEl) iconEl.className = `fa-solid ${iconClass}`;
+            if (iconBox) {
+                iconBox.style.color = themeColor;
+                iconBox.style.background = boxBg;
+            }
+            if (btnConfirm) {
+                btnConfirm.className = btnClass;
+                btnConfirm.textContent = confirmText;
+            }
+            if (btnCancel) {
+                btnCancel.textContent = cancelText;
+            }
+
+            let isResolved = false;
+            function cleanup(result) {
+                if (isResolved) return;
+                isResolved = true;
+                modal.classList.remove('active');
+                window.removeEventListener('keydown', handleKey);
+                modal.removeEventListener('click', handleBackdropClick);
+                if (btnConfirm) btnConfirm.onclick = null;
+                if (btnCancel) btnCancel.onclick = null;
+                if (btnClose) btnClose.onclick = null;
+                resolve(result);
+            }
+
+            function handleKey(e) {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cleanup(false);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    cleanup(true);
+                }
+            }
+
+            function handleBackdropClick(e) {
+                if (e.target === modal) {
+                    cleanup(false);
+                }
+            }
+
+            if (btnConfirm) btnConfirm.onclick = () => cleanup(true);
+            if (btnCancel) btnCancel.onclick = () => cleanup(false);
+            if (btnClose) btnClose.onclick = () => cleanup(false);
+
+            modal.addEventListener('click', handleBackdropClick);
+            window.addEventListener('keydown', handleKey);
+            modal.classList.add('active');
+        });
     }
 
     // 组装挂载命名空间
     ProtoView.Utils = {
         escapeHTML,
         showToast,
+        showConfirm,
         copyTextToClipboard,
         fallbackCopy,
         downloadFile
@@ -158,12 +325,14 @@
         switchToView
     };
     ProtoView.Controllers = {};
+    ProtoView.showConfirm = showConfirm;
 
     global.ProtoView = ProtoView;
 
     // 向后兼容全局函数 (让旧有 inline onclick 零成本直接可用)
     global.escapeHTML = escapeHTML;
     global.showToast = showToast;
+    global.showConfirmDialog = showConfirm;
     global.copyTextToClipboard = copyTextToClipboard;
     global.downloadFile = downloadFile;
     global.switchToView = switchToView;

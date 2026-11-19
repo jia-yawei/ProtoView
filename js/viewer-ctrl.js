@@ -27,7 +27,9 @@
     ];
 
     // 内部状态
+    let rootProtocol = null;
     let currentProtocol = null;
+    let activeViewingVersionKey = '__working__';
     let currentPacketIndex = 0;
     let currentWordIndex = 0;
     let searchQuery = '';
@@ -38,10 +40,13 @@
     // DOM 元素引用
     let viewerSection;
     let btnViewerBack, viewerTitle, viewerProductBadge, viewerTypeBadge, btnViewerEditWorkbench;
+    let viewerVersionSelectWrap, viewerVersionSelect;
+    let viewerSnapshotBanner, viewerSnapshotText, btnViewerSwitchWorking, btnViewerSnapshotDiff;
     let viewerFieldSearch, btnClearViewerSearch, viewerMatchCount;
-    let viewerPacketSelect, btnViewerLayoutSingle, btnViewerLayoutContinuous;
-    let viewerWordsCatalog, viewerActiveWordHeader, viewerBitBarContainer, viewerReaderDeck;
-    let viewerFieldsList, viewerSdiSsmCard, btnViewerExport, btnViewerExportMd, btnViewerPrint;
+    let viewerPacketSelect, viewerCatalogPacketWrap, viewerCatalogPacketSelect;
+    let btnViewerLayoutSingle, btnViewerLayoutContinuous;
+    let viewerWordsCatalog, viewerCatalogPanel, viewerCatalogResizer, viewerActiveWordHeader, viewerBitBarContainer, viewerReaderDeck;
+    let viewerFieldsList, viewerSdiSsmCard, btnViewerCheck, btnViewerExport, btnViewerExportMd, btnViewerPrint;
 
     function initDOMElements() {
         viewerSection = document.getElementById('protocol-viewer-view');
@@ -51,21 +56,42 @@
         viewerTypeBadge = document.getElementById('viewer-type-badge');
         btnViewerEditWorkbench = document.getElementById('btn-viewer-edit-workbench');
 
+        viewerVersionSelectWrap = document.getElementById('viewer-version-select-wrap');
+        viewerVersionSelect = document.getElementById('viewer-version-select');
+        viewerSnapshotBanner = document.getElementById('viewer-snapshot-banner');
+        viewerSnapshotText = document.getElementById('viewer-snapshot-text');
+        btnViewerSwitchWorking = document.getElementById('btn-viewer-switch-working');
+        btnViewerSnapshotDiff = document.getElementById('btn-viewer-snapshot-diff');
+
         viewerFieldSearch = document.getElementById('viewer-field-search');
         btnClearViewerSearch = document.getElementById('btn-clear-viewer-search');
         viewerMatchCount = document.getElementById('viewer-match-count');
 
         viewerPacketSelect = document.getElementById('viewer-packet-select');
+        viewerCatalogPacketWrap = document.getElementById('viewer-catalog-packet-wrap');
+        viewerCatalogPacketSelect = document.getElementById('viewer-catalog-packet-select');
         btnViewerLayoutSingle = document.getElementById('btn-viewer-layout-single');
         btnViewerLayoutContinuous = document.getElementById('btn-viewer-layout-continuous');
 
         viewerWordsCatalog = document.getElementById('viewer-words-catalog');
+        viewerCatalogPanel = document.querySelector('.viewer-catalog-panel');
+        viewerCatalogResizer = document.getElementById('viewer-catalog-resizer');
+        if (viewerCatalogPanel) {
+            const savedW = localStorage.getItem('protoview_viewer_catalog_width');
+            if (savedW) {
+                const parsedW = parseInt(savedW, 10);
+                if (parsedW >= 200 && parsedW <= 650) {
+                    viewerCatalogPanel.style.width = `${parsedW}px`;
+                }
+            }
+        }
         viewerActiveWordHeader = document.getElementById('viewer-active-word-header');
         viewerBitBarContainer = document.getElementById('viewer-bit-bar-container');
         viewerReaderDeck = document.querySelector('.viewer-reader-deck');
         viewerFieldsList = document.getElementById('viewer-fields-list');
         viewerSdiSsmCard = document.getElementById('viewer-sdi-ssm-card');
 
+        btnViewerCheck = document.getElementById('btn-viewer-check');
         btnViewerExport = document.getElementById('btn-viewer-export');
         btnViewerExportMd = document.getElementById('btn-viewer-export-md');
         btnViewerPrint = document.getElementById('btn-viewer-print');
@@ -86,13 +112,38 @@
         if (currentPacketIndex >= currentProtocol.packets.length) {
             currentPacketIndex = 0;
         }
-        return currentProtocol.packets[currentPacketIndex];
+        const pkt = currentProtocol.packets[currentPacketIndex];
+        if (pkt) {
+            if ((!pkt.words || pkt.words.length === 0) && currentProtocol.words && currentProtocol.words.length > 0) {
+                pkt.words = currentProtocol.words;
+            }
+            if ((!pkt.fields || pkt.fields.length === 0) && currentProtocol.fields && currentProtocol.fields.length > 0) {
+                pkt.fields = currentProtocol.fields;
+            }
+        }
+        return pkt;
+    }
+
+    // 格式化紧凑时间 (如 11-19 10:30)
+    function formatCompactTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return '';
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const h = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${m}-${day} ${h}:${min}`;
     }
 
     // 载入协议进入只读查阅模式 (秒级极速渲染与防重入保障)
-    async function loadProtocolIntoViewer(protoOrId, targetWordIndex = 0, targetFieldIndex = null) {
-        if (isViewerLoading) return;
+    async function loadProtocolIntoViewer(protoOrId, targetWordIndex = 0, targetFieldIndex = null, targetVersionKey = null) {
+        if (isViewerLoading) {
+            // 超时与连续点击安全自愈熔断
+            isViewerLoading = false;
+        }
         isViewerLoading = true;
+        const safetyTimer = setTimeout(() => { isViewerLoading = false; }, 1000);
 
         try {
             initDOMElements();
@@ -104,17 +155,20 @@
                 // 1. 优先从内存当前工作台极速检索，无需等待数据库异步轮询
                 if (ProtoView.Controllers && ProtoView.Controllers.Arinc) {
                     const cur = ProtoView.Controllers.Arinc.getCurrentProtocol();
-                    if (cur && (cur.id === protoOrId || String(cur.id) === String(protoOrId))) {
+                    if (cur && (cur.id === protoOrId || String(cur.id) === String(protoOrId) || Number(cur.id) === Number(protoOrId))) {
                         p = cur;
                     }
                 }
                 if (!p && ProtoView.Controllers && ProtoView.Controllers.Serial) {
                     const cur = ProtoView.Controllers.Serial.getCurrentProtocol();
-                    if (cur && (cur.id === protoOrId || String(cur.id) === String(protoOrId))) {
+                    if (cur && (cur.id === protoOrId || String(cur.id) === String(protoOrId) || Number(cur.id) === Number(protoOrId))) {
                         p = cur;
                     }
                 }
-                if (!p && currentProtocol && (currentProtocol.id === protoOrId || String(currentProtocol.id) === String(protoOrId))) {
+                if (!p && rootProtocol && (rootProtocol.id === protoOrId || String(rootProtocol.id) === String(protoOrId) || Number(rootProtocol.id) === Number(protoOrId))) {
+                    p = rootProtocol;
+                }
+                if (!p && currentProtocol && (currentProtocol.id === protoOrId || String(currentProtocol.id) === String(protoOrId) || Number(currentProtocol.id) === Number(protoOrId))) {
                     p = currentProtocol;
                 }
                 // 2. 本地数据库回退
@@ -131,6 +185,9 @@
                 if (!p && ProtoView.Controllers && ProtoView.Controllers.Serial && ProtoView.Controllers.Serial.getCurrentProtocol) {
                     p = ProtoView.Controllers.Serial.getCurrentProtocol();
                 }
+                if (!p && rootProtocol) {
+                    p = rootProtocol;
+                }
                 if (!p && currentProtocol) {
                     p = currentProtocol;
                 }
@@ -141,7 +198,45 @@
                 return;
             }
 
-            currentProtocol = p;
+            // 若输入对象本身是历史快照，解析其父级根实体
+            let root = null;
+            if (p && !p._isHistoricalSnapshot && Array.isArray(p.archivedVersions)) {
+                root = p;
+            } else if (p && p.id) {
+                if (window.dbHelper) {
+                    try { root = await window.dbHelper.getProtocol(p.id); } catch(e){}
+                }
+                if (!root && window.currentArincProtocol && String(window.currentArincProtocol.id) === String(p.id)) {
+                    root = window.currentArincProtocol;
+                }
+                if (!root && window.currentSerialProtocol && String(window.currentSerialProtocol.id) === String(p.id)) {
+                    root = window.currentSerialProtocol;
+                }
+            }
+            if (!root) {
+                root = p;
+            }
+
+            rootProtocol = root;
+            if (ProtoView.ArchiveManager) {
+                ProtoView.ArchiveManager.ensureProtocolVersion(rootProtocol);
+            }
+
+            // 确定要查看的目标版本
+            let initialVerKey = targetVersionKey;
+            if (!initialVerKey && p && p._isHistoricalSnapshot && p._snapshotIndex !== undefined) {
+                initialVerKey = `archived_${p._snapshotIndex}`;
+            }
+            if (!initialVerKey) {
+                initialVerKey = '__working__';
+            }
+
+            activeViewingVersionKey = initialVerKey;
+            applyViewingVersion(activeViewingVersionKey, false);
+
+            if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+                ProtoView.ActiveSession.set(currentProtocol);
+            }
             currentPacketIndex = 0;
             currentWordIndex = targetWordIndex || 0;
             searchQuery = '';
@@ -155,6 +250,7 @@
             }
 
             renderHeaderMeta();
+            renderVersionSelector();
             renderPacketSelector();
             renderWordsCatalog();
             renderActiveWordView();
@@ -162,25 +258,255 @@
             if (targetFieldIndex !== null) {
                 scrollToField(targetFieldIndex);
             }
+        } catch (err) {
+            console.error('加载协议至查阅模式异常:', err);
+            showToast('进入查阅模式异常: ' + (err.message || '未知错误'), 'warning');
         } finally {
+            clearTimeout(safetyTimer);
             isViewerLoading = false;
         }
     }
 
+    // 应用并切换查阅版本 (支持最新修改工作副本与任意历史归档快照无损瞬切)
+    function applyViewingVersion(verKey, triggerRender = true) {
+        if (!rootProtocol) return;
+        activeViewingVersionKey = verKey || '__working__';
+
+        if (activeViewingVersionKey === '__working__') {
+            currentProtocol = rootProtocol;
+        } else if (activeViewingVersionKey.startsWith('archived_')) {
+            const idx = parseInt(activeViewingVersionKey.replace('archived_', ''), 10);
+            const av = (Array.isArray(rootProtocol.archivedVersions) && rootProtocol.archivedVersions[idx]) ? rootProtocol.archivedVersions[idx] : null;
+            if (!av || !av.data) {
+                console.warn('未找到历史归档快照数据，回退至最新工作副本:', activeViewingVersionKey);
+                activeViewingVersionKey = '__working__';
+                currentProtocol = rootProtocol;
+            } else {
+                const snap = JSON.parse(JSON.stringify(av.data));
+                currentProtocol = Object.assign({}, snap, {
+                    id: rootProtocol.id,
+                    name: snap.name || rootProtocol.name,
+                    type: snap.type || rootProtocol.type,
+                    subType: snap.subType || rootProtocol.subType,
+                    product: rootProtocol.product || snap.product || '',
+                    device: snap.device || rootProtocol.device || '',
+                    version: av.version || snap.version || rootProtocol.version,
+                    archivedVersions: rootProtocol.archivedVersions,
+                    isArchived: true,
+                    hasUnarchivedChanges: false,
+                    _isHistoricalSnapshot: true,
+                    _snapshotIndex: idx,
+                    _snapshotVersion: av.version || 'v1.0',
+                    _snapshotDate: av.archivedAt,
+                    _snapshotAuthor: av.author,
+                    _snapshotComment: av.comment,
+                    _rootProtocol: rootProtocol
+                });
+            }
+        } else {
+            activeViewingVersionKey = '__working__';
+            currentProtocol = rootProtocol;
+        }
+
+        window.currentViewerProtocol = currentProtocol;
+        if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+            ProtoView.ActiveSession.set(currentProtocol);
+        }
+
+        if (triggerRender) {
+            currentPacketIndex = 0;
+            currentWordIndex = 0;
+            searchQuery = '';
+            if (viewerFieldSearch) viewerFieldSearch.value = '';
+            if (btnClearViewerSearch) btnClearViewerSearch.style.display = 'none';
+            if (viewerMatchCount) viewerMatchCount.style.display = 'none';
+
+            renderHeaderMeta();
+            renderVersionSelector();
+            renderPacketSelector();
+            renderWordsCatalog();
+            renderActiveWordView();
+
+            if (currentProtocol._isHistoricalSnapshot) {
+                showToast(`已切换至历史版本快照 [${currentProtocol._snapshotVersion}]`, 'info');
+            } else {
+                showToast('已切换至最新修改工作副本', 'info');
+            }
+        }
+    }
+
+    // 渲染顶部版本切换下拉控件
+    function renderVersionSelector() {
+        if (!viewerVersionSelect) viewerVersionSelect = document.getElementById('viewer-version-select');
+        const wrap = document.getElementById('viewer-version-select-wrap');
+        if (!viewerVersionSelect || !rootProtocol) return;
+
+        viewerVersionSelect.innerHTML = '';
+        const isModified = (ProtoView.ArchiveManager && typeof ProtoView.ArchiveManager.hasChangesAgainstArchived === 'function')
+            ? ProtoView.ArchiveManager.hasChangesAgainstArchived(rootProtocol)
+            : Boolean(rootProtocol.hasUnarchivedChanges);
+        const archives = Array.isArray(rootProtocol.archivedVersions) ? rootProtocol.archivedVersions : [];
+
+        // 1. 最新修改工作副本选项
+        const optWorking = document.createElement('option');
+        optWorking.value = '__working__';
+        if (archives.length > 0) {
+            if (isModified || !rootProtocol.isArchived) {
+                optWorking.textContent = `${rootProtocol.version || 'v1.0'}* (最新修改副本)`;
+            } else {
+                optWorking.textContent = `${rootProtocol.version || 'v1.0'} (正式生效基准)`;
+            }
+        } else {
+            optWorking.textContent = `${rootProtocol.version || 'v1.0'} (草稿 · 未归档)`;
+        }
+        viewerVersionSelect.appendChild(optWorking);
+
+        // 2. 遍历历史归档快照
+        archives.forEach((av, idx) => {
+            // 如果协议完全未修改且idx===0，工作副本即为此基准，跳过重复项
+            if (!isModified && rootProtocol.isArchived && idx === 0 && av.version === rootProtocol.version) {
+                return;
+            }
+            const opt = document.createElement('option');
+            opt.value = `archived_${idx}`;
+            const timeStr = formatCompactTime(av.archivedAt);
+            const isBase = (idx === 0 && isModified);
+            opt.textContent = `${av.version || 'v1.0'} · ${timeStr} ${isBase ? '(归档基准)' : '(历史版本)'}`;
+            viewerVersionSelect.appendChild(opt);
+        });
+
+        // 自动纠偏：若当前处于未修改状态且选择的是 archived_0，修正为 __working__
+        if (!isModified && activeViewingVersionKey === 'archived_0') {
+            activeViewingVersionKey = '__working__';
+        }
+
+        viewerVersionSelect.value = activeViewingVersionKey;
+        if (wrap) wrap.style.display = 'inline-flex';
+    }
+
     // 渲染顶部协议元数据
     function renderHeaderMeta() {
-        if (!currentProtocol) return;
+        if (!currentProtocol || !rootProtocol) return;
         const p = currentProtocol;
+        window.currentViewerProtocol = currentProtocol;
 
         if (viewerTitle) {
-            viewerTitle.textContent = p.name || '未命名协议';
-            viewerTitle.title = p.name || '';
+            viewerTitle.textContent = rootProtocol.name || p.name || '未命名协议';
+            viewerTitle.title = rootProtocol.name || p.name || '';
+        }
+
+        const verPill = document.getElementById('viewer-ver-pill');
+        const archiveBadge = document.getElementById('viewer-archive-badge');
+        const unarchivedBanner = document.getElementById('viewer-unarchived-banner');
+        const snapshotBanner = document.getElementById('viewer-snapshot-banner');
+
+        if (p._isHistoricalSnapshot) {
+            // 查阅历史快照中
+            if (verPill) {
+                verPill.textContent = `${p._snapshotVersion || p.version || 'v1.0'}`;
+                verPill.className = 'proto-version-pill';
+                verPill.title = `正在查阅历史归档快照 [${p._snapshotVersion}]`;
+                verPill.onclick = () => {
+                    if (window.openProtocolVersionView) window.openProtocolVersionView(rootProtocol);
+                    else if (window.openProtocolVersionModal) window.openProtocolVersionModal(rootProtocol);
+                };
+            }
+            if (archiveBadge) {
+                archiveBadge.className = 'proto-archive-badge is-archived';
+                archiveBadge.innerHTML = `<i class="fa-solid fa-box-archive"></i> 历史快照 [只读]`;
+                archiveBadge.title = `归档于 ${formatCompactTime(p._snapshotDate)} · ${p._snapshotComment || '正式归档版本'}`;
+                archiveBadge.onclick = null;
+            }
+
+            if (unarchivedBanner) unarchivedBanner.style.display = 'none';
+            if (snapshotBanner) {
+                snapshotBanner.style.display = 'flex';
+                const snapText = document.getElementById('viewer-snapshot-text');
+                if (snapText) {
+                    snapText.innerHTML = `正在查阅历史归档快照 <b>${escapeHTML(p._snapshotVersion || p.version || 'v1.0')}</b>（归档于 ${formatCompactTime(p._snapshotDate)} · 由 ${escapeHTML(p._snapshotAuthor || '工程师')} 提交 · 只读快照）`;
+                }
+            }
+        } else {
+            // 查阅最新工作副本中
+            if (snapshotBanner) snapshotBanner.style.display = 'none';
+
+            const verInfo = ProtoView.ArchiveManager
+                ? ProtoView.ArchiveManager.getVersionDisplayInfo(rootProtocol)
+                : { versionText: rootProtocol.version || 'v1.0', baseVersion: rootProtocol.version || 'v1.0', isArchived: Boolean(rootProtocol.isArchived), isModified: false, statusLabel: rootProtocol.isArchived ? '已归档' : '未归档', statusClass: rootProtocol.isArchived ? 'is-archived' : 'not-archived', versionPillClass: 'proto-version-pill', tooltip: '' };
+
+            if (verPill) {
+                verPill.textContent = verInfo.versionText;
+                verPill.className = verInfo.versionPillClass;
+                verPill.title = '点击打开通信协议版本管理中心与版本发展历程';
+                verPill.onclick = () => {
+                    if (window.openProtocolVersionView) window.openProtocolVersionView(rootProtocol);
+                    else if (window.openProtocolVersionModal) window.openProtocolVersionModal(rootProtocol);
+                    else if (window.openProtocolDiffModal) window.openProtocolDiffModal(rootProtocol);
+                };
+            }
+            if (archiveBadge) {
+                archiveBadge.className = `proto-archive-badge ${verInfo.statusClass}`;
+                archiveBadge.innerHTML = `<i class="fa-solid ${verInfo.isArchived ? 'fa-box-archive' : (verInfo.isModified ? 'fa-pen-to-square' : 'fa-folder-open')}"></i> ${verInfo.statusLabel}`;
+                archiveBadge.title = verInfo.tooltip;
+                archiveBadge.onclick = () => {
+                    if (window.handleProtocolArchive) window.handleProtocolArchive(rootProtocol);
+                };
+            }
+
+            // 归档修改中提示横幅控制 (基于方案一：默认看最新修改工作副本，同时提供一键对比、一键还原与升版归档)
+            if (unarchivedBanner) {
+                if (verInfo.isModified) {
+                    unarchivedBanner.style.display = 'flex';
+                    const textEl = document.getElementById('viewer-unarchived-text');
+                    if (textEl) {
+                        textEl.innerHTML = `当前查阅内容为基于 <b>${escapeHTML(verInfo.baseVersion)}</b> 的最新修改工作副本（包含未归档改动）`;
+                    }
+                    const diffBaseVer = document.getElementById('vub-diff-base-ver');
+                    if (diffBaseVer) diffBaseVer.textContent = verInfo.baseVersion;
+                    const revertBaseVer = document.getElementById('vub-revert-base-ver');
+                    if (revertBaseVer) revertBaseVer.textContent = verInfo.baseVersion;
+
+                    const btnDiff = document.getElementById('btn-viewer-banner-diff');
+                    if (btnDiff) {
+                        btnDiff.onclick = () => {
+                            if (window.openProtocolVersionView) {
+                                window.openProtocolVersionView(rootProtocol);
+                            } else if (window.openProtocolVersionModal) {
+                                window.openProtocolVersionModal(rootProtocol);
+                            } else if (window.openProtocolDiffModal) {
+                                window.openProtocolDiffModal(rootProtocol);
+                            }
+                        };
+                    }
+
+                    const btnRevert = document.getElementById('btn-viewer-banner-revert');
+                    if (btnRevert) {
+                        btnRevert.onclick = () => {
+                            if (ProtoView.ArchiveManager && ProtoView.ArchiveManager.revertToArchived) {
+                                ProtoView.ArchiveManager.revertToArchived(rootProtocol);
+                            }
+                        };
+                    }
+
+                    const btnArchive = document.getElementById('btn-viewer-banner-archive');
+                    if (btnArchive) {
+                        btnArchive.onclick = () => {
+                            if (ProtoView.ArchiveManager && ProtoView.ArchiveManager.handleArchiveClick) {
+                                ProtoView.ArchiveManager.handleArchiveClick(rootProtocol);
+                            }
+                        };
+                    }
+                } else {
+                    unarchivedBanner.style.display = 'none';
+                }
+            }
         }
 
         if (viewerProductBadge) {
-            if (p.product && p.product.trim()) {
+            const prod = rootProtocol.product || p.product;
+            if (prod && prod.trim()) {
                 viewerProductBadge.style.display = 'inline-flex';
-                viewerProductBadge.innerHTML = `<i class="fa-solid fa-cube"></i> ${escapeHTML(p.product)}`;
+                viewerProductBadge.innerHTML = `<i class="fa-solid fa-cube"></i> ${escapeHTML(prod)}`;
             } else {
                 viewerProductBadge.style.display = 'none';
             }
@@ -202,28 +528,195 @@
         }
     }
 
-    // 渲染数据包切换下拉框
+    // 渲染数据包切换下拉框 (支持目录头部与顶栏双向联动)
     function renderPacketSelector() {
-        if (!viewerPacketSelect || !currentProtocol) return;
-        viewerPacketSelect.innerHTML = '';
+        if (!currentProtocol) return;
 
-        const packets = currentProtocol.packets && currentProtocol.packets.length > 0
-            ? currentProtocol.packets
-            : [{ name: '默认数据包', direction: currentProtocol.direction || 'Tx', period: currentProtocol.period || 20 }];
+        // 统一规范化：若当前协议 packets 为空，自动补全首包，确保向前/向后完美兼容
+        if (!currentProtocol.packets || !Array.isArray(currentProtocol.packets) || currentProtocol.packets.length === 0) {
+            const initialDir = currentProtocol.direction === 'Rx' ? 'Rx' : 'Tx';
+            currentProtocol.packets = [
+                {
+                    key: 'pkt_1',
+                    name: '数据包 1',
+                    direction: initialDir,
+                    period: currentProtocol.period || 20,
+                    words: currentProtocol.words || [],
+                    fields: currentProtocol.fields || []
+                }
+            ];
+        }
 
-        packets.forEach((pkt, idx) => {
-            const opt = document.createElement('option');
-            opt.value = idx.toString();
-            const isRx = pkt.direction === 'Rx';
-            const count = (pkt.words ? pkt.words.length : (pkt.fields ? pkt.fields.length : 0));
-            const countUnit = currentProtocol.type === 'Serial' ? '字节' : '标号字';
-            opt.textContent = pkt.name || `数据包 ${idx + 1}`;
-            opt.title = `[${isRx ? 'Rx (收)' : 'Tx (发)'} ${pkt.period || 20}ms] ${pkt.name || `数据包 ${idx + 1}`} (${count} ${countUnit})`;
-            if (idx === currentPacketIndex) opt.selected = true;
-            viewerPacketSelect.appendChild(opt);
-        });
+        const packets = currentProtocol.packets;
+        const hasMultiPackets = packets.length > 1;
 
-        viewerPacketSelect.style.display = packets.length > 1 ? 'inline-block' : 'none';
+        if (currentPacketIndex >= packets.length) {
+            currentPacketIndex = 0;
+        }
+
+        // 1. 顶部操作栏右侧数据包下拉框
+        if (!viewerPacketSelect) viewerPacketSelect = document.getElementById('viewer-packet-select');
+        if (viewerPacketSelect) {
+            viewerPacketSelect.innerHTML = '';
+            packets.forEach((pkt, idx) => {
+                const opt = document.createElement('option');
+                opt.value = idx.toString();
+                const isRx = pkt.direction === 'Rx';
+                const count = (pkt.words ? pkt.words.length : (pkt.fields ? pkt.fields.length : 0));
+                const countUnit = currentProtocol.type === 'Serial' ? '字节' : '标号字';
+                opt.textContent = pkt.name || `数据包 ${idx + 1}`;
+                opt.title = `[${isRx ? '接收' : '发送'} ${pkt.period || 20}ms] ${pkt.name || `数据包 ${idx + 1}`} (${count} ${countUnit})`;
+                if (idx === currentPacketIndex) opt.selected = true;
+                viewerPacketSelect.appendChild(opt);
+            });
+            viewerPacketSelect.style.display = hasMultiPackets ? 'inline-block' : 'none';
+        }
+
+        // 2. 左侧目录导航头部数据包下拉框 (最符合用户视线焦点，始终醒目呈现)
+        if (!viewerCatalogPacketWrap) viewerCatalogPacketWrap = document.getElementById('viewer-catalog-packet-wrap');
+        if (!viewerCatalogPacketSelect) viewerCatalogPacketSelect = document.getElementById('viewer-catalog-packet-select');
+
+        if (viewerCatalogPacketSelect) {
+            viewerCatalogPacketSelect.innerHTML = '';
+            packets.forEach((pkt, idx) => {
+                const opt = document.createElement('option');
+                opt.value = idx.toString();
+                const count = (pkt.words ? pkt.words.length : (pkt.fields ? pkt.fields.length : 0));
+                const countUnit = currentProtocol.type === 'Serial' ? '字节' : '字';
+                const pktName = pkt.name || `数据包 ${idx + 1}`;
+                opt.textContent = `${pktName} (${count}${countUnit})`;
+                opt.title = `${pktName} · 通信方向: ${pkt.direction === 'Rx' ? '接收' : '发送'} · 周期: ${pkt.period || 20}ms`;
+                if (idx === currentPacketIndex) opt.selected = true;
+                viewerCatalogPacketSelect.appendChild(opt);
+            });
+        }
+
+        if (viewerCatalogPacketWrap) {
+            viewerCatalogPacketWrap.style.display = 'inline-flex';
+        }
+    }
+
+    // 评估目录项规范合规与分配完整度状态 (绿色：已完整定义 | 黄色：存在未分配空闲位 | 红色：合规检查有告警)
+    function inspectCatalogWordStatus(item, proto) {
+        if (!item) return { status: 'idle', tip: '未定义数据' };
+        const isArinc = !proto || proto.type === 'ARINC429';
+
+        if (isArinc) {
+            const rawLabel = (item.label !== undefined && item.label !== null) ? String(item.label).trim() : '';
+            // 1. 检查标号八进制合法性
+            if (!rawLabel || !/^[0-7]{1,3}$/.test(rawLabel)) {
+                return { status: 'alert', tip: '合规告警：标号未定义或不是合法的八进制数值 (000~377₈)' };
+            }
+            const labelVal = parseInt(rawLabel, 8);
+            if (isNaN(labelVal) || labelVal < 0 || labelVal > 255) {
+                return { status: 'alert', tip: '合规告警：八进制标号超出范围 (000~377₈)' };
+            }
+
+            const signals = item.signals || [];
+            if (signals.length === 0) {
+                return { status: 'idle', tip: '空闲未分配：尚未划分具体字段' };
+            }
+
+            const protoMode = (proto && proto.mode) || item.editMode || 'classic';
+            const isBitstream = protoMode === 'bitstream';
+            const minBit = isBitstream ? 9 : 11;
+            const maxBit = 29;
+            const expectedBits = maxBit - minBit + 1; // 经典19位，自由21位
+
+            const occupiedBits = new Set();
+            let hasOverlap = false;
+            let hasOutOfBounds = false;
+            let hasParamError = false;
+            let hasReservedField = false;
+
+            for (const sig of signals) {
+                if (!sig) continue;
+                const start = Number(sig.startBit || 1);
+                const count = Number(sig.bitCount || sig.length || 1);
+                const end = start + count - 1;
+
+                if (count <= 0) {
+                    hasParamError = true;
+                }
+                // 越界侵占 SSM (B30~31) 或 校验 (B32) 或 越入 Label/SDI
+                if (start < minBit || end > maxBit) {
+                    hasOutOfBounds = true;
+                }
+                // 最小值与最大值逻辑倒置
+                if (sig.min !== undefined && sig.min !== null && sig.min !== '' &&
+                    sig.max !== undefined && sig.max !== null && sig.max !== '') {
+                    if (Number(sig.min) > Number(sig.max)) {
+                        hasParamError = true;
+                    }
+                }
+
+                // 预留占位字段检测
+                const sigName = (sig.name || '').toLowerCase();
+                if (sigName.includes('预留') || sigName.includes('保留') || sigName.includes('reserved') || sigName.includes('spare')) {
+                    hasReservedField = true;
+                }
+
+                for (let b = start; b <= end; b++) {
+                    if (occupiedBits.has(b)) {
+                        hasOverlap = true;
+                    }
+                    if (b >= minBit && b <= maxBit) {
+                        occupiedBits.add(b);
+                    }
+                }
+            }
+
+            if (hasOutOfBounds) {
+                return { status: 'alert', tip: `合规告警：存在越界字段（有效数据载荷区为 Bit ${minBit}~${maxBit}，禁止侵占标号/SSM/校验位）` };
+            }
+            if (hasOverlap) {
+                return { status: 'alert', tip: '合规告警：存在位段重叠冲突（多个字段占用相同 Bit）' };
+            }
+            if (hasParamError) {
+                return { status: 'alert', tip: '合规告警：存在参数逻辑错误（位长无效或最小值大于最大值）' };
+            }
+
+            const allocatedCount = occupiedBits.size;
+            if (allocatedCount < expectedBits) {
+                const idleCount = expectedBits - allocatedCount;
+                return {
+                    status: 'idle',
+                    tip: `存在空闲位：已分配 ${allocatedCount}/${expectedBits} 位 (尚有 ${idleCount} 位空闲未分配)`
+                };
+            }
+
+            if (hasReservedField) {
+                return { status: 'idle', tip: '包含预留/保留字段，待最终定义' };
+            }
+
+            return { status: 'complete', tip: `已完整定义：数据位 B${minBit}~B${maxBit} (${expectedBits}位) 全部无缝覆盖` };
+        } else {
+            // 串口或其它总线
+            const name = (item.name || '').trim();
+            if (!name) {
+                return { status: 'alert', tip: '合规告警：字节名称为空' };
+            }
+            const len = item.byteCount || item.length || 1;
+            if (len <= 0) {
+                return { status: 'alert', tip: '合规告警：字节长度非法 (<= 0)' };
+            }
+            const nameLower = name.toLowerCase();
+            if (nameLower.includes('预留') || nameLower.includes('保留') || nameLower.includes('reserved')) {
+                return { status: 'idle', tip: '预留占位字节' };
+            }
+            const signals = item.signals || [];
+            if (signals.length > 0) {
+                let bitSum = 0;
+                for (const s of signals) {
+                    bitSum += Number(s.bitCount || s.length || 1);
+                }
+                const maxBits = len * 8;
+                if (bitSum < maxBits) {
+                    return { status: 'idle', tip: `存在空闲位：当前已划分 ${bitSum}/${maxBits} Bits` };
+                }
+            }
+            return { status: 'complete', tip: '规格完整定义 · 校验合规' };
+        }
     }
 
     // 渲染左侧导航目录 (ARINC 标号字列表 / 串口字节序列表)
@@ -252,7 +745,9 @@
 
             let labelStr = '';
             let titleStr = '';
-            let subInfoStr = '';
+            let metaStr = '';
+            let metaTooltip = '';
+            let fullCardTitle = '';
             let matchedInThisWord = 0;
 
             if (isArinc) {
@@ -260,7 +755,13 @@
                 labelStr = `${octal}₈`;
                 titleStr = item.name || '未命名标号字';
                 const sigCount = item.signals ? item.signals.length : 0;
-                subInfoStr = `${item.direction || pkt.direction || 'Tx'} · ${sigCount} 字段 · ${item.period || pkt.period || 20}ms`;
+                const wordDir = item.direction || pkt.direction || (currentProtocol && currentProtocol.direction) || 'Tx';
+                const wordPeriod = item.period || pkt.period || (currentProtocol && currentProtocol.period) || 20;
+
+                // 目录项元信息：依用户需求移除周期与多余文字，仅保留纯数字表示字段个数
+                metaStr = `${sigCount}`;
+                metaTooltip = `包含 ${sigCount} 个字段 · 方向: ${wordDir === 'Tx' ? '发送' : '接收'} · 周期: ${wordPeriod}ms`;
+                fullCardTitle = `标号 ${labelStr} - ${titleStr}\n字段数: ${sigCount} · 通信方向: ${wordDir === 'Tx' ? '发送' : '接收'} · 刷新周期: ${wordPeriod}ms`;
 
                 // 搜索命中匹配检测 (仅匹配用户定义的名字、单位、备注、位段与字典)
                 if (query) {
@@ -288,10 +789,12 @@
             } else {
                 // Serial
                 const offset = item.offset !== undefined ? item.offset : idx;
-                labelStr = `Byte ${offset}`;
+                labelStr = `B${offset}`;
                 titleStr = item.name || `字节 ${offset}`;
                 const subSignals = item.signals ? item.signals.length : 1;
-                subInfoStr = `${item.dataType || 'u8'} · ${subSignals} 字段 · ${item.length || 1}B`;
+                metaStr = `${subSignals}`;
+                metaTooltip = `偏移: Byte ${offset} · 包含 ${subSignals} 个字段 · 类型: ${item.dataType || 'u8'} · 长度: ${item.length || 1}B`;
+                fullCardTitle = `Byte ${offset} - ${titleStr}\n字段数: ${subSignals} · 类型: ${item.dataType || 'u8'} · 长度: ${item.length || 1}B`;
 
                 if (query) {
                     const matchOffset = `byte ${offset}`.includes(query) || `${offset}` === query;
@@ -306,13 +809,12 @@
                 card.classList.add('has-search-match');
             }
 
+            card.title = fullCardTitle;
             card.innerHTML = `
-                <div class="vci-top">
-                    <span class="vci-label-chip">${escapeHTML(labelStr)}</span>
-                    <span class="vci-name" title="${escapeHTML(titleStr)}">${escapeHTML(titleStr)}</span>
-                    ${hasMatch ? `<span class="vci-match-pill" title="在该字内匹配到 ${matchedInThisWord} 处">${matchedInThisWord} 匹配</span>` : ''}
-                </div>
-                <div class="vci-sub">${escapeHTML(subInfoStr)}</div>
+                <span class="vci-label-chip">${escapeHTML(labelStr)}</span>
+                <span class="vci-name" title="${escapeHTML(titleStr)}">${escapeHTML(titleStr)}</span>
+                <span class="vci-count-pill" title="${escapeHTML(metaTooltip)}">${escapeHTML(metaStr)}</span>
+                ${hasMatch ? `<span class="vci-match-pill" title="在该字内匹配到 ${matchedInThisWord} 处">${matchedInThisWord}</span>` : ''}
             `;
 
             frag.appendChild(card);
@@ -389,64 +891,27 @@
         const ssmCode = bitMapStr[ssmVal] || '00';
         const ssmDesc = ssmDict[ssmVal] || `状态 ${ssmVal}`;
 
-        // 1. 顶部字摘要卡片 + 协议传输控制域规范
+        // 1. 顶部标号字紧凑摘要卡片 (将奇偶校验、SDI、SSM 等次要协议规范直接在顶部一笔带过，不占宝贵纵向视区)
+        const ssmDictTooltip = 'SSM 状态矩阵字典定义:\n' + Object.entries(ssmDict).map(([k, v]) => `${bitMapStr[k] || k}b: ${v}`).join('\n');
+        const sdiTooltip = hasSdi ? `SDI 设备识别源: ${sdiCode}b (${sdiDesc})` : '自由 Bit 流模式不启用独立 SDI';
+
         if (viewerActiveWordHeader) {
             viewerActiveWordHeader.innerHTML = `
                 <div class="vwh-title-row">
                     <div class="vwh-title-left">
                         <span class="vwh-octal-badge" title="ARINC 429 八进制标号 (B1~B8)">${octal}₈</span>
                         <h2 class="vwh-title" title="${escapeHTML(word.name || '未命名标号字')}">${escapeHTML(word.name || '未命名标号字')}</h2>
-                        <span class="vwh-dir-chip ${isTx ? 'chip-tx' : 'chip-rx'}">${isTx ? 'Tx (发送)' : 'Rx (接收)'}</span>
+                        <span class="vwh-dir-chip ${isTx ? 'chip-tx' : 'chip-rx'}">${isTx ? '发送' : '接收'}</span>
                         <span class="vwh-mode-chip" title="协议模式">${isBitstream ? '自由 Bit 模式' : '经典航电模式'}</span>
                     </div>
                     <div class="vwh-meta-chips">
                         <span class="vwh-chip" title="16进制标号编码"><i class="fa-solid fa-hashtag"></i> Hex: ${hex}</span>
-                        <span class="vwh-chip" title="刷新周期"><i class="fa-regular fa-clock"></i> ${word.period || pkt.period || 20}ms</span>
-                        <span class="vwh-chip" title="当前字定义的载荷字段数"><i class="fa-solid fa-list-check"></i> ${signals.length} 个字段</span>
-                        <span class="vwh-chip" title="所属系统/信道"><i class="fa-solid fa-tower-broadcast"></i> ${escapeHTML(word.source || 'CH1')}</span>
-                    </div>
-                </div>
-
-                <!-- 航电协议控制域传输规范 (属于协议整体与字级的规范，非个别字段属性) -->
-                <div class="vwh-protocol-strip">
-                    <div class="vwh-proto-strip-head">
-                        <i class="fa-solid fa-satellite-dish" style="color:var(--accent-color);"></i>
-                        <span class="vwh-proto-strip-title">429 协议传输控制域规范</span>
-                    </div>
-                    <div class="vwh-proto-items">
-                        <!-- 1. 奇偶校验 -->
-                        <div class="vwh-proto-card proto-card-parity" title="奇偶校验位 (Bit 32)">
-                            <span class="vpc-tag"><i class="fa-solid fa-shield-halved"></i> 校验 (Bit 32):</span>
-                            <strong class="vpc-val">${parityLabel}</strong>
-                        </div>
-
-                        <!-- 2. SDI (源/目标识别) -->
-                        ${hasSdi ? `
-                        <div class="vwh-proto-card proto-card-sdi" title="SDI 系统设备识别 (Bits 9~10)">
-                            <span class="vpc-tag"><i class="fa-solid fa-diagram-project"></i> SDI (Bits 9~10):</span>
-                            <strong class="vpc-val"><code>${sdiCode}b</code> ${escapeHTML(sdiDesc)}</strong>
-                        </div>
-                        ` : `
-                        <div class="vwh-proto-card proto-card-sdi" title="自由 Bit 流模式不启用独立 SDI">
-                            <span class="vpc-tag"><i class="fa-solid fa-diagram-project"></i> SDI:</span>
-                            <span class="vpc-val" style="color:var(--text-secondary);">自由Bit流模式 (无独立SDI)</span>
-                        </div>
-                        `}
-
-                        <!-- 3. SSM (状态符号矩阵) -->
-                        <div class="vwh-proto-card proto-card-ssm" title="SSM 状态符号矩阵 (Bits 30~31)">
-                            <div class="vpc-row-top">
-                                <span class="vpc-tag"><i class="fa-solid fa-heart-pulse"></i> SSM (Bits 30~31):</span>
-                                <strong class="vpc-val"><code>${ssmCode}b</code> ${escapeHTML(ssmDesc)}</strong>
-                            </div>
-                            <div class="vpc-ssm-dict" title="协议全局 SSM 状态符号矩阵定义">
-                                ${Object.entries(ssmDict).map(([k, v]) => `
-                                    <span class="vpc-ssm-pill ${k === ssmVal ? 'active-ssm' : ''}">
-                                        <code>${bitMapStr[k] || k}b</code>: ${escapeHTML(v)}
-                                    </span>
-                                `).join('')}
-                            </div>
-                        </div>
+                        <span class="vwh-chip" title="发送刷新周期"><i class="fa-regular fa-clock"></i> ${word.period || pkt.period || 20}ms</span>
+                        <span class="vwh-chip" title="当前字定义的载荷字段数"><i class="fa-solid fa-list-check"></i> ${signals.length} 字段</span>
+                        ${(word.source && word.source !== 'CH1') ? `<span class="vwh-chip" title="所属信道/设备"><i class="fa-solid fa-tower-broadcast"></i> ${escapeHTML(word.source)}</span>` : ''}
+                        <span class="vwh-chip" title="Bit 32 奇偶校验"><i class="fa-solid fa-shield-halved" style="color:#ef4444;"></i> 校验: <b>${parityLabel}</b></span>
+                        ${hasSdi ? `<span class="vwh-chip" title="${escapeHTML(sdiTooltip)}"><i class="fa-solid fa-diagram-project" style="color:#8b5cf6;"></i> SDI: <b>${sdiCode}b</b></span>` : ''}
+                        <span class="vwh-chip" title="${escapeHTML(ssmDictTooltip)}"><i class="fa-solid fa-heart-pulse" style="color:#f59e0b;"></i> SSM: <b>${ssmCode}b</b> (${escapeHTML(ssmDesc)})</span>
                     </div>
                 </div>
             `;
@@ -621,7 +1086,7 @@
         viewerBitBarContainer.appendChild(barWrap);
     }
 
-    // 渲染 ARINC 429 字段工程规格明细表 (双列网格排布：两个字段占一行，仅重点显示有数据的属性，绝不显示空白占位或未定义的编码规范/内部字段key)
+    // 渲染 ARINC 429 字段工程规格明细表 (四列高密度网格排布：一行放四个字段，仅重点显示有数据的属性，绝不显示空白占位或未定义的编码规范/内部字段key)
     function renderArincFieldsTable(signals) {
         if (!viewerFieldsList) return;
         viewerFieldsList.innerHTML = '';
@@ -717,18 +1182,23 @@
                 </div>
             ` : '';
 
-            // 组装卡片：双列排布，彻底移除无意义的复制按钮，不显示未配置的虚假属性
+            // 组装卡片：四列排布，彻底移除无意义的复制按钮，不显示未配置的虚假属性
+            // 单 bit 字段简化标识为 BitX，多 bit 字段标识为 Bstart ~ Bend (count b)
+            const bitBadgeText = (count === 1)
+                ? `Bit${start}`
+                : `B${start} ~ B${end} <small>(${count}b)</small>`;
+
             card.innerHTML = `
                 <div class="vfc-header">
-                    <div class="vfc-title-group">
+                    <div class="vfc-badges-strip">
                         <span class="vfc-bit-badge" style="background:${color.bg}; border-color:${color.border}; color:${color.text};">
-                            B${start} ~ B${end} <small>(${count}b)</small>
+                            ${bitBadgeText}
                         </span>
-                        <h4 class="vfc-name">${highlightText(sig.name || '未命名信号', query)}</h4>
                         <span class="vfc-datatype-pill">${escapeHTML(sig.dataType || 'u8')}</span>
                         ${(sig.unit && String(sig.unit).trim()) ? `<span class="vfc-unit-pill">${escapeHTML(sig.unit.trim())}</span>` : ''}
                     </div>
                 </div>
+                <h4 class="vfc-name">${highlightText(sig.name || '未命名信号', query)}</h4>
                 ${(propsHtml || dictHtml || remarkHtml) ? `
                     <div class="vfc-body">
                         ${propsHtml}
@@ -737,21 +1207,6 @@
                     </div>
                 ` : ''}
             `;
-
-            // 鼠标悬停高亮顶部位图
-            card.addEventListener('mouseenter', () => {
-                highlightBitBarSegments(sIdx);
-            });
-
-            card.addEventListener('mouseleave', () => {
-                unhighlightBitBarSegments();
-            });
-
-            frag.appendChild(card);
-        });
-
-        viewerFieldsList.appendChild(frag);
-    }
 
             // 鼠标悬停高亮顶部位图
             card.addEventListener('mouseenter', () => {
@@ -857,41 +1312,22 @@
                     <div class="vwh-title-left">
                         <span class="vwh-octal-badge" style="background:#ea580c;">Byte ${offset}</span>
                         <h2 class="vwh-title">${escapeHTML(byteItem.name || `字节 ${offset}`)}</h2>
-                        <span class="vwh-dir-chip ${isTx ? 'chip-tx' : 'chip-rx'}">${isTx ? 'Tx (发送)' : 'Rx (接收)'}</span>
+                        <span class="vwh-dir-chip ${isTx ? 'chip-tx' : 'chip-rx'}">${isTx ? '发送' : '接收'}</span>
                     </div>
                     <div class="vwh-meta-chips">
-                        <span class="vwh-chip"><i class="fa-solid fa-arrows-left-right-to-line"></i> 偏移量: ${offset}</span>
-                        <span class="vwh-chip"><i class="fa-solid fa-shapes"></i> 默认类型: ${escapeHTML(byteItem.dataType || 'u8')}</span>
-                        <span class="vwh-chip"><i class="fa-solid fa-list-check"></i> 字段数: ${subSignals.length > 0 ? subSignals.length : 1} 个</span>
+                        <span class="vwh-chip"><i class="fa-solid fa-arrows-left-right-to-line"></i> 偏移: ${offset}</span>
+                        <span class="vwh-chip"><i class="fa-solid fa-shapes"></i> 类型: ${escapeHTML(byteItem.dataType || 'u8')}</span>
+                        <span class="vwh-chip"><i class="fa-solid fa-list-check"></i> ${subSignals.length > 0 ? subSignals.length : 1} 字段</span>
                         <span class="vwh-chip"><i class="fa-regular fa-clock"></i> 周期: ${pkt.period || (currentProtocol && currentProtocol.period) || 20}ms</span>
-                    </div>
-                </div>
-
-                <!-- 串口通信参数条 (属于协议整体的传输规范) -->
-                <div class="vwh-protocol-strip">
-                    <div class="vwh-proto-strip-head">
-                        <i class="fa-solid fa-bolt" style="color:#f59e0b;"></i>
-                        <span class="vwh-proto-strip-title">串口通信物理电气参数</span>
-                    </div>
-                    <div class="vwh-proto-items">
-                        <div class="vwh-proto-card" title="总线物理接口类型">
-                            <span class="vpc-tag"><i class="fa-solid fa-microchip"></i> 接口类型:</span>
-                            <strong class="vpc-val">${escapeHTML((currentProtocol && currentProtocol.type) || 'RS422')}</strong>
-                        </div>
-                        <div class="vwh-proto-card" title="通信波特率">
-                            <span class="vpc-tag"><i class="fa-solid fa-gauge"></i> 波特率:</span>
-                            <strong class="vpc-val">${escapeHTML(String((currentProtocol && currentProtocol.baudRate) || (currentProtocol && currentProtocol.baud) || '115200'))} bps</strong>
-                        </div>
-                        <div class="vwh-proto-card" title="奇偶校验位">
-                            <span class="vpc-tag"><i class="fa-solid fa-shield-halved"></i> 校验:</span>
-                            <strong class="vpc-val">${(currentProtocol && currentProtocol.parity === 'odd') ? '奇校验 (Odd)' : ((currentProtocol && currentProtocol.parity === 'even') ? '偶校验 (Even)' : '无校验 (None)')}</strong>
-                        </div>
+                        <span class="vwh-chip" title="总线物理接口"><i class="fa-solid fa-microchip" style="color:#f59e0b;"></i> ${escapeHTML((currentProtocol && currentProtocol.type) || 'RS422')}</span>
+                        <span class="vwh-chip" title="通信波特率"><i class="fa-solid fa-gauge"></i> ${escapeHTML(String((currentProtocol && currentProtocol.baudRate) || (currentProtocol && currentProtocol.baud) || '115200'))} bps</span>
+                        <span class="vwh-chip" title="奇偶校验"><i class="fa-solid fa-shield-halved" style="color:#ef4444;"></i> ${(currentProtocol && currentProtocol.parity === 'odd') ? '奇校验' : ((currentProtocol && currentProtocol.parity === 'even') ? '偶校验' : '无校验')}</span>
                     </div>
                 </div>
             `;
         }
 
-        // 渲染单字节内字段卡片 (双列排布，无复制按钮，仅有配置的属性)
+        // 渲染单字节内字段卡片 (四列排布，无复制按钮，仅有配置的属性)
         if (viewerFieldsList) {
             viewerFieldsList.innerHTML = '';
             const frag = document.createDocumentFragment();
@@ -938,17 +1374,21 @@
                     const card = document.createElement('div');
                     card.className = 'viewer-field-card';
                     card.id = `viewer-field-card-${sIdx}`;
+                    const serialBitBadgeText = (count === 1)
+                        ? `Bit${start}`
+                        : `bit${start}~bit${end} <small>(${count}b)</small>`;
+
                     card.innerHTML = `
                         <div class="vfc-header">
-                            <div class="vfc-title-group">
+                            <div class="vfc-badges-strip">
                                 <span class="vfc-bit-badge" style="background:${color.bg}; border-color:${color.border}; color:${color.text};">
-                                    bit${start}${count > 1 ? `~bit${end}` : ''} <small>(${count}b)</small>
+                                    ${serialBitBadgeText}
                                 </span>
-                                <h4 class="vfc-name">${escapeHTML(sig.name || `字段 ${sIdx + 1}`)}</h4>
                                 <span class="vfc-datatype-pill">${escapeHTML(sig.dataType || 'u8')}</span>
                                 ${sig.unit ? `<span class="vfc-unit-pill">${escapeHTML(sig.unit.trim())}</span>` : ''}
                             </div>
                         </div>
+                        <h4 class="vfc-name">${escapeHTML(sig.name || `字段 ${sIdx + 1}`)}</h4>
                         ${(propsHtml || dictHtml || remarkHtml) ? `
                             <div class="vfc-body">
                                 ${propsHtml}
@@ -1069,9 +1509,13 @@
 
     // 一键切换至工作台编辑模式
     function switchToEditWorkbench() {
-        if (!currentProtocol) return;
+        if (!rootProtocol && !currentProtocol) return;
+        const target = rootProtocol || currentProtocol;
+        if (currentProtocol && currentProtocol._isHistoricalSnapshot) {
+            showToast('已进入编辑工作台（历史版本为只读快照，正在载入最新工作副本）', 'info');
+        }
         if (typeof window.openProtocolWorkbench === 'function') {
-            window.openProtocolWorkbench(currentProtocol.id);
+            window.openProtocolWorkbench(target.id);
         }
     }
 
@@ -1080,6 +1524,31 @@
         if (viewerEventsBound) return;
         initDOMElements();
         viewerEventsBound = true;
+
+        // 规范版本下拉切换监听
+        if (viewerVersionSelect) {
+            viewerVersionSelect.addEventListener('change', (e) => {
+                applyViewingVersion(e.target.value, true);
+            });
+        }
+
+        // 历史版本横幅内快捷切回最新工作副本
+        if (btnViewerSwitchWorking) {
+            btnViewerSwitchWorking.addEventListener('click', () => {
+                applyViewingVersion('__working__', true);
+            });
+        }
+
+        // 历史版本横幅内快捷打开版本演进中心比对差异
+        if (btnViewerSnapshotDiff) {
+            btnViewerSnapshotDiff.addEventListener('click', () => {
+                if (window.openProtocolVersionView && rootProtocol) {
+                    window.openProtocolVersionView(rootProtocol);
+                } else if (window.openProtocolVersionModal && rootProtocol) {
+                    window.openProtocolVersionModal(rootProtocol);
+                }
+            });
+        }
 
         // 返回协议列表
         if (btnViewerBack) {
@@ -1155,13 +1624,36 @@
             });
         }
 
-        // 数据包切换
+        // 数据包切换 (支持目录头部与顶栏双向联动)
+        const handlePacketChange = (newIdx) => {
+            currentPacketIndex = newIdx;
+            currentWordIndex = 0;
+            if (viewerPacketSelect) viewerPacketSelect.value = newIdx.toString();
+            if (viewerCatalogPacketSelect) viewerCatalogPacketSelect.value = newIdx.toString();
+            renderWordsCatalog();
+            renderActiveWordView();
+        };
+
         if (viewerPacketSelect) {
             viewerPacketSelect.addEventListener('change', (e) => {
-                currentPacketIndex = parseInt(e.target.value, 10) || 0;
-                currentWordIndex = 0;
-                renderWordsCatalog();
-                renderActiveWordView();
+                handlePacketChange(parseInt(e.target.value, 10) || 0);
+            });
+        }
+
+        if (viewerCatalogPacketSelect) {
+            viewerCatalogPacketSelect.addEventListener('change', (e) => {
+                handlePacketChange(parseInt(e.target.value, 10) || 0);
+            });
+        }
+
+        // 协议合规与健康度全面体检
+        if (btnViewerCheck) {
+            btnViewerCheck.addEventListener('click', () => {
+                if (typeof window.runProtocolHealthCheck === 'function') {
+                    window.runProtocolHealthCheck(currentProtocol);
+                } else if (ProtoView.Controllers && ProtoView.Controllers.Arinc && ProtoView.Controllers.Arinc.runProtocolHealthCheck) {
+                    ProtoView.Controllers.Arinc.runProtocolHealthCheck(currentProtocol);
+                }
             });
         }
 
@@ -1204,12 +1696,60 @@
                 }
             }, { passive: true });
         }
+
+        // 查阅模式左侧目录面板鼠标拖拽调宽
+        if (viewerCatalogResizer && viewerCatalogPanel) {
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 290;
+
+            const savedCatalogWidth = localStorage.getItem('protoview_viewer_catalog_width');
+            if (savedCatalogWidth) {
+                const parsedW = parseInt(savedCatalogWidth, 10);
+                if (parsedW >= 200 && parsedW <= 650) {
+                    viewerCatalogPanel.style.width = `${parsedW}px`;
+                }
+            }
+
+            viewerCatalogResizer.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = viewerCatalogPanel.getBoundingClientRect().width;
+                viewerCatalogResizer.classList.add('resizing');
+                document.body.classList.add('resizing-active');
+                e.preventDefault();
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                const deltaX = e.clientX - startX;
+                let newWidth = startWidth + deltaX;
+                if (newWidth < 200) newWidth = 200;
+                if (newWidth > 650) newWidth = 650;
+                viewerCatalogPanel.style.width = `${newWidth}px`;
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (!isResizing) return;
+                isResizing = false;
+                viewerCatalogResizer.classList.remove('resizing');
+                document.body.classList.remove('resizing-active');
+
+                const finalWidth = parseInt(viewerCatalogPanel.style.width, 10);
+                if (!isNaN(finalWidth)) {
+                    localStorage.setItem('protoview_viewer_catalog_width', finalWidth.toString());
+                }
+            });
+        }
     }
 
     // 控制器接口暴露
     const ViewerController = {
         loadProtocolIntoViewer,
         getCurrentProtocol: () => currentProtocol,
+        getRootProtocol: () => rootProtocol,
+        getActiveViewingVersionKey: () => activeViewingVersionKey,
+        switchViewingVersion: applyViewingVersion,
         switchToEditWorkbench,
         scrollToField,
         bindEvents: bindViewerEvents

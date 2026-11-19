@@ -71,10 +71,45 @@
             return false;
         }
 
-        // 核心隔离：首先清空本地缓存，保证新注册账号或切换账号后绝对无历史残留
+        const isLocal = (
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.protocol === 'file:' ||
+            token.startsWith('local_dev_token_')
+        );
+
+        // 如果处于本地开发环境，先探测云端服务是否可用，不可用时千万不要清空本地 IndexedDB
+        let isCloudAvailable = false;
+        try {
+            const probe = await cloudApiCall('/api/auth?action=me', 'GET');
+            if (probe.ok) isCloudAvailable = true;
+        } catch(e) {}
+
+        if (!isCloudAvailable && isLocal) {
+            if (notifyUser) {
+                if (window.ProtoView && window.ProtoView.Utils && window.ProtoView.Utils.showToast) {
+                    window.ProtoView.Utils.showToast('当前处于本地离线模式，已激活本地 IndexedDB 协议库', 'info');
+                }
+            }
+            if (window.refreshProductDatalist) await window.refreshProductDatalist();
+            if (window.loadProtocols) await window.loadProtocols();
+            if (window.loadArincProtocolsForSelect) await window.loadArincProtocolsForSelect();
+            if (window.loadProtocolsForSelect) await window.loadProtocolsForSelect();
+            return true;
+        }
+
+        // 收集受保护的本地草稿与未提交协议，防止全量拉取云端时误抹除草稿
+        const protectedProtocols = [];
         if (window.dbHelper) {
-            await window.dbHelper.clearAllProtocols();
-            await window.dbHelper.clearAllProducts();
+            try {
+                const currentLocal = await window.dbHelper.getAllProtocols();
+                for (const lp of currentLocal) {
+                    const hasDraft = ProtoView.DraftManager && ProtoView.DraftManager.getDraft(lp);
+                    if (hasDraft || lp._isLocalDraft || lp._isLocalOnly) {
+                        protectedProtocols.push(lp);
+                    }
+                }
+            } catch(e) {}
         }
 
         let loadedCount = 0;
@@ -148,6 +183,16 @@
             errors.push(`协议同步异常: ${e.message}`);
         }
 
+        // 恢复未提交的受保护本地草稿
+        if (window.dbHelper && protectedProtocols.length > 0) {
+            for (const p of protectedProtocols) {
+                const existing = await window.dbHelper.getProtocol(p.id);
+                if (!existing) {
+                    await window.dbHelper.saveProtocol(p);
+                }
+            }
+        }
+
         // 3. 无论拉取到多少，强制刷新界面
         if (window.refreshProductDatalist) await window.refreshProductDatalist();
         if (window.loadProtocols) await window.loadProtocols();
@@ -167,26 +212,61 @@
         return errors.length === 0;
     }
 
-    // ----------------- 保存协议至云端 (支持 R2 / D1 / KV 三引擎容灾) -----------------
-    async function saveProtocolToWorkspaceAndCloud(proto) {
+    // ----------------- 保存协议至云端 (支持 R2 / D1 / KV 三引擎容灾与并发冲突拦截) -----------------
+    async function saveProtocolToWorkspaceAndCloud(proto, options = {}) {
         if (!proto) return { ok: false, error: '协议对象为空' };
+
+        // 1. 本地数据库先行可靠持久化 (确保本地离线调试数据绝对不丢)
+        proto.updatedAt = new Date().toISOString();
+        if (proto.id && window.dbHelper) {
+            await window.dbHelper.saveProtocol(proto);
+        }
+
+        const isLocal = (
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.protocol === 'file:' ||
+            (localStorage.getItem('protoview_auth_token') || '').startsWith('local_dev_token_')
+        );
+
+        // 附带并发冲突预期基准时间与强制覆盖标识
+        const payload = JSON.parse(JSON.stringify(proto));
+        payload._expectedUpdated = options.expectedUpdated !== undefined ? options.expectedUpdated : (proto._cloudUpdated || 0);
+        if (options.force) {
+            payload.force = true;
+        }
+
         try {
-            const cloudRes = await cloudApiCall('/api/protocols', 'POST', proto);
+            const cloudRes = await cloudApiCall('/api/protocols', 'POST', payload);
             if (cloudRes.ok && cloudRes.data && cloudRes.data.success) {
                 proto._cloudKey = cloudRes.data.key;
                 proto._fromCloud = true;
+                proto._cloudUpdated = cloudRes.data.metadata?.updateTime ? Number(cloudRes.data.metadata.updateTime) : Date.now();
                 if (proto.id && window.dbHelper) {
                     await window.dbHelper.saveProtocol(proto);
                 }
                 return { ok: true, data: cloudRes.data };
+            } else if (cloudRes.status === 409 || (cloudRes.data && cloudRes.data.conflict)) {
+                return {
+                    ok: false,
+                    conflict: true,
+                    cloudUpdated: cloudRes.data?.cloudUpdated,
+                    error: cloudRes.data?.error || '云端存在较新版本，可能已被其他设备修改！'
+                };
             } else {
                 const errMsg = cloudRes.data?.error || cloudRes.error || `HTTP ${cloudRes.status}`;
+                if (isLocal) {
+                    return { ok: true, isLocal: true };
+                }
                 console.error('保存至云端接口响应异常:', errMsg);
-                return { ok: false, error: errMsg };
+                return { ok: false, retryable: true, error: errMsg };
             }
         } catch (cloudErr) {
+            if (isLocal) {
+                return { ok: true, isLocal: true };
+            }
             console.error('ProtoView: 同步保存至云端失败:', cloudErr);
-            return { ok: false, error: cloudErr.message };
+            return { ok: false, retryable: true, error: cloudErr.message };
         }
     }
 
