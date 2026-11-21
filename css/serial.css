@@ -2,11 +2,11 @@
    串口通信协议工程工作台 (Serial / RS485 / RS422 / UART) 专用样式
    ======================================================== */
 .dense-input-xs {
-    height: 24px !important;
-    line-height: 22px !important;
-    padding: 0 6px !important;
+    height: var(--control-height-sm, 28px) !important;
+    line-height: 26px !important;
+    padding: 0 8px !important;
     font-size: 11.5px !important;
-    border-radius: 4px !important;
+    border-radius: var(--radius-sm, 6px) !important;
     background: var(--bg-secondary) !important;
     border: 1px solid var(--border-color) !important;
     color: var(--text-primary) !important;
@@ -14,11 +14,11 @@
 }
 
 .dense-select-xs {
-    height: 24px !important;
-    line-height: 22px !important;
-    padding: 0 18px 0 6px !important;
+    height: var(--control-height-sm, 28px) !important;
+    line-height: 26px !important;
+    padding: 0 18px 0 8px !important;
     font-size: 11.5px !important;
-    border-radius: 4px !important;
+    border-radius: var(--radius-sm, 6px) !important;
     background: var(--bg-secondary) !important;
     border: 1px solid var(--border-color) !important;
     color: var(--text-primary) !important;
@@ -51,15 +51,16 @@
 
 #btn-rename-serial-packet,
 #btn-add-serial-packet {
-    width: 24px !important;
-    min-width: 24px !important;
-    max-width: 24px !important;
-    height: 24px !important;
-    min-height: 24px !important;
-    max-height: 24px !important;
-    line-height: 22px !important;
+    width: 28px !important;
+    min-width: 28px !important;
+    max-width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    line-height: 26px !important;
     padding: 0 !important;
-    flex: 0 0 24px !important;
+    border-radius: var(--radius-sm, 6px) !important;
+    flex: 0 0 28px !important;
     flex-shrink: 0 !important;
     margin: 0 !important;
     box-sizing: border-box !important;
@@ -279,12 +280,12 @@
 .span-badge {
     font-family: 'JetBrains Mono', Consolas, monospace;
     font-size: 11px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 3px;
+    font-weight: 600;
+    padding: 1.5px 7px;
+    border-radius: var(--radius-pill, 9999px);
     background: rgba(234, 88, 12, 0.08);
     color: #ea580c;
-    border: 1px solid rgba(234, 88, 12, 0.25);
+    border: 1px solid rgba(234, 88, 12, 0.2);
     display: inline-block;
     white-space: nowrap;
 }
@@ -292,14 +293,14 @@
 [data-theme="dark"] .span-badge {
     background: rgba(249, 115, 22, 0.15);
     color: #fb923c;
-    border-color: rgba(249, 115, 22, 0.35);
+    border-color: rgba(249, 115, 22, 0.3);
 }
 
 .serial-role-tag {
     font-size: 10.5px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 3px;
+    font-weight: 600;
+    padding: 1.5px 7px;
+    border-radius: var(--radius-pill, 9999px);
     display: inline-block;
     white-space: nowrap;
 }

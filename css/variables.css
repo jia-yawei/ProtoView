@@ -14,6 +14,19 @@
     --glass-border: rgba(255, 255, 255, 0.5);
     --danger: #ef4444;
     --success: #10b981;
+
+    /* 统一圆角设计规范令牌 (轻度现代圆角，精致克制，杜绝生硬直角与过度椭圆) */
+    --radius-xs: 4px;       /* 紧凑微型元素、内嵌指示器 */
+    --radius-sm: 6px;       /* 输入框、下拉选择、标准操作按钮、小卡片 */
+    --radius-md: 8px;       /* 工具栏、表单面板、卡片容器 */
+    --radius-lg: 12px;      /* 弹出层、模态框、核心视窗 */
+    --radius-pill: 9999px;  /* 状态标签、胶囊药丸 (低饱和度辅助标签) */
+
+    /* 统一控件高度体系 (严格对齐、杜绝并排时参差不齐) */
+    --control-height-xs: 24px;   /* 极紧凑微型表单控件 (dense-xs) */
+    --control-height-sm: 28px;   /* 工控高密度工作台小号标准高度 (dense-sm / field-card) */
+    --control-height-md: 34px;   /* 通用常规表单控件高度 (standard inputs / buttons) */
+    --control-height-lg: 40px;   /* 大号主要控件 (modal submit / hero input) */
 }
 
 [data-theme="dark"] {
@@ -58,16 +71,20 @@ body {
 }
 
 .btn {
-    padding: 0.6rem 1.2rem;
-    border-radius: 8px;
+    height: var(--control-height-md, 34px);
+    padding: 0 14px;
+    border-radius: var(--radius-sm, 6px);
     border: none;
     cursor: pointer;
     font-weight: 500;
     transition: all 0.2s ease;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .btn-primary {
@@ -103,8 +120,10 @@ body {
 }
 
 .btn-sm {
-    padding: 0.4rem 0.8rem;
+    height: var(--control-height-sm, 28px);
+    padding: 0 10px;
     font-size: 0.8rem;
+    border-radius: var(--radius-sm, 6px);
 }
 
 /* Layout Root Container */

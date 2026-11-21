@@ -16,6 +16,7 @@
     // 状态
     let activeProductFilter = 'all';
     let activeBusTypeFilter = 'all'; // 'all' | 'ARINC429' | 'SERIAL' | 'CAN'
+    let activeArchiveStatusFilter = 'all'; // 'all' | 'archived' | 'unarchived'
     let productSearchQuery = '';
     let sidebarProductSearchQuery = '';
     let isSidebarProdTreeCollapsed = false;
@@ -157,15 +158,26 @@
                 }
             }
 
+            const mainClickEl = document.getElementById('sas-main-click');
+            if (mainClickEl) {
+                mainClickEl.onclick = () => {
+                    if (window.openProtocolWorkbench) {
+                        window.openProtocolWorkbench(data.id);
+                    }
+                };
+            }
+
             if (btnEdit) {
-                btnEdit.onclick = () => {
+                btnEdit.onclick = (e) => {
+                    e.stopPropagation();
                     if (window.openProtocolWorkbench) {
                         window.openProtocolWorkbench(data.id);
                     }
                 };
             }
             if (btnView) {
-                btnView.onclick = () => {
+                btnView.onclick = (e) => {
+                    e.stopPropagation();
                     if (window.openProtocolViewer) {
                         window.openProtocolViewer(data.id);
                     }
@@ -764,13 +776,46 @@
                 <span class="proto-archive-badge ${verInfo.statusClass}">${verInfo.statusLabel}</span>
             </div>
         `;
-        const csciStatHtml = p.softwareCI ? `<span class="pstat-item pstat-csci" title="关联软件配置项: ${escapeHTML(p.softwareCI)}"><i class="fa-solid fa-code-branch"></i> ${escapeHTML(p.softwareCI)}</span>` : '';
+        const csciStatHtml = p.softwareCI ? `<span class="pct-tag pct-tag-csci" title="关联软件配置项: ${escapeHTML(p.softwareCI)}"><i class="fa-solid fa-code-branch"></i> ${escapeHTML(p.softwareCI)}</span>` : '';
+
+        // 云端同步状态胶囊：移至卡片右上角与版本状态并列，与底层业务/工程参数彻底剥离
+        const isCloudSynced = Boolean(p._fromCloud || p._cloudKey || p._cloudUpdated || (localStorage.getItem('protoview_auth_token') && !localStorage.getItem('protoview_auth_token').startsWith('local_dev_token_')));
+        const cloudBadgeHtml = `
+            <span class="card-cloud-badge ${isCloudSynced ? 'is-synced' : 'is-local'}" title="${isCloudSynced ? '数据已持久化同步至 Cloudflare 分布式云端' : '数据保存在本地 IndexedDB 离线环境'}">
+                <i class="fa-solid ${isCloudSynced ? 'fa-cloud' : 'fa-database'}"></i> ${isCloudSynced ? '云端保存' : '本地就绪'}
+            </span>
+        `;
+
+        const moreMenuHtml = `
+            <div class="card-more-wrap">
+                <button type="button" class="btn-card-more" onclick="event.stopPropagation(); if(window.toggleCardMoreMenu){window.toggleCardMoreMenu(this, '${p.id}');}" title="更多操作 (修改属性、复制副本、导出、移至回收站)">
+                    <i class="fa-solid fa-ellipsis"></i>
+                </button>
+                <div class="card-more-dropdown" id="cmd-${p.id}" onclick="event.stopPropagation();">
+                    <button type="button" class="cmd-item" onclick="if(window.closeAllCardMoreMenus){window.closeAllCardMoreMenus();} if(window.editProtocolProps){window.editProtocolProps('${p.id}');}">
+                        <i class="fa-solid fa-sliders"></i> 修改属性
+                    </button>
+                    <button type="button" class="cmd-item" onclick="if(window.closeAllCardMoreMenus){window.closeAllCardMoreMenus();} if(window.cloneProtocol){window.cloneProtocol('${p.id}');}">
+                        <i class="fa-solid fa-copy"></i> 复制为副本
+                    </button>
+                    <button type="button" class="cmd-item" onclick="if(window.closeAllCardMoreMenus){window.closeAllCardMoreMenus();} if(window.exportProtocolById){window.exportProtocolById('${p.id}');}">
+                        <i class="fa-solid fa-file-export"></i> 导出规范
+                    </button>
+                    <div class="cmd-divider"></div>
+                    <button type="button" class="cmd-item cmd-danger" onclick="if(window.closeAllCardMoreMenus){window.closeAllCardMoreMenus();} if(window.deleteProtocol){window.deleteProtocol('${p.id}');}">
+                        <i class="fa-solid fa-trash-can"></i> 移至回收站
+                    </button>
+                </div>
+            </div>
+        `;
 
         if (p.type === 'ARINC429') {
             const packetCount = (p.packets && Array.isArray(p.packets)) ? p.packets.length : 1;
-            const modeName = p.mode === 'bitstream' ? '自由 Bit 模式' : '经典航电模式';
-            const deviceName = p.device || p.source || '未指定设备';
-            const parityName = p.parity === 'odd' ? '奇校验' : (p.parity === 'even' ? '偶校验' : '无校验');
+            const modeName = p.mode === 'bitstream' ? '自由 Bit 模式' : '标准字模式';
+            const deviceName = p.device || p.source || '机载航电系统';
+            const parityName = p.parity === 'odd' ? '奇校验' : (p.parity === 'even' ? '偶校验' : (p.parity || '奇校验'));
+            const speedName = p.speed || '100kbps';
+            const periodStr = `${p.period || 20}ms`;
             const arincTag = 'ARINC 429';
 
             card.innerHTML = `
@@ -780,31 +825,46 @@
                         <span class="protocol-type-badge badge-proto-arinc"><i class="fa-solid fa-plane-departure"></i> ${escapeHTML(arincTag)}</span>
                     </div>
                     <div class="pct-right">
+                        ${cloudBadgeHtml}
                         ${archiveBadgeHtml}
+                        ${moreMenuHtml}
                     </div>
                 </div>
                 <div class="protocol-card-title-box">
                     <h3 class="protocol-card-title" title="${escapeHTML(p.name)}">${escapeHTML(p.name)}</h3>
                 </div>
-                <div class="protocol-stats">
-                    ${productName ? `<span class="pstat-item pstat-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
+                <div class="protocol-card-tags">
+                    ${productName ? `<span class="pct-tag pct-tag-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
                     ${csciStatHtml}
-                    <span class="pstat-item pstat-cloud" title="Cloudflare 云端分布式存储"><i class="fa-solid fa-cloud"></i> 云端保存</span>
-                    <span class="pstat-item"><i class="fa-solid fa-box-archive"></i> ${packetCount} 个数据包</span>
-                    <span class="pstat-item"><i class="fa-solid fa-desktop"></i> ${escapeHTML(deviceName)}</span>
-                    <span class="pstat-item"><i class="fa-solid fa-clock"></i> 发送周期: ${p.period || 20}ms</span>
-                    <span class="pstat-item"><i class="fa-solid fa-gauge-high"></i> ${p.speed || '100kbps'}</span>
-                    <span class="pstat-item"><i class="fa-solid fa-shield-halved"></i> ${parityName}</span>
-                    <span class="pstat-item"><i class="fa-solid fa-sliders"></i> ${modeName}</span>
+                    <span class="pct-tag" title="数据包规模"><i class="fa-solid fa-box-archive"></i> ${packetCount} 个数据包</span>
+                    <span class="pct-tag" title="工作模式"><i class="fa-solid fa-sliders"></i> ${modeName}</span>
                 </div>
-                <p class="protocol-card-desc">
+                <!-- 2列横向硬件参数对比矩阵 (传输速率、校验方式、发送周期、对端系统) -->
+                <div class="protocol-specs-grid">
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-gauge-high"></i> 传输速率</span>
+                        <span class="spec-v" title="${escapeHTML(speedName)}">${escapeHTML(speedName)}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-shield-halved"></i> 校验方式</span>
+                        <span class="spec-v" title="${escapeHTML(parityName)}">${escapeHTML(parityName)}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-clock"></i> 发送周期</span>
+                        <span class="spec-v" title="${periodStr}">${periodStr}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-desktop"></i> 对端系统</span>
+                        <span class="spec-v" title="${escapeHTML(deviceName)}">${escapeHTML(deviceName)}</span>
+                    </div>
+                </div>
+                <p class="protocol-card-desc" title="${escapeHTML(p.description || '机载 ARINC 429 航空总线通信协议')}">
                     ${escapeHTML(p.description || '机载 ARINC 429 航空总线通信协议')}
                 </p>
                 <div class="protocol-actions">
                     <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入工程工作台编辑标号字与字段"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
-                    <button type="button" class="btn btn-sm btn-proto-version" onclick="window.openProtocolVersionView && window.openProtocolVersionView('${p.id}')" title="查看并管理该协议的版本历程与变更对比"><i class="fa-solid fa-code-branch"></i> 版本</button>
-                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、周期、速率等)"><i class="fa-solid fa-sliders"></i> 属性</button>
-                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
+                    <button type="button" class="btn btn-sm btn-proto-outline btn-proto-version" onclick="window.openProtocolVersionView && window.openProtocolVersionView('${p.id}')" title="查看并管理该协议的版本历程与变更对比"><i class="fa-solid fa-code-branch"></i> 版本</button>
+                    <button type="button" class="btn btn-sm btn-proto-outline btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、周期、速率等)"><i class="fa-solid fa-sliders"></i> 属性</button>
                 </div>
             `;
         } else if (p.type === 'Serial' || isSerialFamily(p.type)) {
@@ -813,6 +873,7 @@
             const deviceName = p.device || '传感器/执行器';
             const baudStr = (p.baudRate || 115200) + ' bps';
             const formatStr = `${p.dataBits || 8}-${(p.parity || 'none')[0].toUpperCase()}-${p.stopBits || 1}`;
+            const periodStr = `${p.period || 20}ms`;
 
             card.innerHTML = `
                 <div class="protocol-card-top-bar">
@@ -821,34 +882,56 @@
                         <span class="protocol-type-badge badge-proto-serial"><i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> ${escapeHTML(subTypeName)}</span>
                     </div>
                     <div class="pct-right">
+                        ${cloudBadgeHtml}
                         ${archiveBadgeHtml}
+                        ${moreMenuHtml}
                     </div>
                 </div>
                 <div class="protocol-card-title-box">
                     <h3 class="protocol-card-title" title="${escapeHTML(p.name)}">${escapeHTML(p.name)}</h3>
                 </div>
-                <div class="protocol-stats">
-                    ${productName ? `<span class="pstat-item pstat-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
+                <div class="protocol-card-tags">
+                    ${productName ? `<span class="pct-tag pct-tag-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
                     ${csciStatHtml}
-                    <span class="pstat-item pstat-cloud" title="Cloudflare 云端分布式存储"><i class="fa-solid fa-cloud"></i> 云端保存</span>
-                    <span class="pstat-item"><i class="fa-solid fa-box-archive"></i> ${packetCount} 个数据包</span>
-                    <span class="pstat-item"><i class="fa-solid fa-desktop"></i> ${escapeHTML(deviceName)}</span>
-                    <span class="pstat-item"><i class="fa-solid fa-clock"></i> 发送周期: ${p.period || 20}ms</span>
-                    <span class="pstat-item"><i class="fa-solid fa-gauge-high"></i> ${baudStr}</span>
-                    <span class="pstat-item"><i class="fa-solid fa-microchip"></i> ${formatStr}</span>
+                    <span class="pct-tag" title="通信数据包"><i class="fa-solid fa-box-archive"></i> ${packetCount} 个数据包</span>
+                    <span class="pct-tag" title="串行标准"><i class="fa-solid fa-microchip"></i> ${escapeHTML(subTypeName)} 串口</span>
                 </div>
-                <p class="protocol-card-desc">
+                <!-- 2列横向硬件参数对比矩阵 (传输速率、校验方式、发送周期、对端系统) -->
+                <div class="protocol-specs-grid">
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-gauge-high"></i> 传输速率</span>
+                        <span class="spec-v" title="${escapeHTML(baudStr)}">${escapeHTML(baudStr)}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-shield-halved"></i> 校验方式</span>
+                        <span class="spec-v" title="${escapeHTML(formatStr)}">${escapeHTML(formatStr)}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-clock"></i> 发送周期</span>
+                        <span class="spec-v" title="${periodStr}">${periodStr}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-desktop"></i> 对端系统</span>
+                        <span class="spec-v" title="${escapeHTML(deviceName)}">${escapeHTML(deviceName)}</span>
+                    </div>
+                </div>
+                <p class="protocol-card-desc" title="${escapeHTML(p.description || `工业/航电标准 ${subTypeName} 串行通信协议`)}">
                     ${escapeHTML(p.description || `工业/航电标准 ${subTypeName} 串行通信协议`)}
                 </p>
                 <div class="protocol-actions">
                     <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入串口工作台编辑数据包与字段"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
-                    <button type="button" class="btn btn-sm btn-proto-version" onclick="window.openProtocolVersionView && window.openProtocolVersionView('${p.id}')" title="查看并管理该协议的版本历程与变更对比"><i class="fa-solid fa-code-branch"></i> 版本</button>
-                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、波特率等)"><i class="fa-solid fa-sliders"></i> 属性</button>
-                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
+                    <button type="button" class="btn btn-sm btn-proto-outline btn-proto-version" onclick="window.openProtocolVersionView && window.openProtocolVersionView('${p.id}')" title="查看并管理该协议的版本历程与变更对比"><i class="fa-solid fa-code-branch"></i> 版本</button>
+                    <button type="button" class="btn btn-sm btn-proto-outline btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、波特率等)"><i class="fa-solid fa-sliders"></i> 属性</button>
                 </div>
             `;
         } else {
             const canTag = 'CAN';
+            const frameCount = p.frames ? p.frames.length : 0;
+            const canBaudStr = p.baudRate ? (p.baudRate >= 1000 ? (p.baudRate / 1000) + ' kbps' : p.baudRate + ' bps') : '500 kbps';
+            const canStdStr = p.canStandard ? `${p.canStandard} (CRC)` : 'CAN 2.0B (CRC)';
+            const periodStr = `${p.period || 20}ms`;
+            const deviceName = p.device || '整机控制单元';
+
             card.innerHTML = `
                 <div class="protocol-card-top-bar">
                     <div class="pct-left">
@@ -856,26 +939,46 @@
                         <span class="protocol-type-badge badge-proto-can"><i class="fa-solid fa-network-wired" style="color:#10b981;"></i> ${escapeHTML(canTag)}</span>
                     </div>
                     <div class="pct-right">
+                        ${cloudBadgeHtml}
                         ${archiveBadgeHtml}
+                        ${moreMenuHtml}
                     </div>
                 </div>
                 <div class="protocol-card-title-box">
                     <h3 class="protocol-card-title" title="${escapeHTML(p.name)}">${escapeHTML(p.name)}</h3>
                 </div>
-                <div class="protocol-stats">
-                    ${productName ? `<span class="pstat-item pstat-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
+                <div class="protocol-card-tags">
+                    ${productName ? `<span class="pct-tag pct-tag-product" title="所属产品: ${escapeHTML(productName)}"><i class="fa-solid fa-cube"></i> ${escapeHTML(productName)}</span>` : ''}
                     ${csciStatHtml}
-                    <span class="pstat-item pstat-cloud" title="Cloudflare 云端分布式存储"><i class="fa-solid fa-cloud"></i> 云端保存</span>
-                    <span class="pstat-item"><i class="fa-solid fa-layer-group"></i> ${p.frames ? p.frames.length : 0} 个报文</span>
+                    <span class="pct-tag" title="CAN 报文规模"><i class="fa-solid fa-layer-group"></i> ${frameCount} 个报文</span>
+                    <span class="pct-tag" title="总线规范"><i class="fa-solid fa-sliders"></i> ${escapeHTML(p.canStandard || 'CAN 2.0B')}</span>
                 </div>
-                <p class="protocol-card-desc">
+                <!-- 2列横向硬件参数对比矩阵 (传输速率、校验方式、发送周期、对端系统) -->
+                <div class="protocol-specs-grid">
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-gauge-high"></i> 传输速率</span>
+                        <span class="spec-v" title="${escapeHTML(canBaudStr)}">${escapeHTML(canBaudStr)}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-shield-halved"></i> 校验方式</span>
+                        <span class="spec-v" title="${escapeHTML(canStdStr)}">${escapeHTML(canStdStr)}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-clock"></i> 发送周期</span>
+                        <span class="spec-v" title="${periodStr}">${periodStr}</span>
+                    </div>
+                    <div class="spec-cell">
+                        <span class="spec-k"><i class="fa-solid fa-desktop"></i> 对端系统</span>
+                        <span class="spec-v" title="${escapeHTML(deviceName)}">${escapeHTML(deviceName)}</span>
+                    </div>
+                </div>
+                <p class="protocol-card-desc" title="${escapeHTML(p.description || '工业总线通信协议')}">
                     ${escapeHTML(p.description || '工业总线通信协议')}
                 </p>
                 <div class="protocol-actions">
                     <button type="button" class="btn btn-sm btn-proto-workbench" onclick="window.openProtocolWorkbench && window.openProtocolWorkbench('${p.id}')" title="进入工作台编辑报文与信号"><i class="fa-solid fa-pen-ruler"></i> 编辑</button>
-                    <button type="button" class="btn btn-sm btn-proto-version" onclick="window.openProtocolVersionView && window.openProtocolVersionView('${p.id}')" title="查看并管理该协议的版本历程与变更对比"><i class="fa-solid fa-code-branch"></i> 版本</button>
-                    <button type="button" class="btn btn-sm btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、周期等)"><i class="fa-solid fa-sliders"></i> 属性</button>
-                    <button type="button" class="btn btn-sm btn-proto-delete" onclick="window.deleteProtocol && window.deleteProtocol('${p.id}')" title="删除通信协议"><i class="fa-solid fa-trash"></i> 删除</button>
+                    <button type="button" class="btn btn-sm btn-proto-outline btn-proto-version" onclick="window.openProtocolVersionView && window.openProtocolVersionView('${p.id}')" title="查看并管理该协议的版本历程与变更对比"><i class="fa-solid fa-code-branch"></i> 版本</button>
+                    <button type="button" class="btn btn-sm btn-proto-outline btn-proto-edit" onclick="window.editProtocolProps && window.editProtocolProps('${p.id}')" title="修改协议属性 (名称、产品型号、周期等)"><i class="fa-solid fa-sliders"></i> 属性</button>
                 </div>
             `;
         }
@@ -892,21 +995,67 @@
         ]);
         await refreshProductDatalist();
 
-        // 实时更新侧边栏各总线协议数量徽章
+        // 实时更新侧边栏与页面内总线协议数量徽章
         const totalCount = (protocols || []).length;
         const arincCount = (protocols || []).filter(p => p.type === 'ARINC429').length;
         const serialCount = (protocols || []).filter(p => isSerialFamily(p.type)).length;
         const canCount = (protocols || []).filter(p => p.type === 'CAN').length;
 
+        // 侧边栏常驻「协议库」总数徽章
         const sidebarProtoBadge = document.getElementById('sidebar-proto-count-badge');
-        const badgeArinc = document.getElementById('sidebar-count-arinc429');
-        const badgeSerial = document.getElementById('sidebar-count-serial');
-        const badgeCan = document.getElementById('sidebar-count-can');
-
         if (sidebarProtoBadge) sidebarProtoBadge.textContent = totalCount;
-        if (badgeArinc) badgeArinc.textContent = arincCount;
-        if (badgeSerial) badgeSerial.textContent = serialCount;
-        if (badgeCan) badgeCan.textContent = canCount;
+
+        // 协议库页面顶部总线类型筛选药丸组数量与状态
+        const bfCountAll = document.getElementById('bf-count-all');
+        const bfCountArinc = document.getElementById('bf-count-arinc');
+        const bfCountSerial = document.getElementById('bf-count-serial');
+        const bfCountCan = document.getElementById('bf-count-can');
+
+        if (bfCountAll) bfCountAll.textContent = totalCount;
+        if (bfCountArinc) bfCountArinc.textContent = arincCount;
+        if (bfCountSerial) bfCountSerial.textContent = serialCount;
+        if (bfCountCan) bfCountCan.textContent = canCount;
+
+        document.querySelectorAll('#main-bus-filter-group .bf-pill').forEach(pill => {
+            const bType = pill.getAttribute('data-bus-type') || 'all';
+            if (bType === activeBusTypeFilter) {
+                pill.classList.add('active');
+            } else {
+                pill.classList.remove('active');
+            }
+        });
+
+        // 统计归档与未归档协议数量并更新筛选药丸组
+        let archivedCount = 0;
+        let unarchivedCount = 0;
+        (protocols || []).forEach(p => {
+            const vInfo = ProtoView.ArchiveManager ? ProtoView.ArchiveManager.getVersionDisplayInfo(p) : { isArchived: Boolean(p.isArchived) };
+            if (vInfo.isArchived) {
+                archivedCount++;
+            } else {
+                unarchivedCount++;
+            }
+        });
+
+        const afCountAll = document.getElementById('af-count-all');
+        const afCountArchived = document.getElementById('af-count-archived');
+        const afCountUnarchived = document.getElementById('af-count-unarchived');
+
+        if (afCountAll) afCountAll.textContent = totalCount;
+        if (afCountArchived) afCountArchived.textContent = archivedCount;
+        if (afCountUnarchived) afCountUnarchived.textContent = unarchivedCount;
+
+        document.querySelectorAll('#main-archive-filter-group .af-pill').forEach(pill => {
+            const aStatus = pill.getAttribute('data-archive-status') || 'all';
+            if (aStatus === activeArchiveStatusFilter) {
+                pill.classList.add('active');
+            } else {
+                pill.classList.remove('active');
+            }
+        });
+
+        // 更新侧边栏回收站数量徽章
+        updateRecycleBinBadge();
 
         const productMap = new Map();
         (products || []).forEach(p => {
@@ -967,6 +1116,22 @@
                 return list.filter(p => p.type === 'CAN');
             }
             return list;
+        }
+
+        // 归档状态辅助过滤函数 (全部 / 已归档 / 未归档)
+        function applyArchiveStatusFilter(list) {
+            if (!list) return [];
+            if (activeArchiveStatusFilter === 'all') return list;
+            return list.filter(p => {
+                const vInfo = ProtoView.ArchiveManager ? ProtoView.ArchiveManager.getVersionDisplayInfo(p) : { isArchived: Boolean(p.isArchived) };
+                if (activeArchiveStatusFilter === 'archived') {
+                    return vInfo.isArchived;
+                }
+                if (activeArchiveStatusFilter === 'unarchived') {
+                    return !vInfo.isArchived;
+                }
+                return true;
+            });
         }
 
         if (!protocols || protocols.length === 0) {
@@ -1063,8 +1228,9 @@
             const prodInfo = productMap.get(prodName);
             const protoList = groupMap.get(prodName) || [];
             const busFilteredList = applyBusTypeFilter(protoList);
+            const archiveFilteredList = applyArchiveStatusFilter(busFilteredList);
 
-            const filteredProtos = filterProtocolsBySearch(busFilteredList, productSearchQuery);
+            const filteredProtos = filterProtocolsBySearch(archiveFilteredList, productSearchQuery);
             const isProductSelfMatch = productSearchQuery && (
                 prodName.toLowerCase().includes(productSearchQuery) ||
                 (prodInfo.code && prodInfo.code.toLowerCase().includes(productSearchQuery)) ||
@@ -1072,8 +1238,8 @@
                 (prodInfo.softwareItems && prodInfo.softwareItems.some(s => (s.name && s.name.toLowerCase().includes(productSearchQuery)) || (s.version && s.version.toLowerCase().includes(productSearchQuery))))
             );
 
-            // 当指定了总线类型且该产品下没有对应协议时，跳过此卡片
-            if (activeBusTypeFilter !== 'all' && busFilteredList.length === 0) {
+            // 当指定了总线类型或归档状态，且该产品下没有符合条件的协议时，跳过此卡片
+            if ((activeBusTypeFilter !== 'all' || activeArchiveStatusFilter !== 'all') && archiveFilteredList.length === 0) {
                 return;
             }
 
@@ -1081,7 +1247,7 @@
                 return;
             }
 
-            const protosToRender = isProductSelfMatch ? busFilteredList : filteredProtos;
+            const protosToRender = isProductSelfMatch ? archiveFilteredList : filteredProtos;
 
             const groupCard = document.createElement('div');
             groupCard.className = 'product-group-card';
@@ -1189,7 +1355,7 @@
                 grid.innerHTML = `
                     <div class="product-empty-protos" style="grid-column: 1 / -1;">
                         <i class="fa-solid fa-folder-open"></i>
-                        <div>该产品下暂无协议。点击右上角「+ 此产品下新建协议」即可快速为此产品创建通信协议。</div>
+                        <div>该产品下暂无符合筛选条件的协议。点击右上角「+」可快速创建协议。</div>
                     </div>
                 `;
             } else {
@@ -1204,8 +1370,9 @@
 
         if (hasUncategorized && (activeProductFilter === 'all' || activeProductFilter === UNCATEGORIZED_KEY)) {
             const busFilteredUncategorized = applyBusTypeFilter(uncategorizedList);
-            const filteredUncategorized = filterProtocolsBySearch(busFilteredUncategorized, productSearchQuery);
-            if ((!productSearchQuery || filteredUncategorized.length > 0) && (activeBusTypeFilter === 'all' || busFilteredUncategorized.length > 0)) {
+            const archiveFilteredUncategorized = applyArchiveStatusFilter(busFilteredUncategorized);
+            const filteredUncategorized = filterProtocolsBySearch(archiveFilteredUncategorized, productSearchQuery);
+            if ((!productSearchQuery || filteredUncategorized.length > 0) && ((activeBusTypeFilter === 'all' && activeArchiveStatusFilter === 'all') || archiveFilteredUncategorized.length > 0)) {
                 const groupCard = document.createElement('div');
                 groupCard.className = 'product-group-card is-uncategorized';
                 groupCard.setAttribute('data-product-name', '__uncategorized__');
@@ -1299,7 +1466,7 @@
                 <div class="empty-state" style="padding: 3rem 1.5rem; text-align: center; background: var(--bg-secondary); border: 1px dashed var(--border-color); border-radius: 12px;">
                     <i class="fa-solid fa-magnifying-glass" style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 0.6rem; display: block; opacity: 0.6;"></i>
                     <h3 style="font-size: 1.05rem; color: var(--text-primary); margin-bottom: 0.3rem;">未找到匹配的产品或协议</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">请尝试更换搜索关键字或切换产品标签。</p>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">请尝试更换搜索关键字、切换总线类型或调整归档状态筛选。</p>
                 </div>
             `;
         }
@@ -1319,26 +1486,39 @@
         });
     }
 
-    // 删除协议
+    // 移至回收站 (具备误删保护与一键撤销安全网)
     async function deleteProtocol(id) {
         const proto = await (window.dbHelper ? window.dbHelper.getProtocol(id) : null);
         const name = proto ? proto.name : '该协议';
 
-        const ok = await (ProtoView.showConfirm ? ProtoView.showConfirm({
-            title: '删除通信协议确认',
-            icon: 'fa-trash-can',
-            type: 'danger',
-            message: `确定要删除通信协议「${name}」吗？`,
-            detail: '此操作将同步从 Cloudflare 云端数据库与本地持久存储中彻底删除，不可恢复。',
-            confirmText: '确认删除',
-            cancelText: '取消'
-        }) : Promise.resolve(confirm(`确定要删除通信协议「${name}」吗？\n\n此操作将同步从 Cloudflare 云端数据库中彻底删除，不可恢复。`)));
+        let confirmed = false;
+        if (ProtoView.Utils && typeof ProtoView.Utils.showConfirm === 'function') {
+            confirmed = await ProtoView.Utils.showConfirm({
+                title: '移至回收站确认',
+                icon: 'fa-trash-can',
+                type: 'danger',
+                message: `确定要将通信协议「${name}」移至回收站吗？`,
+                detail: '协议将被移入左侧边栏「协议回收站」，主列表将不再展示此协议。如系误删，您可以随时在回收站中一键恢复其报文定义与版本历程。',
+                confirmText: '移至回收站',
+                cancelText: '取消'
+            });
+        } else if (typeof window.confirm === 'function') {
+            confirmed = window.confirm(`确定要将通信协议「${name}」移至回收站吗？\n\n如系误删，可随时在左侧边栏「协议回收站」中一键恢复。`);
+        } else {
+            confirmed = true;
+        }
 
-        if (ok) {
-            if (ProtoView.WorkspaceSync) {
+        if (confirmed) {
+            if (window.dbHelper && typeof window.dbHelper.moveToRecycleBin === 'function') {
+                await window.dbHelper.moveToRecycleBin(proto);
+            } else if (window.dbHelper && typeof window.dbHelper.deleteProtocol === 'function') {
+                await window.dbHelper.deleteProtocol(id);
+            }
+
+            if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.deleteProtocolFile === 'function') {
                 await ProtoView.WorkspaceSync.deleteProtocolFile(proto);
             }
-            await window.dbHelper.deleteProtocol(id);
+
             if (ProtoView.Controllers.Arinc) {
                 const curArinc = ProtoView.Controllers.Arinc.getCurrentProtocol();
                 if (curArinc && curArinc.id === Number(id)) {
@@ -1351,13 +1531,241 @@
                     ProtoView.Controllers.Serial.setCurrentProtocol(null);
                 }
             }
+
             await loadProtocols();
             if (typeof window.loadArincProtocolsForSelect === 'function') {
                 await window.loadArincProtocolsForSelect();
             }
-            showToast(`已删除协议「${name}」`, 'info');
+            updateRecycleBinBadge();
+
+            showToast(`已将协议「${name}」移至回收站。您可随时在左侧边栏回收站中恢复！`, 'info');
         }
     }
+
+    // 更新侧边栏回收站数量徽章
+    function updateRecycleBinBadge() {
+        const badge = document.getElementById('sidebar-trash-count-badge');
+        if (!badge) return;
+        const bin = (window.dbHelper && typeof window.dbHelper.getRecycleBin === 'function') ? window.dbHelper.getRecycleBin() : [];
+        const count = bin.length;
+        badge.textContent = count;
+        if (count > 0) {
+            badge.style.display = 'inline-flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    // 格式化删除相对时间
+    function formatTimeAgo(timestamp) {
+        if (!timestamp) return '刚刚';
+        const diff = Date.now() - timestamp;
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return '刚刚';
+        if (mins < 60) return `${mins} 分钟前`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours} 小时前`;
+        const days = Math.floor(hours / 24);
+        if (days < 30) return `${days} 天前`;
+        const d = new Date(timestamp);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // 打开回收站弹窗
+    function openRecycleBinModal() {
+        const modal = document.getElementById('recycle-bin-modal');
+        const listEl = document.getElementById('recycle-bin-list');
+        const countBadge = document.getElementById('rb-modal-count-badge');
+        const btnClear = document.getElementById('btn-clear-recycle-bin');
+        if (!modal || !listEl) return;
+
+        const bin = (window.dbHelper && typeof window.dbHelper.getRecycleBin === 'function') ? window.dbHelper.getRecycleBin() : [];
+        if (countBadge) countBadge.textContent = `共 ${bin.length} 个已删除协议`;
+        if (btnClear) btnClear.style.display = bin.length > 0 ? 'inline-flex' : 'none';
+
+        if (bin.length === 0) {
+            listEl.innerHTML = `
+                <div style="text-align:center; padding:45px 20px; color:var(--text-secondary);">
+                    <i class="fa-solid fa-trash-can" style="font-size:38px; opacity:0.3; margin-bottom:12px; display:block;"></i>
+                    <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">回收站暂无协议</div>
+                    <div style="font-size:12px;">当您在协议卡片右上角将协议移至回收站时，协议将安全保存在此处，支持随时一键恢复。</div>
+                </div>
+            `;
+        } else {
+            listEl.innerHTML = bin.map(p => {
+                const isArinc = p.type === 'ARINC429';
+                const isSerial = isSerialFamily(p.type);
+                const typeTag = isArinc ? 'ARINC 429' : (isSerial ? (p.subType || '串口') : 'CAN');
+                const iconClass = isArinc ? 'fa-plane-departure' : (isSerial ? 'fa-bolt' : 'fa-network-wired');
+                const iconColor = isArinc ? '#2563eb' : (isSerial ? '#f59e0b' : '#10b981');
+                const iconBg = isArinc ? 'rgba(37,99,235,0.1)' : (isSerial ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)');
+                const scaleStr = isArinc ? `${(p.packets && p.packets.length) || 1} 个数据包` : (isSerial ? `${(p.packets && p.packets.length) || 0} 个数据包` : `${(p.frames && p.frames.length) || 0} 个报文`);
+                const timeStr = formatTimeAgo(p._deletedAt);
+
+                return `
+                    <div class="rb-item-card" data-proto-id="${p.id}">
+                        <div class="rb-item-left">
+                            <div class="rb-item-icon" style="background:${iconBg}; color:${iconColor};">
+                                <i class="fa-solid ${iconClass}"></i>
+                            </div>
+                            <div class="rb-item-meta">
+                                <div class="rb-item-title-row">
+                                    <h4 class="rb-item-name">${escapeHTML(p.name)}</h4>
+                                    <span class="protocol-type-badge" style="font-size:10px; padding:1px 6px;">${escapeHTML(typeTag)}</span>
+                                    ${p.product ? `<span class="pct-tag pct-tag-product" style="font-size:10px; padding:1px 6px;"><i class="fa-solid fa-cube"></i> ${escapeHTML(p.product)}</span>` : ''}
+                                </div>
+                                <div class="rb-item-details">
+                                    <span><i class="fa-solid fa-layer-group"></i> ${scaleStr}</span>
+                                    <span>•</span>
+                                    <span><i class="fa-regular fa-clock"></i> 移入回收站: ${timeStr}</span>
+                                    ${p.softwareCI ? `<span>•</span><span><i class="fa-solid fa-code-branch"></i> ${escapeHTML(p.softwareCI)}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rb-item-actions">
+                            <button type="button" class="btn btn-sm btn-primary" style="height:28px; font-size:11.5px; padding:0 12px; font-weight:600;" onclick="window.restoreProtocol && window.restoreProtocol('${p.id}');" title="将此协议完整还原到协议库">
+                                <i class="fa-solid fa-rotate-left"></i> 一键恢复
+                            </button>
+                            <button type="button" class="btn btn-sm btn-danger-outline" style="height:28px; font-size:11.5px; padding:0 8px;" onclick="window.permanentlyDeleteProtocol && window.permanentlyDeleteProtocol('${p.id}');" title="永久删除，不可恢复">
+                                <i class="fa-solid fa-fire"></i> 彻底清除
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        modal.classList.add('active');
+    }
+
+    // 恢复协议
+    async function restoreProtocol(id) {
+        if (!window.dbHelper || typeof window.dbHelper.restoreFromRecycleBin !== 'function') return;
+        const restored = await window.dbHelper.restoreFromRecycleBin(id);
+        if (restored) {
+            if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud === 'function') {
+                await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(restored);
+            }
+            await loadProtocols();
+            if (typeof window.loadArincProtocolsForSelect === 'function') {
+                await window.loadArincProtocolsForSelect();
+            }
+            updateRecycleBinBadge();
+            openRecycleBinModal(); // 刷新弹窗内部列表
+            showToast(`已成功恢复通信协议「${restored.name}」！`, 'success');
+        }
+    }
+
+    // 彻底清除单个协议
+    async function permanentlyDeleteProtocol(id) {
+        const bin = (window.dbHelper && typeof window.dbHelper.getRecycleBin === 'function') ? window.dbHelper.getRecycleBin() : [];
+        const numId = Number(id);
+        const item = bin.find(p => p.id === id || String(p.id) === String(id) || (!isNaN(numId) && Number(p.id) === numId));
+        const name = item ? item.name : '该协议';
+
+        let confirmed = false;
+        if (ProtoView.Utils && typeof ProtoView.Utils.showConfirm === 'function') {
+            confirmed = await ProtoView.Utils.showConfirm({
+                title: '彻底清除协议确认',
+                icon: 'fa-fire',
+                type: 'danger',
+                message: `确定要彻底清除协议「${name}」吗？`,
+                detail: '彻底清除后，该协议的全部报文、位字段和版本快照将被永久物理抹除，无法再次恢复。',
+                confirmText: '彻底清除',
+                cancelText: '取消'
+            });
+        } else if (typeof window.confirm === 'function') {
+            confirmed = window.confirm(`确定要彻底清除协议「${name}」吗？\n\n此操作将永久物理抹除，无法恢复。`);
+        } else {
+            confirmed = true;
+        }
+
+        if (confirmed) {
+            if (window.dbHelper && typeof window.dbHelper.permanentlyDeleteFromRecycleBin === 'function') {
+                window.dbHelper.permanentlyDeleteFromRecycleBin(id);
+            }
+            updateRecycleBinBadge();
+            openRecycleBinModal();
+            showToast(`已彻底清除协议「${name}」`, 'info');
+        }
+    }
+
+    // 清空回收站
+    async function emptyRecycleBin() {
+        let confirmed = false;
+        if (ProtoView.Utils && typeof ProtoView.Utils.showConfirm === 'function') {
+            confirmed = await ProtoView.Utils.showConfirm({
+                title: '清空回收站确认',
+                icon: 'fa-fire',
+                type: 'danger',
+                message: '确定要清空回收站中的全部协议吗？',
+                detail: '此操作将不可逆地永久抹除回收站内的所有通信协议和历史快照。',
+                confirmText: '清空回收站',
+                cancelText: '取消'
+            });
+        } else if (typeof window.confirm === 'function') {
+            confirmed = window.confirm('确定要清空回收站中的全部协议吗？此操作不可撤销。');
+        } else {
+            confirmed = true;
+        }
+
+        if (confirmed) {
+            if (window.dbHelper && typeof window.dbHelper.clearRecycleBin === 'function') {
+                window.dbHelper.clearRecycleBin();
+            }
+            updateRecycleBinBadge();
+            openRecycleBinModal();
+            showToast('已清空协议回收站', 'info');
+        }
+    }
+
+    // 复制为新协议副本 (Clone Protocol)
+    async function cloneProtocol(id) {
+        const proto = await (window.dbHelper ? window.dbHelper.getProtocol(id) : null);
+        if (!proto) return;
+        const copy = JSON.parse(JSON.stringify(proto));
+        delete copy.id;
+        copy.name = `${copy.name || '通信协议'}_副本`;
+        copy.version = 'v1.0';
+        copy.isArchived = false;
+        copy.archivedVersions = [];
+        delete copy.lastArchivedVersion;
+        copy.createdAt = Date.now();
+        copy.updatedAt = Date.now();
+
+        const newId = await window.dbHelper.saveProtocol(copy);
+        copy.id = newId;
+
+        if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud === 'function') {
+            await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(copy);
+        }
+
+        await loadProtocols();
+        if (typeof window.loadArincProtocolsForSelect === 'function') {
+            await window.loadArincProtocolsForSelect();
+        }
+        showToast(`已成功创建协议副本「${copy.name}」！`, 'success');
+    }
+
+    // 卡片右上角 ··· 更多菜单展开/收起切换
+    function toggleCardMoreMenu(btn, id) {
+        const wrap = btn.closest('.card-more-wrap');
+        if (!wrap) return;
+        const isOpen = wrap.classList.contains('is-open');
+        closeAllCardMoreMenus();
+        if (!isOpen) {
+            wrap.classList.add('is-open');
+        }
+    }
+
+    function closeAllCardMoreMenus() {
+        document.querySelectorAll('.card-more-wrap.is-open').forEach(w => w.classList.remove('is-open'));
+    }
+
+    // 全局点击空白关闭 ··· 菜单
+    document.addEventListener('click', () => {
+        closeAllCardMoreMenus();
+    });
 
     // 进入只读查阅模式 (以极致可读性、位域拓扑与秒级字段速查为核心)
     async function openProtocolViewer(protoOrId) {
@@ -1477,10 +1885,24 @@
             }
             if (protoCanStandardLockBadge) protoCanStandardLockBadge.style.display = 'none';
 
-            // 默认协议名称根据选定的接口精准预设
+            // 从系统全局设置读取默认值
+            const sysSettings = (ProtoView.Settings && typeof ProtoView.Settings.get === 'function') ? ProtoView.Settings : null;
+            const defPeriod = sysSettings ? sysSettings.get('defaultPeriod', 20) : 20;
+            const defSpeed = sysSettings ? sysSettings.get('defaultArincSpeed', '100kbps') : '100kbps';
+            const defParity = sysSettings ? sysSettings.get('defaultArincParity', 'odd') : 'odd';
+            const defBaud = sysSettings ? sysSettings.get('defaultSerialBaud', '115200') : '115200';
+            const namingTpl = sysSettings ? sysSettings.get('namingTemplate', '{product}_{bus}_{type}通信协议') : '';
+
+            // 默认协议名称根据选定的接口精准预设 (优先应用系统命名模板)
             if (protoFormName) {
                 if (defaultName) {
                     protoFormName.value = defaultName;
+                } else if (namingTpl && targetProduct) {
+                    const devName = targetProduct ? `${targetProduct}` : '机载';
+                    protoFormName.value = namingTpl
+                        .replace(/\{product\}/gi, targetProduct)
+                        .replace(/\{bus\}/gi, initialType)
+                        .replace(/\{type\}/gi, devName);
                 } else if (isSerialFamily(initialType)) {
                     protoFormName.value = `新建 ${initialType} 串行通信协议`;
                 } else if (initialType === 'CAN') {
@@ -1494,14 +1916,14 @@
             if (protoFormDevice) {
                 protoFormDevice.value = targetProduct ? `${targetProduct}系统` : '';
             }
-            if (protoFormPeriod) protoFormPeriod.value = 20;
+            if (protoFormPeriod) protoFormPeriod.value = defPeriod;
 
             // ARINC 默认值
-            if (protoArincSpeed) protoArincSpeed.value = '100kbps';
-            if (protoArincParity) protoArincParity.value = 'odd';
+            if (protoArincSpeed) protoArincSpeed.value = defSpeed;
+            if (protoArincParity) protoArincParity.value = defParity;
 
             // 串口默认值
-            if (protoSerialBaud) protoSerialBaud.value = '115200';
+            if (protoSerialBaud) protoSerialBaud.value = String(defBaud);
             if (protoSerialDataBits) protoSerialDataBits.value = '8';
             if (protoSerialParity) protoSerialParity.value = 'none';
             if (protoSerialStopBits) protoSerialStopBits.value = '1';
@@ -1675,31 +2097,62 @@
         initDOMElements();
         updateCollapseAllButtonState();
 
-        // 侧边栏总线协议类型快速筛选切换
-        const busBtnConfigs = [
-            { id: 'nav-bus-all', type: 'all' },
-            { id: 'nav-bus-arinc429', type: 'ARINC429' },
-            { id: 'nav-bus-serial', type: 'SERIAL' },
-            { id: 'nav-bus-can', type: 'CAN' }
-        ];
-        busBtnConfigs.forEach(cfg => {
-            const btn = document.getElementById(cfg.id);
-            if (btn) {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    activeBusTypeFilter = cfg.type;
-                    busBtnConfigs.forEach(c => {
-                        const b = document.getElementById(c.id);
-                        if (b) b.classList.remove('active');
-                    });
-                    btn.classList.add('active');
-                    if (typeof window.switchToView === 'function') {
-                        window.switchToView('protocol-view');
-                    }
-                    loadProtocols();
-                });
-            }
+        // 侧边栏常驻「协议库」导航项点击
+        const navBusAll = document.getElementById('nav-bus-all');
+        if (navBusAll) {
+            navBusAll.addEventListener('click', (e) => {
+                e.preventDefault();
+                activeBusTypeFilter = 'all';
+                document.querySelectorAll('#sidebar-nav-menu .nav-item').forEach(b => b.classList.remove('active'));
+                navBusAll.classList.add('active');
+                if (typeof window.switchToView === 'function') {
+                    window.switchToView('protocol-view');
+                }
+                loadProtocols();
+            });
+        }
+
+        // 协议库页面级总线协议类型快速筛选药丸组
+        const bfPills = document.querySelectorAll('#main-bus-filter-group .bf-pill');
+        bfPills.forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.preventDefault();
+                const bType = pill.getAttribute('data-bus-type') || 'all';
+                activeBusTypeFilter = bType;
+                bfPills.forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                loadProtocols();
+            });
         });
+
+        // 协议库页面级归档状态快速筛选药丸组 (全部 / 已归档 / 未归档)
+        const afPills = document.querySelectorAll('#main-archive-filter-group .af-pill');
+        afPills.forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.preventDefault();
+                const aStatus = pill.getAttribute('data-archive-status') || 'all';
+                activeArchiveStatusFilter = aStatus;
+                afPills.forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                loadProtocols();
+            });
+        });
+
+        // 回收站弹窗关闭按钮绑定
+        const btnCloseRecycleBin = document.getElementById('btn-close-recycle-bin');
+        if (btnCloseRecycleBin) {
+            btnCloseRecycleBin.addEventListener('click', () => {
+                const modal = document.getElementById('recycle-bin-modal');
+                if (modal) modal.classList.remove('active');
+            });
+        }
+        const btnCloseRecycleBinFooter = document.getElementById('btn-close-recycle-bin-footer');
+        if (btnCloseRecycleBinFooter) {
+            btnCloseRecycleBinFooter.addEventListener('click', () => {
+                const modal = document.getElementById('recycle-bin-modal');
+                if (modal) modal.classList.remove('active');
+            });
+        }
 
         if (btnToggleCollapseAll) {
             btnToggleCollapseAll.addEventListener('click', () => {
@@ -2040,7 +2493,9 @@
                             if (protoFormLifecycle) newProto.lifecycleStatus = protoFormLifecycle.value;
                             if (protoFormCsci) newProto.softwareCI = protoFormCsci.value.trim();
 
-                            if (ProtoView.VersionManager) {
+                            if (ProtoView.ArchiveManager && typeof ProtoView.ArchiveManager.ensureProtocolVersion === 'function') {
+                                ProtoView.ArchiveManager.ensureProtocolVersion(newProto);
+                            } else if (ProtoView.VersionManager && typeof ProtoView.VersionManager.ensureProtocolVersion === 'function') {
                                 ProtoView.VersionManager.ensureProtocolVersion(newProto);
                             }
 
@@ -2085,7 +2540,9 @@
                             if (protoFormLifecycle) newProto.lifecycleStatus = protoFormLifecycle.value;
                             if (protoFormCsci) newProto.softwareCI = protoFormCsci.value.trim();
 
-                            if (ProtoView.VersionManager) {
+                            if (ProtoView.ArchiveManager && typeof ProtoView.ArchiveManager.ensureProtocolVersion === 'function') {
+                                ProtoView.ArchiveManager.ensureProtocolVersion(newProto);
+                            } else if (ProtoView.VersionManager && typeof ProtoView.VersionManager.ensureProtocolVersion === 'function') {
                                 ProtoView.VersionManager.ensureProtocolVersion(newProto);
                             }
 
@@ -2138,7 +2595,9 @@
                         if (protoFormLifecycle) newProto.lifecycleStatus = protoFormLifecycle.value;
                         if (protoFormCsci) newProto.softwareCI = protoFormCsci.value.trim();
 
-                        if (ProtoView.VersionManager) {
+                        if (ProtoView.ArchiveManager && typeof ProtoView.ArchiveManager.ensureProtocolVersion === 'function') {
+                            ProtoView.ArchiveManager.ensureProtocolVersion(newProto);
+                        } else if (ProtoView.VersionManager && typeof ProtoView.VersionManager.ensureProtocolVersion === 'function') {
                             ProtoView.VersionManager.ensureProtocolVersion(newProto);
                         }
 
@@ -2437,6 +2896,14 @@
         openProtocolPropsModal,
         exportProtocolById,
         refreshProductDatalist,
+        openRecycleBinModal,
+        restoreProtocol,
+        permanentlyDeleteProtocol,
+        emptyRecycleBin,
+        cloneProtocol,
+        toggleCardMoreMenu,
+        closeAllCardMoreMenus,
+        updateRecycleBinBadge,
         bindEvents: bindProductEvents
     };
 
@@ -2462,6 +2929,14 @@
     global.editProtocolProps = openProtocolPropsModal;
     global.editProtocol = openProtocolPropsModal;
     global.exportProtocolById = exportProtocolById;
+    global.openRecycleBinModal = openRecycleBinModal;
+    global.restoreProtocol = restoreProtocol;
+    global.permanentlyDeleteProtocol = permanentlyDeleteProtocol;
+    global.emptyRecycleBin = emptyRecycleBin;
+    global.cloneProtocol = cloneProtocol;
+    global.toggleCardMoreMenu = toggleCardMoreMenu;
+    global.closeAllCardMoreMenus = closeAllCardMoreMenus;
+    global.updateRecycleBinBadge = updateRecycleBinBadge;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindProductEvents);

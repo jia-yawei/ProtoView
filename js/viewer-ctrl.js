@@ -14,17 +14,47 @@
     const downloadFile = ProtoView.downloadFile || global.downloadFile || function(){};
     const copyTextToClipboard = ProtoView.copyTextToClipboard || global.copyTextToClipboard || function(){};
 
-    // 颜色调色板 (用于为不同字段生成高辨识度且美观的色彩标识)
-    const FIELD_PALETTES = [
-        { bg: 'rgba(59, 130, 246, 0.15)', border: '#3b82f6', text: '#2563eb' },
-        { bg: 'rgba(16, 185, 129, 0.15)', border: '#10b981', text: '#059669' },
-        { bg: 'rgba(245, 158, 11, 0.15)', border: '#f59e0b', text: '#d97706' },
-        { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7', text: '#7c3aed' },
-        { bg: 'rgba(236, 72, 153, 0.15)', border: '#ec4899', text: '#db2777' },
-        { bg: 'rgba(6, 182, 212, 0.15)', border: '#06b6d4', text: '#0891b2' },
-        { bg: 'rgba(99, 102, 241, 0.15)', border: '#6366f1', text: '#4f46e5' },
-        { bg: 'rgba(20, 184, 166, 0.15)', border: '#14b8a6', text: '#0d9488' }
-    ];
+    // 方案A：按字段数据类型与工程语义映射高质感统一色系 (同语义同类型共享同族色，位图靠物理网格清晰区隔)
+    const TYPE_PALETTES = {
+        bool: { bg: 'rgba(59, 130, 246, 0.15)', border: '#3b82f6', text: '#2563eb', label: '离散量 bool', dot: '#3b82f6' },
+        bnr: { bg: 'rgba(16, 185, 129, 0.15)', border: '#10b981', text: '#059669', label: '数值量 BNR/float', dot: '#10b981' },
+        bcd: { bg: 'rgba(14, 165, 233, 0.15)', border: '#0ea5e9', text: '#0284c7', label: '编码/整型 BCD/u', dot: '#0ea5e9' },
+        enum: { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7', text: '#7c3aed', label: '状态/枚举 Enum', dot: '#a855f7' },
+        checksum: { bg: 'rgba(245, 158, 11, 0.15)', border: '#f59e0b', text: '#d97706', label: '校验/原始 Hex', dot: '#f59e0b' },
+        default: { bg: 'rgba(100, 116, 139, 0.15)', border: '#64748b', text: '#475569', label: '自定义 Custom', dot: '#64748b' }
+    };
+
+    const FIELD_PALETTES = Object.values(TYPE_PALETTES);
+
+    /**
+     * 根据字段数据类型与字典特性获取工程语义调色板 (方案A：语义一致性调色)
+     */
+    function getFieldPalette(sig) {
+        if (!sig) return TYPE_PALETTES.default;
+        const rawType = String(sig.dataType || '').toLowerCase().trim();
+
+        // 1. 布尔/离散量/单位告警状态
+        if (rawType === 'bool' || rawType === 'boolean' || rawType === 'discrete' || rawType === 'bit') {
+            return TYPE_PALETTES.bool;
+        }
+        // 2. BNR 二进制补码连续物理量 / 浮点数 / 有符号整型
+        if (rawType === 'bnr' || rawType === 'float' || rawType === 'double' || rawType === 'int' || rawType.startsWith('i')) {
+            return TYPE_PALETTES.bnr;
+        }
+        // 3. BCD / 无符号整型 / 计数器 (u8, u16, u32 等)
+        if (rawType === 'bcd' || rawType.startsWith('u') || rawType === 'uint' || rawType === 'unsigned') {
+            return TYPE_PALETTES.bcd;
+        }
+        // 4. 枚举 / 多状态字典 (若含有 3 项及以上状态字典，或显式标注为 enum/state)
+        if (rawType === 'enum' || rawType === 'state' || (sig.dict && typeof sig.dict === 'object' && Object.keys(sig.dict).length > 2)) {
+            return TYPE_PALETTES.enum;
+        }
+        // 5. 校验 / 十六进制 / 原始码
+        if (rawType === 'hex' || rawType === 'crc' || rawType === 'checksum' || rawType === 'raw') {
+            return TYPE_PALETTES.checksum;
+        }
+        return TYPE_PALETTES.default;
+    }
 
     // 内部状态
     let rootProtocol = null;
@@ -973,7 +1003,7 @@
             const start = Number(sig.startBit || 1);
             const count = Number(sig.bitCount || sig.length || 1);
             const end = start + count - 1;
-            const color = FIELD_PALETTES[sIdx % FIELD_PALETTES.length];
+            const color = getFieldPalette(sig);
 
             for (let b = start; b <= end && b <= 32; b++) {
                 bitMap[b] = {
@@ -1006,6 +1036,12 @@
                 <span class="vbb-title-text"><i class="fa-solid fa-ruler-horizontal"></i> <b>32-Bit 传输位域全景映射</b></span>
             </div>
             <div class="vbb-hint-right">
+                <div class="vbb-type-legends" title="位域数据类型语义色系说明">
+                    <span class="vbb-legend-item"><span class="vbb-legend-dot" style="background:#3b82f6;"></span>离散量 bool</span>
+                    <span class="vbb-legend-item"><span class="vbb-legend-dot" style="background:#10b981;"></span>数值量 BNR</span>
+                    <span class="vbb-legend-item"><span class="vbb-legend-dot" style="background:#0ea5e9;"></span>编码 BCD/u</span>
+                    <span class="vbb-legend-item"><span class="vbb-legend-dot" style="background:#a855f7;"></span>枚举/字典</span>
+                </div>
                 <button type="button" class="btn-vbb-scroll-top" title="回到当前标号字顶部" style="display:none;"><i class="fa-solid fa-arrow-up"></i> 回顶</button>
             </div>
         `;
@@ -1110,7 +1146,7 @@
             const start = Number(sig.startBit || 1);
             const count = Number(sig.bitCount || sig.length || 1);
             const end = start + count - 1;
-            const color = FIELD_PALETTES[sIdx % FIELD_PALETTES.length];
+            const color = getFieldPalette(sig);
 
             // 搜索过滤与高亮判断 (仅匹配用户定义的名字、单位、备注与字典，绝不搜索隐藏的系统key)
             let isMatched = false;
@@ -1194,7 +1230,7 @@
                         <span class="vfc-bit-badge" style="background:${color.bg}; border-color:${color.border}; color:${color.text};">
                             ${bitBadgeText}
                         </span>
-                        <span class="vfc-datatype-pill">${escapeHTML(sig.dataType || 'u8')}</span>
+                        <span class="vfc-datatype-pill" style="background:${color.bg}; border-color:${color.border}; color:${color.text};">${escapeHTML(sig.dataType || 'u8')}</span>
                         ${(sig.unit && String(sig.unit).trim()) ? `<span class="vfc-unit-pill">${escapeHTML(sig.unit.trim())}</span>` : ''}
                     </div>
                 </div>
@@ -1337,7 +1373,7 @@
                     const start = sig.startBit !== undefined ? sig.startBit : 0;
                     const count = sig.bitCount !== undefined ? sig.bitCount : (sig.length || 8);
                     const end = start + count - 1;
-                    const color = FIELD_PALETTES[sIdx % FIELD_PALETTES.length];
+                    const color = getFieldPalette(sig);
 
                     const propItems = [];
                     const resVal = (sig.resolution !== undefined && sig.resolution !== null && String(sig.resolution).trim() !== '') ? String(sig.resolution).trim() : '';
@@ -1384,7 +1420,7 @@
                                 <span class="vfc-bit-badge" style="background:${color.bg}; border-color:${color.border}; color:${color.text};">
                                     ${serialBitBadgeText}
                                 </span>
-                                <span class="vfc-datatype-pill">${escapeHTML(sig.dataType || 'u8')}</span>
+                                <span class="vfc-datatype-pill" style="background:${color.bg}; border-color:${color.border}; color:${color.text};">${escapeHTML(sig.dataType || 'u8')}</span>
                                 ${sig.unit ? `<span class="vfc-unit-pill">${escapeHTML(sig.unit.trim())}</span>` : ''}
                             </div>
                         </div>
@@ -1423,17 +1459,18 @@
                 const propsHtml = propItems.length > 0 ? `<div class="vfc-props-grid">${propItems.join('')}</div>` : '';
                 const remarkHtml = (byteItem.remark && String(byteItem.remark).trim()) ? `<div class="vfc-remark-box"><i class="fa-solid fa-circle-info" style="color:var(--accent-color);"></i> <b>说明:</b> ${escapeHTML(byteItem.remark.trim())}</div>` : '';
 
+                const byteColor = getFieldPalette(byteItem);
                 const card = document.createElement('div');
                 card.className = 'viewer-field-card';
                 card.innerHTML = `
                     <div class="vfc-header">
                         <div class="vfc-title-group">
-                            <span class="vfc-bit-badge">Offset: ${offset}</span>
-                            <h4 class="vfc-name">${escapeHTML(byteItem.name || `字节 ${offset}`)}</h4>
-                            <span class="vfc-datatype-pill">${escapeHTML(byteItem.dataType || 'u8')}</span>
+                            <span class="vfc-bit-badge" style="background:${byteColor.bg}; border-color:${byteColor.border}; color:${byteColor.text};">Offset: ${offset}</span>
+                            <span class="vfc-datatype-pill" style="background:${byteColor.bg}; border-color:${byteColor.border}; color:${byteColor.text};">${escapeHTML(byteItem.dataType || 'u8')}</span>
                             ${byteItem.unit ? `<span class="vfc-unit-pill">${escapeHTML(byteItem.unit.trim())}</span>` : ''}
                         </div>
                     </div>
+                    <h4 class="vfc-name">${escapeHTML(byteItem.name || `字节 ${offset}`)}</h4>
                     ${(propsHtml || remarkHtml) ? `
                         <div class="vfc-body">
                             ${propsHtml}

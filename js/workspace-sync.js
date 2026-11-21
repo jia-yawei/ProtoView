@@ -9,6 +9,26 @@
     const ProtoView = global.ProtoView || {};
 
     // ----------------- 通用 Cloudflare API 请求封装 -----------------
+    // 检测是否处于本地离线开发环境
+    function isLocalDevEnv() {
+        if (ProtoView.Auth && typeof ProtoView.Auth.isLocalDevEnv === 'function') {
+            return ProtoView.Auth.isLocalDevEnv();
+        }
+        const host = window.location.hostname || '';
+        const proto = window.location.protocol || '';
+        const token = localStorage.getItem('protoview_auth_token') || '';
+        return (
+            proto === 'file:' ||
+            host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '0.0.0.0' ||
+            host.endsWith('.local') ||
+            host === '' ||
+            !token ||
+            token.startsWith('local_dev_token_')
+        );
+    }
+
     // 安全编码请求头，防止中文用户名或特殊字符导致浏览器 fetch 抛出 non ISO-8859-1 code point 异常
     function safeHeaderValue(val) {
         if (val === null || val === undefined) return '';
@@ -222,12 +242,13 @@
             await window.dbHelper.saveProtocol(proto);
         }
 
-        const isLocal = (
-            window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.protocol === 'file:' ||
-            (localStorage.getItem('protoview_auth_token') || '').startsWith('local_dev_token_')
-        );
+        const token = localStorage.getItem('protoview_auth_token') || '';
+        const isLocal = isLocalDevEnv();
+
+        // 本地离线开发环境或无云端鉴权凭证时，本地 IndexedDB 已安全持久化，直接返回成功，完全避免断网或非云端调试时的网络报错
+        if (isLocal && (!token || token.startsWith('local_dev_token_'))) {
+            return { ok: true, isLocal: true };
+        }
 
         // 附带并发冲突预期基准时间与强制覆盖标识
         const payload = JSON.parse(JSON.stringify(proto));
@@ -290,17 +311,28 @@
     // ----------------- 同步全量产品型号到云端 (支持独立保存空产品) -----------------
     async function syncProductsToCloud() {
         if (!window.dbHelper) return { ok: false, error: '本地存储不可用' };
+        const token = localStorage.getItem('protoview_auth_token') || '';
+        const isLocal = isLocalDevEnv();
+        if (isLocal && (!token || token.startsWith('local_dev_token_'))) {
+            return { ok: true, isLocal: true };
+        }
         try {
             const products = await window.dbHelper.getAllProducts();
             const res = await cloudApiCall('/api/products', 'POST', { products: products || [] });
             if (res.ok && res.data && res.data.success) {
                 return { ok: true, data: res.data };
             } else {
+                if (isLocal) {
+                    return { ok: true, isLocal: true };
+                }
                 const errMsg = res.data?.error || res.error || `HTTP ${res.status}`;
                 console.error('ProtoView: 同步产品型号到云端异常:', errMsg);
                 return { ok: false, error: errMsg };
             }
         } catch (e) {
+            if (isLocal) {
+                return { ok: true, isLocal: true };
+            }
             console.error('ProtoView: 同步产品型号到云端异常:', e);
             return { ok: false, error: e.message };
         }

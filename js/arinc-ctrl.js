@@ -1752,6 +1752,10 @@
         const defaultLen = maxAvail >= 16 ? 16 : Math.max(1, maxAvail);
         const defaultType = defaultLen >= 16 ? 'u16' : (defaultLen === 1 ? 'bool' : 'u8');
 
+        const defEndian = (ProtoView.Settings && typeof ProtoView.Settings.get === 'function') 
+            ? ProtoView.Settings.get('defaultEndianness', 'little') 
+            : 'little';
+
         const newField = {
             key: `sig_${word.signals.length + 1}`,
             name: `字段_${word.signals.length + 1}`,
@@ -1759,7 +1763,7 @@
             startBit: nextStartBit,
             bitCount: defaultType === 'u16' ? 16 : defaultLen,
             length: defaultType === 'u16' ? 16 : defaultLen,
-            endianness: defaultType === 'u16' ? 'little' : 'none',
+            endianness: defaultType === 'u16' ? defEndian : 'none',
             resolution: '',
             precision: '',
             offset: '',

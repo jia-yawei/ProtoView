@@ -774,20 +774,23 @@ html:not(.is-authenticated) .app-container {
     display: none !important;
 }
 
-/* 核心角色隔离：管理员账号仅展示管理后台，隐藏通信协议管理 */
-html.is-admin #nav-btn-protocol {
+/* ========================================================
+   核心角色隔离：管理员专属纯粹后台导航 vs 工程师通信协议工作台
+   ======================================================== */
+/* 管理员模式：彻底隐藏全部总线协议、产品型号树、工程工具箱及协议卡片，仅保留后台监控选项 */
+html.is-admin .engineer-only {
     display: none !important;
 }
-html.is-admin #nav-btn-admin {
+html.is-admin .admin-only {
     display: flex !important;
+}
+html.is-admin div.admin-only {
+    display: block !important;
 }
 
-/* 普通工程师用户：展示通信协议管理，隐藏管理后台入口 */
-html:not(.is-admin) #nav-btn-admin {
+/* 工程师模式：彻底隐藏管理员后台入口，仅展示通信协议与工程工具箱 */
+html:not(.is-admin) .admin-only {
     display: none !important;
-}
-html:not(.is-admin) #nav-btn-protocol {
-    display: flex !important;
 }
 
 /* 极简卡片容器 */

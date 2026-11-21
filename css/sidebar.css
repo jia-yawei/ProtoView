@@ -487,28 +487,32 @@
     border: 1px dashed var(--accent-color);
 }
 
-/* 侧边栏当前活跃协议卡片 */
+/* 侧边栏当前活跃协议 - 单行紧凑悬浮条 (收缩至 32px，释放垂直空间) */
 .sidebar-active-session {
-    margin: 8px 10px;
-    padding: 9px 10px;
-    border-radius: 9px;
+    margin: 4px 10px 6px 10px;
+    padding: 0 8px;
+    height: 32px;
+    border-radius: 7px;
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(99, 102, 241, 0.05));
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.22);
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
     gap: 6px;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 [data-theme="dark"] .sidebar-active-session {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.1));
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(99, 102, 241, 0.08));
     border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .sidebar-active-session:hover {
-    border-color: rgba(59, 130, 246, 0.4);
-    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.45);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(99, 102, 241, 0.08));
 }
 
 /* 当处于协议详情查阅页、版本管理主视图或工作台时，侧边栏隐藏“当前协议”卡片，避免与顶部统一的模式/状态切换入口重复冗余 */
@@ -519,107 +523,148 @@
     display: none !important;
 }
 
-.sas-header {
+/* 单行主要信息区 (可点击) */
+.sas-main {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+    overflow: hidden;
 }
 
-.sas-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accent-color);
-    display: flex;
-    align-items: center;
-    gap: 4px;
+/* 活跃小绿点 */
+.sas-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    animation: sasPulse 2.4s infinite;
+}
+
+@keyframes sasPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.9); }
 }
 
 .sas-type-tag {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: rgba(59, 130, 246, 0.15);
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: var(--radius-pill, 9999px);
+    background: rgba(59, 130, 246, 0.08);
     color: var(--accent-color);
+    border: 1px solid rgba(59, 130, 246, 0.2);
     font-family: var(--font-mono, monospace);
-}
-
-.sas-body {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    line-height: 1.2;
+    flex-shrink: 0;
 }
 
 .sas-title {
-    font-size: 12.5px;
+    font-size: 11.5px;
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.3;
-}
-
-.sas-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
+    flex: 1;
+    min-width: 0;
 }
 
 .sas-ver {
     font-family: var(--font-mono, monospace);
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 600;
     color: var(--accent-color);
-}
-
-.sas-status {
-    color: var(--text-secondary);
-}
-
-.sas-status.is-modified {
-    color: #f59e0b;
-    font-weight: 600;
-}
-
-.sas-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 2px;
-}
-
-.sas-btn {
-    flex: 1;
-    height: 25px;
-    border-radius: 5px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 11.5px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    border-radius: var(--radius-pill, 9999px);
+    padding: 1px 6px;
+    flex-shrink: 0;
+    line-height: 1.2;
     transition: all 0.15s ease;
 }
 
+.sas-ver:hover {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+.sas-status {
+    font-size: 10px;
+    color: var(--text-secondary);
+    background: rgba(100, 116, 139, 0.08);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+    border-radius: var(--radius-pill, 9999px);
+    padding: 1px 6px;
+    flex-shrink: 0;
+    line-height: 1.2;
+}
+
+.sas-status.is-modified {
+    color: #d97706;
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.25);
+    font-weight: 600;
+}
+
+[data-theme="dark"] .sas-status.is-modified {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+/* 右侧快捷操作按钮组 (紧凑单行小图标) */
+.sas-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+}
+
+.sas-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10.5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+}
+
 .sas-btn-workbench {
-    background: var(--accent-color);
-    color: #ffffff;
-    border-color: var(--accent-color);
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--accent-color);
 }
 
 .sas-btn-workbench:hover {
-    background: #1d4ed8;
+    background: var(--accent-color);
+    color: #ffffff;
+}
+
+.sas-btn-viewer {
+    background: transparent;
+    color: var(--text-secondary);
 }
 
 .sas-btn-viewer:hover {
-    background: rgba(0, 0, 0, 0.05);
-    border-color: var(--accent-color);
-    color: var(--accent-color);
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .sas-btn-viewer:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
 }
 
 /* 侧边栏底部容器 */
@@ -784,6 +829,12 @@
     border-color: rgba(239, 68, 68, 0.25);
 }
 
+#sidebar-settings-btn:hover i {
+    transform: rotate(45deg);
+    transition: transform 0.25s ease;
+    color: var(--accent-color);
+}
+
 /* 一键同步旋转动画 */
 .sidebar-action-btn.is-syncing i {
     animation: sidebarSpinSync 0.75s linear infinite;
@@ -939,4 +990,37 @@
     height: 44px;
     justify-content: center;
     border-radius: 9px;
+}
+
+/* ========================================================
+   角色权限隔离：管理中心与系统监控后台 (Admin Isolation)
+   ======================================================== */
+.admin-only,
+.sidebar .admin-only,
+.sidebar.collapsed .admin-only,
+.sidebar.collapsed .nav-item.admin-only {
+    display: none !important;
+}
+
+html.is-admin .admin-only,
+html.is-admin .sidebar .admin-only {
+    display: flex !important;
+}
+
+html.is-admin div.admin-only,
+html.is-admin span.admin-only,
+html.is-admin .sidebar div.admin-only,
+html.is-admin .sidebar span.admin-only {
+    display: block !important;
+}
+
+html.is-admin .sidebar.collapsed .nav-item.admin-only {
+    display: flex !important;
+}
+
+/* 管理员模式下隐藏工程师业务导航与产品列表 */
+html.is-admin .engineer-only,
+html.is-admin .sidebar .engineer-only,
+html.is-admin .sidebar.collapsed .engineer-only {
+    display: none !important;
 }

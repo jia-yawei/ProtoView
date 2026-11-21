@@ -689,7 +689,7 @@
                         key: field.key || `sig_${off}`,
                         name: field.name || `字节_${off}数据`,
                         bitRange: 'bit0-7',
-                        dataType: (field.dataType === 'i8' ? 'i8' : (field.dataType === 'bool' ? 'bool' : 'u8')),
+                        dataType: (field.dataType === 'bool' ? 'bool' : (field.dataType === 'u16' ? 'u16' : 'u8')),
                         dict: field.dict || {},
                         resolution: (field.scale !== undefined && field.scale !== 1 && field.scale !== null) ? field.scale : '',
                         precision: (field.offset !== undefined && field.offset !== 0 && field.offset !== null) ? field.offset : '',
@@ -707,21 +707,23 @@
 
     // 辅助解析字段位段起始位与长度
     function parseBitRangeHelper(sig) {
+        const curType = (sig.dataType || '').toLowerCase();
+        const maxBits = (curType === 'u16') ? 16 : 8;
         if (sig.startBit !== undefined && sig.startBit !== null && sig.startBit !== '') {
             const s = Math.max(0, Math.min(7, parseInt(sig.startBit, 10) || 0));
-            const cnt = Math.max(1, Math.min(8, parseInt(sig.bitCount || sig.length, 10) || 1));
+            const cnt = Math.max(1, Math.min(maxBits, parseInt(sig.bitCount || sig.length, 10) || 1));
             return { startBit: s, bitCount: cnt };
         }
         const r = String(sig.bitRange || '');
-        const m = r.match(/^(?:bit)?\s*([0-7])(?:\s*[-~至到,]\s*(?:bit)?\s*([0-7]))?$/i);
+        const m = r.match(/^(?:bit)?\s*([0-7])(?:\s*[-~至到,]\s*(?:bit)?\s*(\d+))?$/i);
         if (m) {
             const s = parseInt(m[1], 10);
             const e = m[2] !== undefined ? parseInt(m[2], 10) : s;
             const start = Math.min(s, e);
-            const count = Math.max(s, e) - start + 1;
+            const count = Math.min(maxBits, Math.max(s, e) - start + 1);
             return { startBit: start, bitCount: count };
         }
-        return { startBit: 0, bitCount: 8 };
+        return { startBit: 0, bitCount: (curType === 'bool' ? 1 : (curType === 'u16' ? 16 : 8)) };
     }
 
     // 渲染单字节内部的字段卡片列表 (与429保持一致：起始位与占用长度，克隆/新建自动计算)
@@ -749,23 +751,40 @@
             card.id = `serial-field-card-${sIdx}`;
             card.setAttribute('data-sig-index', sIdx);
 
+            let curType = (sig.dataType || '').toLowerCase();
+            if (curType !== 'bool' && curType !== 'u8' && curType !== 'u16') {
+                if (curType === 'uint16' || curType === 'i16') curType = 'u16';
+                else if (curType === 'discrete') curType = 'bool';
+                else curType = 'u8';
+            }
+
             const parsed = parseBitRangeHelper(sig);
             let startBit = parsed.startBit;
             let bitCount = parsed.bitCount;
+            if (curType === 'bool') {
+                bitCount = 1;
+            }
+
+            // 核心：第2个及以后的字段，自动顺延上一字段的 (起始位 + 占用位数)
+            if (sIdx > 0) {
+                const prevSig = field.signals[sIdx - 1];
+                const prevStart = Number(prevSig.startBit !== undefined && prevSig.startBit !== null ? prevSig.startBit : 0);
+                const prevCount = Number(prevSig.bitCount || prevSig.length || 1);
+                startBit = prevStart + prevCount;
+            }
+
             sig.startBit = startBit;
             sig.bitCount = bitCount;
             sig.length = bitCount;
-
-            let curType = (sig.dataType || '').toLowerCase();
-            if (curType !== 'i8' && curType !== 'bool') {
-                curType = 'u8';
-            }
-            if (curType === 'bool') {
-                bitCount = 1;
-                sig.bitCount = 1;
-                sig.length = 1;
-            }
             sig.dataType = curType;
+
+            let endianness = sig.endianness;
+            if (curType !== 'u16') {
+                endianness = 'none';
+            } else if (endianness !== 'big') {
+                endianness = 'little';
+            }
+            sig.endianness = endianness;
 
             const endBit = startBit + bitCount - 1;
             const isOverflow = endBit > 7;
@@ -814,19 +833,19 @@
                 </div>
 
                 <div class="field-card-props-flow">
-                    <div class="field-card-cell" style="width: 84px;">
+                    <div class="field-card-cell" style="width: 76px;">
                         <label class="field-card-label"><i class="fa-solid fa-cube"></i> 类型</label>
-                        <select class="field-in-type field-card-select" title="数据类型 (u8 / i8 / bool)">
-                            <option value="u8" ${curType === 'u8' ? 'selected' : ''}>u8 (无符号)</option>
-                            <option value="i8" ${curType === 'i8' ? 'selected' : ''}>i8 (有符号)</option>
-                            <option value="bool" ${curType === 'bool' ? 'selected' : ''}>bool (开关)</option>
+                        <select class="field-in-type field-card-select" title="数据类型 (bool / u8 / u16)">
+                            <option value="bool" ${curType === 'bool' ? 'selected' : ''}>bool</option>
+                            <option value="u8" ${curType === 'u8' ? 'selected' : ''}>u8</option>
+                            <option value="u16" ${curType === 'u16' ? 'selected' : ''}>u16</option>
                         </select>
                     </div>
 
                     <div class="field-card-cell" style="width: 56px;">
                         <label class="field-card-label"><i class="fa-solid fa-play"></i> 起始</label>
                         <div class="field-card-input-wrap">
-                            <input type="number" class="field-in-start field-card-input" min="0" max="7" value="${startBit}" title="在当前单字节中的起始位 (bit0~bit7)">
+                            <input type="number" class="field-in-start field-card-input" min="0" max="7" value="${startBit}" ${sIdx > 0 ? 'readonly style="background-color: var(--bg-hover); opacity: 0.85; cursor: default;" title="自动计算：由上一字段起始位与占用长度顺延计算 (bit' + startBit + ')"' : 'title="在当前单字节中的起始位 (bit0~bit7)"'}>
                             <span class="field-card-addon">位</span>
                         </div>
                     </div>
@@ -834,9 +853,23 @@
                     <div class="field-card-cell" style="width: 56px;">
                         <label class="field-card-label"><i class="fa-solid fa-ruler-horizontal"></i> 占用</label>
                         <div class="field-card-input-wrap">
-                            <input type="number" class="field-in-bitcount field-card-input" min="1" max="${curType === 'bool' ? 1 : 8}" value="${curType === 'bool' ? 1 : bitCount}" ${curType === 'bool' ? 'disabled style="opacity:0.6;cursor:not-allowed;"' : ''} title="占用的位数 (1~8位)">
+                            <input type="number" class="field-in-bitcount field-card-input" min="1" max="${curType === 'bool' ? 1 : (curType === 'u8' ? 8 : 16)}" value="${curType === 'bool' ? 1 : bitCount}" ${curType === 'bool' ? 'disabled style="opacity:0.6;cursor:not-allowed;"' : ''} title="占用的位数 (1~16位)">
                             <span class="field-card-addon">b</span>
                         </div>
+                    </div>
+
+                    <div class="field-card-cell" style="width: 86px;">
+                        <label class="field-card-label"><i class="fa-solid fa-arrows-left-right"></i> 字节序</label>
+                        ${curType === 'u16' ? `
+                        <select class="field-in-endian field-card-select" title="字节序定义 (仅 u16 支持大端/小端)">
+                            <option value="little" ${endianness === 'little' ? 'selected' : ''}>小端(LSB)</option>
+                            <option value="big" ${endianness === 'big' ? 'selected' : ''}>大端(MSB)</option>
+                        </select>
+                        ` : `
+                        <select class="field-in-endian field-card-select" disabled title="只有 u16 类型才支持配置字节序" style="opacity: 0.45; cursor: not-allowed;">
+                            <option value="none">- 无 -</option>
+                        </select>
+                        `}
                     </div>
 
                     <div class="field-card-cell" style="width: 66px;">
@@ -874,6 +907,7 @@
             const inType = card.querySelector('.field-in-type');
             const inStart = card.querySelector('.field-in-start');
             const inBitCount = card.querySelector('.field-in-bitcount');
+            const inEndian = card.querySelector('.field-in-endian');
             const inRes = card.querySelector('.field-in-res');
             const inOffset = card.querySelector('.field-in-offset');
             const inMin = card.querySelector('.field-in-min');
@@ -884,32 +918,25 @@
 
             const onCardChange = () => {
                 sig.name = inName.value.trim();
-                sig.dataType = inType.value;
-
-                if (sig.dataType === 'bool') {
-                    inBitCount.value = 1;
-                    inBitCount.disabled = true;
-                    inBitCount.style.opacity = '0.6';
-                    inBitCount.style.cursor = 'not-allowed';
-                } else {
-                    inBitCount.disabled = false;
-                    inBitCount.style.opacity = '1';
-                    inBitCount.style.cursor = 'auto';
-                }
+                const currentType = inType.value;
+                sig.dataType = currentType;
 
                 let sBit = parseInt(inStart.value, 10);
                 if (isNaN(sBit) || sBit < 0) sBit = 0;
                 if (sBit > 7) sBit = 7;
-                inStart.value = sBit;
+                if (sIdx === 0) inStart.value = sBit;
 
                 let bCount = parseInt(inBitCount.value, 10);
                 if (isNaN(bCount) || bCount < 1) bCount = 1;
-                if (bCount > 8) bCount = 8;
+                const maxBits = (currentType === 'bool' ? 1 : (currentType === 'u8' ? 8 : 16));
+                if (bCount > maxBits) bCount = maxBits;
                 inBitCount.value = bCount;
 
                 sig.startBit = sBit;
                 sig.bitCount = bCount;
                 sig.length = bCount;
+                sig.endianness = (currentType === 'u16' && inEndian) ? inEndian.value : 'none';
+
                 const eBit = sBit + bCount - 1;
                 sig.bitRange = `bit${sBit}${bCount > 1 ? `-${eBit}` : ''}`;
 
@@ -929,6 +956,33 @@
                     bitBadge.title = over ? '警告：位段超出单字节 8 位 (bit0~bit7)' : '位段范围';
                     bitBadge.innerHTML = `<i class="fa-solid fa-sliders"></i> bit${sBit}${bCount > 1 ? `~bit${eBit}` : ''} (${bCount}b)`;
                 }
+
+                // 核心：像 429 自由 Bit 模式一样，向后级联自动计算后续所有字段的起始位
+                for (let j = sIdx + 1; j < field.signals.length; j++) {
+                    const prevF = field.signals[j - 1];
+                    const nextStart = Number(prevF.startBit !== undefined ? prevF.startBit : 0) + Number(prevF.bitCount || prevF.length || 1);
+                    field.signals[j].startBit = nextStart;
+                    const nextCount = Number(field.signals[j].bitCount || field.signals[j].length || 1);
+                    const nextEnd = nextStart + nextCount - 1;
+                    field.signals[j].bitRange = `bit${nextStart}${nextCount > 1 ? `-${nextEnd}` : ''}`;
+
+                    const nextCard = document.getElementById(`serial-field-card-${j}`);
+                    if (nextCard) {
+                        const nextStartIn = nextCard.querySelector('.field-in-start');
+                        if (nextStartIn) {
+                            nextStartIn.value = nextStart;
+                            nextStartIn.title = `自动计算：由上一字段起始位与占用长度顺延计算 (bit${nextStart})`;
+                        }
+                        const nextBitBadge = nextCard.querySelector(`#serial-bit-badge-${j}`);
+                        if (nextBitBadge) {
+                            const over = nextEnd > 7;
+                            nextBitBadge.className = `dense-bit-span ${over ? 'dense-bit-span-overflow' : ''}`;
+                            nextBitBadge.title = over ? '警告：位段超出单字节 8 位 (bit0~bit7)' : '位段范围';
+                            nextBitBadge.innerHTML = `<i class="fa-solid fa-sliders"></i> bit${nextStart}${nextCount > 1 ? `~bit${nextEnd}` : ''} (${nextCount}b)`;
+                        }
+                    }
+                }
+
                 renderSerialBytesList();
                 triggerSerialDraftSave();
             };
@@ -938,9 +992,66 @@
                 triggerSerialDraftSave();
             };
 
-            inName.addEventListener('input', onCardChange);
-            inName.addEventListener('change', () => onFieldPropCommit('字段名'));
-            inType.addEventListener('change', () => { onCardChange(); onFieldPropCommit('类型'); });
+            inType.addEventListener('change', () => {
+                const selType = inType.value;
+                if (selType === 'bool') {
+                    inBitCount.value = '1';
+                    inBitCount.max = '1';
+                    inBitCount.disabled = true;
+                    inBitCount.style.opacity = '0.6';
+                    inBitCount.style.cursor = 'not-allowed';
+                    if (inEndian) {
+                        inEndian.disabled = true;
+                        inEndian.style.opacity = '0.45';
+                        inEndian.style.cursor = 'not-allowed';
+                        inEndian.innerHTML = '<option value="none">- 无 -</option>';
+                        inEndian.value = 'none';
+                    }
+                    sig.endianness = 'none';
+                } else if (selType === 'u8') {
+                    const curC = parseInt(inBitCount.value, 10) || 8;
+                    inBitCount.max = '8';
+                    inBitCount.disabled = false;
+                    inBitCount.style.opacity = '1';
+                    inBitCount.style.cursor = 'auto';
+                    if (curC > 8 || curC < 1) inBitCount.value = '8';
+                    if (inEndian) {
+                        inEndian.disabled = true;
+                        inEndian.style.opacity = '0.45';
+                        inEndian.style.cursor = 'not-allowed';
+                        inEndian.innerHTML = '<option value="none">- 无 -</option>';
+                        inEndian.value = 'none';
+                    }
+                    sig.endianness = 'none';
+                } else {
+                    inBitCount.max = '16';
+                    inBitCount.disabled = false;
+                    inBitCount.style.opacity = '1';
+                    inBitCount.style.cursor = 'auto';
+                    inBitCount.value = '16';
+                    if (inEndian) {
+                        inEndian.disabled = false;
+                        inEndian.style.opacity = '1';
+                        inEndian.style.cursor = 'pointer';
+                        const targetEndian = (sig.endianness === 'big') ? 'big' : 'little';
+                        inEndian.innerHTML = `
+                            <option value="little" ${targetEndian === 'little' ? 'selected' : ''}>小端(LSB)</option>
+                            <option value="big" ${targetEndian === 'big' ? 'selected' : ''}>大端(MSB)</option>
+                        `;
+                        inEndian.value = targetEndian;
+                        sig.endianness = targetEndian;
+                    }
+                }
+                onCardChange();
+                onFieldPropCommit('类型');
+            });
+
+            if (inEndian) {
+                inEndian.addEventListener('change', () => {
+                    sig.endianness = inEndian.value;
+                    onFieldPropCommit('字节序');
+                });
+            }
             inStart.addEventListener('input', onCardChange);
             inStart.addEventListener('change', () => onFieldPropCommit('起始位'));
             inBitCount.addEventListener('input', onCardChange);
@@ -982,22 +1093,44 @@
                     cloned.name = sig.name ? `${sig.name}_副本` : '新字段';
                     cloned.key = `sig_${Date.now().toString().slice(-6)}`;
 
-                    // 核心：自动计算下一个起始位置与长度 (起始位 = 当前起始 + 占用长度)
-                    const curStart = Number(sig.startBit) || 0;
-                    const curCount = Number(sig.bitCount || sig.length) || 1;
-                    const nextStart = curStart + curCount;
-                    if (nextStart <= 7) {
-                        cloned.startBit = nextStart;
-                        cloned.bitCount = Math.min(curCount, 8 - nextStart);
-                    } else {
-                        cloned.startBit = 0;
-                        cloned.bitCount = curCount;
+                    // 若当前整个单字节只有一个 8 位字段，克隆代表用户希望拆解子字段，自动将首字段置为 1 位开关
+                    const curStart = Number(sig.startBit !== undefined ? sig.startBit : 0);
+                    let curCount = Number(sig.bitCount || sig.length || 1);
+                    if (sIdx === 0 && field.signals.length === 1 && curCount === 8 && curStart === 0) {
+                        sig.bitCount = 1;
+                        sig.length = 1;
+                        sig.dataType = 'bool';
+                        sig.bitRange = 'bit0';
+                        curCount = 1;
                     }
-                    cloned.length = cloned.bitCount;
+
+                    const nextStart = curStart + curCount;
+                    cloned.startBit = nextStart;
+                    if (cloned.dataType === 'bool') {
+                        cloned.bitCount = 1;
+                        cloned.length = 1;
+                    } else if (cloned.dataType === 'u8') {
+                        cloned.bitCount = Math.max(1, Math.min(curCount, 8 - (nextStart <= 7 ? nextStart : 0)));
+                        cloned.length = cloned.bitCount;
+                    }
                     const endB = cloned.startBit + cloned.bitCount - 1;
                     cloned.bitRange = `bit${cloned.startBit}${cloned.bitCount > 1 ? `-${endB}` : ''}`;
 
                     field.signals.splice(sIdx + 1, 0, cloned);
+
+                    // 级联顺延对后续所有字段重新计算起始位
+                    field.signals.forEach((s, idx) => {
+                        if (idx === 0) {
+                            s.startBit = Number(s.startBit !== undefined ? s.startBit : 0);
+                        } else {
+                            const prev = field.signals[idx - 1];
+                            s.startBit = Number(prev.startBit !== undefined ? prev.startBit : 0) + Number(prev.bitCount || prev.length || 1);
+                        }
+                        const count = Number(s.bitCount || s.length || 1);
+                        const eb = s.startBit + count - 1;
+                        s.bitRange = `bit${s.startBit}${count > 1 ? `-${eb}` : ''}`;
+                    });
+
                     renderSerialFieldCards(field);
                     renderSerialBytesList();
                     triggerSerialDraftSave();
@@ -1010,6 +1143,19 @@
                 btnDel.addEventListener('click', () => {
                     captureSerialMutation('删除字段卡片');
                     field.signals.splice(sIdx, 1);
+                    if (field.signals.length > 0) {
+                        field.signals.forEach((s, idx) => {
+                            if (idx === 0) {
+                                s.startBit = Number(s.startBit !== undefined ? s.startBit : 0);
+                            } else {
+                                const prev = field.signals[idx - 1];
+                                s.startBit = Number(prev.startBit !== undefined ? prev.startBit : 0) + Number(prev.bitCount || prev.length || 1);
+                            }
+                            const count = Number(s.bitCount || s.length || 1);
+                            const eb = s.startBit + count - 1;
+                            s.bitRange = `bit${s.startBit}${count > 1 ? `-${eb}` : ''}`;
+                        });
+                    }
                     renderSerialFieldCards(field);
                     renderSerialBytesList();
                     triggerSerialDraftSave();
@@ -1033,28 +1179,30 @@
         captureSerialMutation('添加字段卡片');
 
         let nextStart = 0;
-        let defaultCount = 8;
+        let defaultCount = 1;
         if (field.signals.length > 0) {
             const lastSig = field.signals[field.signals.length - 1];
-            const parsed = parseBitRangeHelper(lastSig);
-            nextStart = parsed.startBit + parsed.bitCount;
-            if (nextStart > 7) {
-                nextStart = 0;
-                defaultCount = 1;
-            } else {
-                defaultCount = Math.min(1, 8 - nextStart);
+            // 若原先是单个 8 位字段，拆解为开关位
+            if (field.signals.length === 1 && (Number(lastSig.bitCount || lastSig.length) === 8 || lastSig.bitRange === 'bit0-7') && Number(lastSig.startBit || 0) === 0) {
+                lastSig.bitCount = 1;
+                lastSig.length = 1;
+                lastSig.dataType = 'bool';
+                lastSig.bitRange = 'bit0';
             }
+            const lastStart = Number(lastSig.startBit !== undefined ? lastSig.startBit : 0);
+            const lastCount = Number(lastSig.bitCount || lastSig.length || 1);
+            nextStart = lastStart + lastCount;
+            defaultCount = (nextStart < 8) ? Math.min(1, 8 - nextStart) : 1;
         }
-        const endB = nextStart + defaultCount - 1;
-        const count = field.signals.length;
 
+        const count = field.signals.length;
         const newSig = {
-            key: `field_${count + 1}`,
+            key: `sig_${Date.now().toString().slice(-6)}`,
             name: `字段_${count + 1}`,
             startBit: nextStart,
             bitCount: defaultCount,
             length: defaultCount,
-            bitRange: `bit${nextStart}${defaultCount > 1 ? `-${endB}` : ''}`,
+            bitRange: `bit${nextStart}${defaultCount > 1 ? `-${nextStart + defaultCount - 1}` : ''}`,
             dataType: defaultCount === 1 ? 'bool' : 'u8',
             resolution: '',
             precision: '',
@@ -1169,6 +1317,9 @@
                     {
                         key: `sig_${nextOff}_1`,
                         name: `字节_${nextOff}数据`,
+                        startBit: 0,
+                        bitCount: 8,
+                        length: 8,
                         bitRange: 'bit0-7',
                         dataType: 'u8',
                         resolution: '',

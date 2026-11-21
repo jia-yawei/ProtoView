@@ -178,16 +178,17 @@
         // 核心角色隔离策略：
         // 管理员账号：无需通信协议管理，仅展示系统管理后台
         // 普通工程师：展示通信协议管理，彻底隐藏管理后台入口
-        const navBtnProtocol = document.getElementById('nav-btn-protocol');
         const navBtnAdmin = document.getElementById('nav-btn-admin');
 
         if (isAdmin) {
-            if (navBtnProtocol) navBtnProtocol.style.display = 'none';
+            document.documentElement.classList.add('is-admin');
             if (navBtnAdmin) {
-                navBtnAdmin.style.display = 'flex';
                 navBtnAdmin.classList.add('active');
             }
-            if (navBtnProtocol) navBtnProtocol.classList.remove('active');
+            // 确保移除其他非后台导航项的激活态
+            document.querySelectorAll('#sidebar-nav-menu .nav-item').forEach(b => {
+                if (b !== navBtnAdmin) b.classList.remove('active');
+            });
 
             // 管理员直接置身管理后台
             if (typeof window.switchToView === 'function') {
@@ -196,12 +197,13 @@
                     window.switchToView('admin-view');
                 }
             }
-        } else {
-            if (navBtnProtocol) {
-                navBtnProtocol.style.display = 'flex';
+            if (typeof window.loadAdminStats === 'function') {
+                window.loadAdminStats();
             }
+        } else {
+            document.documentElement.classList.remove('is-admin');
             if (navBtnAdmin) {
-                navBtnAdmin.style.display = 'none';
+                navBtnAdmin.classList.remove('active');
             }
             // 普通用户若停留在 admin-view，自动切回协议库
             if (typeof window.switchToView === 'function') {
@@ -367,9 +369,15 @@
                 if (isLocal && (res.status === 404 || !res.ok)) {
                     return doLocalDevLogin(username);
                 }
-                let msg = (data && data.error) || '登录失败，请检查账号密码';
-                if (res.status === 404) {
-                    msg = 'Cloudflare 后端认证服务未找到 (/api/auth 返回 404)。如果您未配置 Cloudflare D1/KV 函数，请在 Cloudflare Pages 设置中绑定 D1 数据库；或可在本地离线环境调试。';
+                // 核心用户规范：若登录未注册的账号、密码不匹配或鉴权失败，统一明确提示「用户名或密码错误」
+                let msg = '用户名或密码错误';
+                if (data && data.error) {
+                    // 过滤掉内部云基础设施未绑定等技术报错，统一归一化为标准的「用户名或密码错误」
+                    if (data.error.includes('未找到') || data.error.includes('不存在') || data.error.includes('未注册') || data.error.includes('尚未绑定') || data.error.includes('404')) {
+                        msg = '用户名或密码错误';
+                    } else {
+                        msg = data.error;
+                    }
                 }
                 showPortalLoginError(msg);
                 return false;
@@ -379,7 +387,7 @@
             if (isLocal) {
                 return doLocalDevLogin(username);
             }
-            showPortalLoginError('连接 Cloudflare 认证服务异常: ' + e.message);
+            showPortalLoginError('用户名或密码错误');
             return false;
         }
     }
@@ -410,9 +418,9 @@
                 if (isLocal && (res.status === 404 || !res.ok)) {
                     return doLocalDevLogin(username);
                 }
-                let msg = (data && data.error) || '注册失败，请更换用户名重试';
-                if (res.status === 404) {
-                    msg = 'Cloudflare 后端认证服务未找到 (/api/auth 返回 404)。';
+                let msg = (data && data.error) ? data.error : '注册失败，请更换用户名重试';
+                if (!data && res.status === 404) {
+                    msg = '云端注册服务暂时不可用，请稍后重试。';
                 }
                 showPortalRegError(msg);
                 return false;
@@ -421,7 +429,7 @@
             if (isLocal) {
                 return doLocalDevLogin(username);
             }
-            showPortalRegError('连接 Cloudflare 认证服务异常: ' + e.message);
+            showPortalRegError('注册服务连接异常，请检查网络或稍后重试');
             return false;
         }
     }
@@ -664,8 +672,8 @@
         }
         if (sidebarUserCard) {
             sidebarUserCard.addEventListener('click', async (e) => {
-                // 若点击目标或其祖先为同步、主题切换按钮或退出按钮，则不触发账号切换弹窗
-                if (e.target && (e.target.closest('#theme-toggle') || e.target.closest('#btn-sidebar-auth-action') || e.target.closest('#sidebar-quick-sync-btn'))) {
+                // 若点击目标或其祖先为同步、系统设置、主题切换按钮或退出按钮，则不触发账号切换弹窗
+                if (e.target && (e.target.closest('#theme-toggle') || e.target.closest('#btn-sidebar-auth-action') || e.target.closest('#sidebar-quick-sync-btn') || e.target.closest('#sidebar-settings-btn'))) {
                     return;
                 }
                 if (isLoggedIn()) {
@@ -754,6 +762,7 @@
         switchAuthTab,
         updateAuthUI
     };
+    ProtoView.isLocalDevEnv = isLocalDevEnv;
     global.ProtoView = ProtoView;
 
     // 全局函数便捷调用

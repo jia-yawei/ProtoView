@@ -2,52 +2,52 @@
    协议版本管理与字段级语义差异对比样式 (Version & Diff)
    ======================================================== */
 
-/* 版本号药丸徽章 */
+/* 版本号药丸徽章 (低饱和度胶囊样式) */
 .proto-version-pill {
     display: inline-flex;
     align-items: center;
-    padding: 1px 7px;
+    padding: 1.5px 8px;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     font-family: 'JetBrains Mono', Consolas, monospace;
-    border-radius: 4px;
-    background: rgba(59, 130, 246, 0.12);
+    border-radius: var(--radius-pill, 9999px);
+    background: rgba(59, 130, 246, 0.08);
     color: var(--accent-color);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(59, 130, 246, 0.22);
     white-space: nowrap;
     user-select: none;
     transition: all 0.15s ease;
 }
 .proto-version-pill:hover {
-    background: rgba(59, 130, 246, 0.22);
+    background: rgba(59, 130, 246, 0.16);
     border-color: var(--accent-color);
 }
 
-/* 修改中状态的版本药丸徽章 (琥珀橙色) */
+/* 修改中状态的版本药丸徽章 (低饱和琥珀橙色) */
 .proto-version-pill.is-modified {
-    background: rgba(245, 158, 11, 0.14) !important;
-    color: #d97706 !important;
-    border-color: rgba(245, 158, 11, 0.45) !important;
+    background: rgba(245, 158, 11, 0.08) !important;
+    color: #b45309 !important;
+    border-color: rgba(245, 158, 11, 0.25) !important;
 }
 .proto-version-pill.is-modified:hover {
-    background: rgba(245, 158, 11, 0.22) !important;
+    background: rgba(245, 158, 11, 0.16) !important;
     border-color: #d97706 !important;
 }
 [data-theme="dark"] .proto-version-pill.is-modified {
-    background: rgba(245, 158, 11, 0.22) !important;
+    background: rgba(245, 158, 11, 0.14) !important;
     color: #fbbf24 !important;
-    border-color: rgba(245, 158, 11, 0.5) !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
 }
 
-/* 极简双态归档徽章 (已归档 / 未归档) */
+/* 极简双态归档徽章 (已归档 / 未归档 - 低饱和度胶囊样式，更美观且不喧宾夺主) */
 .proto-archive-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 1px 7px;
+    padding: 1.5px 9px;
     font-size: 11px;
-    font-weight: 600;
-    border-radius: 4px;
+    font-weight: 500;
+    border-radius: var(--radius-pill, 9999px);
     white-space: nowrap;
     user-select: none;
     cursor: pointer;
@@ -55,37 +55,37 @@
 }
 
 .proto-archive-badge.is-archived {
-    background: rgba(16, 185, 129, 0.12);
-    color: #059669;
-    border: 1px solid rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.08);
+    color: #047857;
+    border: 1px solid rgba(16, 185, 129, 0.2);
 }
 [data-theme="dark"] .proto-archive-badge.is-archived {
-    background: rgba(16, 185, 129, 0.2);
+    background: rgba(16, 185, 129, 0.12);
     color: #34d399;
-    border-color: rgba(16, 185, 129, 0.45);
+    border-color: rgba(16, 185, 129, 0.25);
 }
 
 .proto-archive-badge.not-archived {
-    background: rgba(100, 116, 139, 0.1);
+    background: rgba(100, 116, 139, 0.08);
     color: #64748b;
-    border: 1px solid rgba(100, 116, 139, 0.28);
+    border: 1px solid rgba(100, 116, 139, 0.18);
 }
 [data-theme="dark"] .proto-archive-badge.not-archived {
-    background: rgba(100, 116, 139, 0.18);
+    background: rgba(100, 116, 139, 0.12);
     color: #94a3b8;
-    border-color: rgba(100, 116, 139, 0.35);
+    border-color: rgba(100, 116, 139, 0.22);
 }
 
-/* 归档后产生修改的未归档徽章 (醒目琥珀橙色，区分全新协议) */
+/* 归档后产生修改的未归档徽章 (低饱和柔和琥珀橙色) */
 .proto-archive-badge.has-modifications {
-    background: rgba(245, 158, 11, 0.12) !important;
-    color: #d97706 !important;
-    border-color: rgba(245, 158, 11, 0.4) !important;
+    background: rgba(245, 158, 11, 0.08) !important;
+    color: #b45309 !important;
+    border-color: rgba(245, 158, 11, 0.22) !important;
 }
 [data-theme="dark"] .proto-archive-badge.has-modifications {
-    background: rgba(245, 158, 11, 0.2) !important;
+    background: rgba(245, 158, 11, 0.14) !important;
     color: #fbbf24 !important;
-    border-color: rgba(245, 158, 11, 0.5) !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
 }
 
 .proto-archive-badge:hover {

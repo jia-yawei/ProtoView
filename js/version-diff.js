@@ -1563,6 +1563,11 @@
         pickerMultiOnly: true,
         pickerEventsBound: false,
 
+        // 代理 ArchiveManager 确保协议具备归档与版本字段
+        ensureProtocolVersion(proto) {
+            return ArchiveManager.ensureProtocolVersion(proto);
+        },
+
         // 计算协议的版本演进状态 (支撑用户诉求：单版本协议过滤与提示)
         getProtocolVersionMeta(proto) {
             if (!proto) return { totalVersions: 0, archivedCount: 0, isModified: false, hasEvolution: false, isSingleVersion: true, badgeText: '无版本', badgeClass: 'vm-pill-single' };
@@ -3138,6 +3143,9 @@
     // ========================================================
     ProtoView.ArchiveManager = ArchiveManager;
     ProtoView.VersionManager = VersionManager; // 升级为全新版本管理引擎
+    if (ProtoView.VersionManager) {
+        ProtoView.VersionManager.ensureProtocolVersion = ArchiveManager.ensureProtocolVersion.bind(ArchiveManager);
+    }
     ProtoView.DiffEngine = DiffEngine;
 
     // 打开通信协议版本管理中心 (一级主视图核心主入口)

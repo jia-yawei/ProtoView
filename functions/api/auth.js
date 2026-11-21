@@ -340,15 +340,15 @@ export async function onRequestPost(context) {
                 await ensureD1Tables(db);
                 const user = await db.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
                 if (!user) {
-                    return new Response(JSON.stringify({ success: false, error: "用户名不存在，请先注册" }), {
-                        status: 404,
+                    return new Response(JSON.stringify({ success: false, error: "用户名或密码错误" }), {
+                        status: 401,
                         headers
                     });
                 }
 
                 const inputHash = await sha256(`${rawPassword}:${user.salt}`);
                 if (inputHash !== user.password_hash) {
-                    return new Response(JSON.stringify({ success: false, error: "密码不正确，请重新输入" }), {
+                    return new Response(JSON.stringify({ success: false, error: "用户名或密码错误" }), {
                         status: 401,
                         headers
                     });
@@ -383,15 +383,15 @@ export async function onRequestPost(context) {
             try {
                 const user = await kv.get("user:" + username, "json");
                 if (!user) {
-                    return new Response(JSON.stringify({ success: false, error: "用户名不存在，请先注册" }), {
-                        status: 404,
+                    return new Response(JSON.stringify({ success: false, error: "用户名或密码错误" }), {
+                        status: 401,
                         headers
                     });
                 }
 
                 const inputHash = await sha256(`${rawPassword}:${user.salt}`);
                 if (inputHash !== user.passwordHash) {
-                    return new Response(JSON.stringify({ success: false, error: "密码不正确，请重新输入" }), {
+                    return new Response(JSON.stringify({ success: false, error: "用户名或密码错误" }), {
                         status: 401,
                         headers
                     });

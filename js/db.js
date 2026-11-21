@@ -164,6 +164,72 @@ const dbHelper = {
         saveLSProtocols(list);
     },
 
+    // ========================================================
+    // 协议回收站 (安全网机制：软删除、一键恢复与彻底清除)
+    // ========================================================
+    getRecycleBin() {
+        try {
+            const raw = localStorage.getItem('protoview_recycle_bin');
+            return raw ? JSON.parse(raw) : [];
+        } catch(e) {
+            return [];
+        }
+    },
+
+    saveRecycleBin(list) {
+        try {
+            localStorage.setItem('protoview_recycle_bin', JSON.stringify(list || []));
+        } catch(e) {
+            console.warn("保存回收站数据失败:", e);
+        }
+    },
+
+    async moveToRecycleBin(protocolData) {
+        if (!protocolData) return null;
+        const proto = JSON.parse(JSON.stringify(protocolData));
+        proto._deletedAt = Date.now();
+        proto._originalId = proto.id;
+
+        // 1. 存入回收站列表头部
+        const bin = this.getRecycleBin();
+        const filtered = bin.filter(p => p.id !== proto.id && String(p.id) !== String(proto.id));
+        filtered.unshift(proto);
+        this.saveRecycleBin(filtered);
+
+        // 2. 从活跃协议库中移除
+        await this.deleteProtocol(proto.id);
+        return proto;
+    },
+
+    async restoreFromRecycleBin(id) {
+        const bin = this.getRecycleBin();
+        const numId = Number(id);
+        const idx = bin.findIndex(p => p.id === id || String(p.id) === String(id) || (!isNaN(numId) && Number(p.id) === numId));
+        if (idx < 0) return null;
+
+        const proto = bin[idx];
+        bin.splice(idx, 1);
+        this.saveRecycleBin(bin);
+
+        delete proto._deletedAt;
+        delete proto._originalId;
+
+        // 重新保存至协议库
+        await this.saveProtocol(proto);
+        return proto;
+    },
+
+    permanentlyDeleteFromRecycleBin(id) {
+        const bin = this.getRecycleBin();
+        const numId = Number(id);
+        const filtered = bin.filter(p => p.id !== id && String(p.id) !== String(id) && (isNaN(numId) || Number(p.id) !== numId));
+        this.saveRecycleBin(filtered);
+    },
+
+    clearRecycleBin() {
+        localStorage.removeItem('protoview_recycle_bin');
+    },
+
     // 清空本地缓存的所有协议 (用于多账号隔离与新用户初始纯净状态)
     async clearAllProtocols() {
         if (useDexie && db && db.protocols) {
