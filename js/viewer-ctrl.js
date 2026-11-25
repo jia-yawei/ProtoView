@@ -429,8 +429,10 @@
         const archiveBadge = document.getElementById('viewer-archive-badge');
         const unarchivedBanner = document.getElementById('viewer-unarchived-banner');
         const snapshotBanner = document.getElementById('viewer-snapshot-banner');
+        const btnViewerUnarchive = document.getElementById('btn-viewer-unarchive');
 
         if (p._isHistoricalSnapshot) {
+            if (btnViewerUnarchive) btnViewerUnarchive.style.display = 'none';
             // 查阅历史快照中
             if (verPill) {
                 verPill.textContent = `${p._snapshotVersion || p.version || 'v1.0'}`;
@@ -480,6 +482,13 @@
                 archiveBadge.title = verInfo.tooltip;
                 archiveBadge.onclick = () => {
                     if (window.handleProtocolArchive) window.handleProtocolArchive(rootProtocol);
+                };
+            }
+            if (btnViewerUnarchive) {
+                const canUnarchive = Boolean(verInfo.hasArchiveRecord || verInfo.isArchived);
+                btnViewerUnarchive.style.display = canUnarchive ? 'inline-flex' : 'none';
+                btnViewerUnarchive.onclick = () => {
+                    if (window.handleProtocolUnarchive) window.handleProtocolUnarchive(rootProtocol);
                 };
             }
 

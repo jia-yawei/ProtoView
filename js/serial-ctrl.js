@@ -276,6 +276,15 @@
             };
         }
 
+        const btnSerialUnarchive = document.getElementById('btn-serial-unarchive');
+        if (btnSerialUnarchive) {
+            const canUnarchive = Boolean(verInfo.hasArchiveRecord || verInfo.isArchived);
+            btnSerialUnarchive.style.display = canUnarchive ? 'inline-flex' : 'none';
+            btnSerialUnarchive.onclick = () => {
+                if (window.handleProtocolUnarchive && p) window.handleProtocolUnarchive(p);
+            };
+        }
+
         if (serialToolbarProtoTitle) {
             serialToolbarProtoTitle.innerHTML = `<i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> ${escapeHTML(p.name || '串口协议')}`;
             serialToolbarProtoTitle.title = (p.product ? `所属产品: ${p.product}\n` : '') + `协议名称: ${p.name || '串口协议'}\n接口类型: ${p.subType || 'RS485'}\n波特率: ${p.baudRate || 115200} bps | 校验: ${p.parity || 'none'}\n方向: ${p.direction || 'Tx'} | 周期: ${p.period || 20}ms`;

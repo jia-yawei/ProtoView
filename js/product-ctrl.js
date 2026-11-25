@@ -802,6 +802,11 @@
                     <button type="button" class="cmd-item" onclick="if(window.closeAllCardMoreMenus){window.closeAllCardMoreMenus();} if(window.exportProtocolById){window.exportProtocolById('${p.id}');}">
                         <i class="fa-solid fa-file-export"></i> 导出规范
                     </button>
+                    ${(verInfo.hasArchiveRecord || verInfo.isArchived) ? `
+                    <button type="button" class="cmd-item" onclick="if(window.closeAllCardMoreMenus){window.closeAllCardMoreMenus();} if(window.unarchiveProtocol){window.unarchiveProtocol('${p.id}');}">
+                        <i class="fa-solid fa-box-open" style="color:#f59e0b;"></i> 放弃归档
+                    </button>
+                    ` : ''}
                     <div class="cmd-divider"></div>
                     <button type="button" class="cmd-item cmd-danger" onclick="if(window.closeAllCardMoreMenus){window.closeAllCardMoreMenus();} if(window.deleteProtocol){window.deleteProtocol('${p.id}');}">
                         <i class="fa-solid fa-trash-can"></i> 移至回收站

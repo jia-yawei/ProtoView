@@ -397,6 +397,7 @@
                     <!-- 顶部右侧：数据包切换、导出与一键切换编辑工作台 -->
                     <div class="viewer-tb-actions">
                         <select id="viewer-packet-select" class="dense-select-xs" style="display:none; min-width: 135px; max-width: 200px; font-weight: 700;" title="切换数据包"></select>
+                        <button type="button" class="dense-btn" id="btn-viewer-unarchive" style="display:none;" onclick="if(window.handleProtocolUnarchive && window.currentViewerProtocol){window.handleProtocolUnarchive(window.currentViewerProtocol);}" title="放弃归档：将已归档协议取出恢复为未归档状态"><i class="fa-solid fa-box-open" style="color:#f59e0b;"></i> 放弃归档</button>
                         <button type="button" class="dense-btn" id="btn-viewer-diff" onclick="if(window.openProtocolVersionView && window.currentViewerProtocol){window.openProtocolVersionView(window.currentViewerProtocol);}else if(window.openProtocolDiffModal && window.currentViewerProtocol){window.openProtocolDiffModal(window.currentViewerProtocol);}" title="打开协议版本管理：查看版本历程与对比差异"><i class="fa-solid fa-code-branch" style="color:var(--accent-color);"></i> 版本管理</button>
                         <button type="button" class="dense-btn" id="btn-viewer-check" onclick="if(window.runProtocolHealthCheck){window.runProtocolHealthCheck();}else if(ProtoView.Controllers && ProtoView.Controllers.Arinc && ProtoView.Controllers.Arinc.runProtocolHealthCheck){ProtoView.Controllers.Arinc.runProtocolHealthCheck();}" title="对当前通信协议进行静态合规与健康度全面体检"><i class="fa-solid fa-stethoscope" style="color:var(--accent-color);"></i> 检查</button>
                         <button type="button" class="dense-btn" id="btn-viewer-export" onclick="window.openProtocolExportModal && window.openProtocolExportModal()" title="导出协议：支持导出配置文件(JSON)、PDF规格书、Markdown或独立HTML卡片"><i class="fa-solid fa-file-export" style="color:var(--accent-color);"></i> 导出</button>
@@ -540,6 +541,9 @@
                         <!-- 归档按钮 (直接外显在顶栏，不在更多里面，符合操作习惯) -->
                         <button type="button" class="dense-btn" id="btn-arinc-archive" onclick="if(window.handleProtocolArchive && window.currentArincProtocol){window.handleProtocolArchive(window.currentArincProtocol);}" title="归档当前协议：未归档直接归档当前版本，已归档可升版并建立冻结快照">
                             <i class="fa-solid fa-box-archive" style="color:#059669;"></i> <span>归档</span>
+                        </button>
+                        <button type="button" class="dense-btn" id="btn-arinc-unarchive" style="display:none;" onclick="if(window.handleProtocolUnarchive && window.currentArincProtocol){window.handleProtocolUnarchive(window.currentArincProtocol);}" title="放弃归档：将已归档协议取出恢复为未归档状态">
+                            <i class="fa-solid fa-box-open" style="color:#f59e0b;"></i> <span>放弃归档</span>
                         </button>
 
                         <!-- 查阅模式 (高频核心切换，保留在外侧) -->
@@ -851,6 +855,9 @@
                         <button type="button" class="dense-btn" id="btn-serial-archive" onclick="if(window.handleProtocolArchive && window.currentSerialProtocol){window.handleProtocolArchive(window.currentSerialProtocol);}" title="归档当前协议：未归档直接归档当前版本，已归档可升版并建立冻结快照">
                             <i class="fa-solid fa-box-archive" style="color:#059669;"></i> <span>归档</span>
                         </button>
+                        <button type="button" class="dense-btn" id="btn-serial-unarchive" style="display:none;" onclick="if(window.handleProtocolUnarchive && window.currentSerialProtocol){window.handleProtocolUnarchive(window.currentSerialProtocol);}" title="放弃归档：将已归档协议取出恢复为未归档状态">
+                            <i class="fa-solid fa-box-open" style="color:#f59e0b;"></i> <span>放弃归档</span>
+                        </button>
 
                         <!-- 查阅模式 (高频核心切换，保留在外侧) -->
                         <button type="button" class="dense-btn" id="btn-serial-switch-viewer" title="切换至只读查阅模式：清晰查看数据包字节与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
@@ -1070,10 +1077,8 @@
                         <button type="button" class="dense-btn" id="btn-can-archive" onclick="if(window.handleProtocolArchive && window.currentCanProtocol){window.handleProtocolArchive(window.currentCanProtocol);}" title="归档当前协议：未归档直接归档当前版本，已归档可升版并建立冻结快照">
                             <i class="fa-solid fa-box-archive" style="color:#059669;"></i> <span>归档</span>
                         </button>
-
-                        <!-- 导出 DBC 按钮 -->
-                        <button type="button" class="dense-btn" id="btn-can-export-dbc" onclick="if(window.exportCanDbcFile){window.exportCanDbcFile();}" title="一键导出标准 Vector DBC 文件 (*.dbc)">
-                            <i class="fa-solid fa-file-export" style="color: #0284c7;"></i> 导出 DBC
+                        <button type="button" class="dense-btn" id="btn-can-unarchive" style="display:none;" onclick="if(window.handleProtocolUnarchive && window.currentCanProtocol){window.handleProtocolUnarchive(window.currentCanProtocol);}" title="放弃归档：将已归档协议取出恢复为未归档状态">
+                            <i class="fa-solid fa-box-open" style="color:#f59e0b;"></i> <span>放弃归档</span>
                         </button>
 
                         <!-- 查阅模式 (高频核心切换，保留在外侧) -->

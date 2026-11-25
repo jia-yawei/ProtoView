@@ -439,6 +439,76 @@
             return true;
         },
 
+        // 放弃归档：将已归档协议取出，恢复为“未归档”状态（保留当前协议全部通信定义数据）
+        async unarchiveProtocol(protoIdOrProto) {
+            let proto = protoIdOrProto;
+            if (typeof protoIdOrProto === 'string' || typeof protoIdOrProto === 'number') {
+                if (window.dbHelper && typeof window.dbHelper.getProtocol === 'function') {
+                    proto = await window.dbHelper.getProtocol(protoIdOrProto);
+                }
+            }
+            if (!proto) {
+                showToast('未找到协议数据', 'error');
+                return false;
+            }
+
+            this.ensureProtocolVersion(proto);
+            const hasArchiveRecord = (Array.isArray(proto.archivedVersions) && proto.archivedVersions.length > 0) || Boolean(proto.lastArchivedVersion) || Boolean(proto.isArchived);
+            if (!hasArchiveRecord) {
+                showToast(`协议「${proto.name || '当前协议'}」当前尚未归档，无需取出`, 'info');
+                return false;
+            }
+
+            const curVer = proto.lastArchivedVersion || proto.version || 'v1.0';
+            const confirmed = await (ProtoView.showConfirm ? ProtoView.showConfirm({
+                title: '放弃归档确认',
+                icon: 'fa-box-open',
+                type: 'warning',
+                message: `确认放弃归档并将协议「${proto.name}」[${curVer}] 取出为未归档状态吗？`,
+                detail: '取出后，该协议将恢复为「未归档」自由编辑状态，原有的归档状态与冻结记录将被清除，但当前协议的所有报文和字段内容会完整保留。',
+                confirmText: '确认放弃归档',
+                cancelText: '取消'
+            }) : Promise.resolve(confirm(`确认放弃归档并将协议「${proto.name}」[${curVer}] 取出为未归档状态吗？`)));
+            if (!confirmed) return false;
+
+            proto.isArchived = false;
+            proto.hasUnarchivedChanges = false;
+            proto.lastArchivedVersion = '';
+            proto.lifecycleStatus = 'draft';
+            proto.archivedVersions = [];
+            if (Array.isArray(proto.versions)) {
+                proto.versions = [];
+            }
+            proto.updatedAt = new Date().toISOString();
+            proto._cloudUpdated = Date.now();
+
+            const syncTarget = (target) => {
+                if (target && String(target.id) === String(proto.id)) {
+                    target.isArchived = false;
+                    target.hasUnarchivedChanges = false;
+                    target.lastArchivedVersion = '';
+                    target.lifecycleStatus = 'draft';
+                    target.archivedVersions = [];
+                    if (Array.isArray(target.versions)) target.versions = [];
+                    target.updatedAt = proto.updatedAt;
+                    target._cloudUpdated = proto._cloudUpdated;
+                }
+            };
+            syncTarget(window.currentArincProtocol);
+            syncTarget(window.currentSerialProtocol);
+            syncTarget(window.currentCanProtocol);
+            syncTarget(window.currentViewerProtocol);
+
+            if (ProtoView.ActiveSession && typeof ProtoView.ActiveSession.set === 'function') {
+                ProtoView.ActiveSession.set(proto);
+            }
+
+            await this.persistProtocol(proto);
+            showToast(`已放弃归档，协议「${proto.name}」已取出为未归档状态`, 'success');
+            this.refreshActiveViews(proto);
+            return true;
+        },
+
         // 点击「归档」按钮的处理逻辑 (核心业务规则)
         async handleArchiveClick(protoIdOrProto) {
             let proto = protoIdOrProto;
@@ -523,6 +593,11 @@
             const serialView = document.getElementById('serial-view');
             if (serialView && serialView.classList.contains('active')) {
                 if (window.loadSerialProtocolIntoEditor) window.loadSerialProtocolIntoEditor(proto.id || proto);
+            }
+
+            const canView = document.getElementById('can-view');
+            if (canView && canView.classList.contains('active')) {
+                if (window.loadCanProtocolIntoEditor) window.loadCanProtocolIntoEditor(proto.id || proto);
             }
 
             const viewerView = document.getElementById('protocol-viewer-view');
@@ -3171,6 +3246,12 @@
 
     global.handleProtocolArchive = function(proto) {
         ArchiveManager.handleArchiveClick(proto);
+    };
+    global.handleProtocolUnarchive = function(proto) {
+        return ArchiveManager.unarchiveProtocol(proto);
+    };
+    global.unarchiveProtocol = function(proto) {
+        return ArchiveManager.unarchiveProtocol(proto);
     };
     global.revertProtocolToArchived = function(proto) {
         ArchiveManager.revertToArchived(proto);

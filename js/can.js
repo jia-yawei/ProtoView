@@ -350,67 +350,6 @@
                 fields: this.decodeCanIdObj(num),
                 j1939
             };
-        },
-
-        /**
-         * 生成符合工业标准的 Vector DBC 规范文本
-         * @param {Object} proto CAN 通信协议对象
-         * @returns {string} DBC 文件文本
-         */
-        generateDbc(proto) {
-            if (!proto) return '';
-            const frames = proto.frames || [];
-            let out = [];
-
-            out.push(`VERSION "ProtoView_1.0"`);
-            out.push(`NS_ :`);
-            out.push(`BS_:`);
-            out.push(`BU_: Master Node`);
-            out.push(``);
-
-            frames.forEach(f => {
-                const idInfo = this.parseCanId(f.canId, f.isExtended);
-                // Vector DBC 中，扩展帧 ID 最高位需按规范打上标志位 0x80000000
-                const dbcId = f.isExtended ? (idInfo.rawNum | 0x80000000) : idInfo.rawNum;
-                const safeName = (f.name || 'Message').replace(/[^a-zA-Z0-9_]/g, '_');
-                const dlc = parseInt(f.dlc, 10) || 8;
-                const sender = f.direction === 'Rx' ? 'Node' : 'Master';
-
-                out.push(`BO_ ${dbcId} ${safeName}: ${dlc} ${sender}`);
-
-                const signals = f.signals || [];
-                signals.forEach(s => {
-                    const sName = (s.identifier || s.name || 'Signal').replace(/[^a-zA-Z0-9_]/g, '_');
-                    const startBit = parseInt(s.startBit, 10) || 0;
-                    const bitLen = parseInt(s.bitLength, 10) || 1;
-                    const byteOrder = s.byteOrder === 'motorola' ? '0' : '1'; // 0 = Motorola, 1 = Intel
-                    const sign = String(s.dataType || '').startsWith('i') ? '-' : '+';
-                    const factor = s.factor !== undefined && s.factor !== '' ? s.factor : 1;
-                    const offset = s.offset !== undefined && s.offset !== '' ? s.offset : 0;
-                    const min = s.min !== undefined && s.min !== '' ? s.min : 0;
-                    const max = s.max !== undefined && s.max !== '' ? s.max : 100;
-                    const unit = s.unit || '';
-                    const receiver = sender === 'Master' ? 'Node' : 'Master';
-
-                    out.push(` SG_ ${sName} : ${startBit}|${bitLen}@${byteOrder}${sign} (${factor},${offset}) [${min}|${max}] "${unit}" ${receiver}`);
-                });
-                out.push(``);
-            });
-
-            // 补充枚举值注释 (VAL_)
-            frames.forEach(f => {
-                const idInfo = this.parseCanId(f.canId, f.isExtended);
-                const dbcId = f.isExtended ? (idInfo.rawNum | 0x80000000) : idInfo.rawNum;
-                (f.signals || []).forEach(s => {
-                    if (s.enumDict && s.enumDict.length > 0) {
-                        const sName = (s.identifier || s.name || 'Signal').replace(/[^a-zA-Z0-9_]/g, '_');
-                        const pairs = s.enumDict.map(e => `${e.value} "${e.label || ''}"`).join(' ');
-                        out.push(`VAL_ ${dbcId} ${sName} ${pairs} ;`);
-                    }
-                });
-            });
-
-            return out.join('\n');
         }
     };
 

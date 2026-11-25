@@ -542,6 +542,15 @@
             };
         }
 
+        const btnArincUnarchive = document.getElementById('btn-arinc-unarchive');
+        if (btnArincUnarchive) {
+            const canUnarchive = Boolean(verInfo.hasArchiveRecord || verInfo.isArchived);
+            btnArincUnarchive.style.display = canUnarchive ? 'inline-flex' : 'none';
+            btnArincUnarchive.onclick = () => {
+                if (window.handleProtocolUnarchive && p) window.handleProtocolUnarchive(p);
+            };
+        }
+
         if (toolbarProtoTitle) {
             // 精简显示：仅展示协议名称，去除冗余前缀
             toolbarProtoTitle.innerHTML = `<i class="fa-solid fa-plane-departure" style="color:var(--accent-color);"></i> ${escapeHTML(p.name || '429 协议')}`;

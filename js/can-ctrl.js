@@ -365,22 +365,57 @@
     // 渲染顶栏协议基础信息与数据包工具栏
     function renderToolbarInfo() {
         if (!currentCanProtocol) return;
+        const p = currentCanProtocol;
+        window.currentCanProtocol = currentCanProtocol;
+
+        if (ProtoView.ArchiveManager) {
+            ProtoView.ArchiveManager.ensureProtocolVersion(p);
+        } else if (ProtoView.VersionManager) {
+            ProtoView.VersionManager.ensureProtocolVersion(p);
+        }
+        const verInfo = ProtoView.ArchiveManager
+            ? ProtoView.ArchiveManager.getVersionDisplayInfo(p)
+            : { versionText: p.version || 'v1.0', baseVersion: p.version || 'v1.0', isArchived: Boolean(p.isArchived), isModified: false, hasArchiveRecord: Boolean(p.isArchived), canArchive: !p.isArchived, archiveBtnText: p.isArchived ? '已归档' : '归档', archiveBtnIcon: p.isArchived ? 'fa-check' : 'fa-box-archive', archiveBtnClass: p.isArchived ? 'dense-btn-disabled' : 'dense-btn', statusLabel: p.isArchived ? '已归档' : '未归档', statusClass: p.isArchived ? 'is-archived' : 'not-archived', versionPillClass: 'proto-version-pill', tooltip: '' };
+
         const titleEl = document.getElementById('can-toolbar-proto-title');
         if (titleEl) {
-            titleEl.innerHTML = `<i class="fa-solid fa-network-wired" style="color:#10b981;"></i> ${escapeHTML(currentCanProtocol.name || 'CAN 协议')}`;
-            titleEl.title = (currentCanProtocol.product ? `所属产品: ${currentCanProtocol.product}\n` : '') + `协议名称: ${currentCanProtocol.name || 'CAN 协议'}\n标准规范: ${currentCanProtocol.canStandard || 'CAN2.0B'}\n波特率: ${(currentCanProtocol.baudRate || 500000) / 1000}kbps`;
+            titleEl.innerHTML = `<i class="fa-solid fa-network-wired" style="color:#10b981;"></i> ${escapeHTML(p.name || 'CAN 协议')}`;
+            titleEl.title = (p.product ? `所属产品: ${p.product}\n` : '') + `协议名称: ${p.name || 'CAN 协议'}\n标准规范: ${p.canStandard || 'CAN2.0B'}\n波特率: ${(p.baudRate || 500000) / 1000}kbps`;
         }
 
         const verPill = document.getElementById('can-ver-pill');
         if (verPill) {
-            verPill.textContent = currentCanProtocol.version || 'v1.0';
+            verPill.textContent = verInfo.versionText;
+            verPill.className = verInfo.versionPillClass;
         }
 
         const arcBadge = document.getElementById('can-archive-badge');
         if (arcBadge) {
-            const isArchived = Boolean(currentCanProtocol.isArchived);
-            arcBadge.textContent = isArchived ? '已归档' : '未归档';
-            arcBadge.className = `proto-archive-badge ${isArchived ? 'is-archived' : 'not-archived'}`;
+            arcBadge.innerHTML = `<i class="fa-solid ${verInfo.isArchived ? 'fa-box-archive' : (verInfo.isModified ? 'fa-pen-to-square' : 'fa-folder-open')}"></i> ${verInfo.statusLabel}`;
+            arcBadge.className = `proto-archive-badge ${verInfo.statusClass}`;
+            arcBadge.title = verInfo.tooltip;
+        }
+
+        const btnCanArchive = document.getElementById('btn-can-archive');
+        if (btnCanArchive) {
+            btnCanArchive.className = `dense-btn ${verInfo.archiveBtnClass || ''}`;
+            btnCanArchive.disabled = !verInfo.canArchive;
+            btnCanArchive.style.opacity = verInfo.canArchive ? '1' : '0.65';
+            btnCanArchive.style.cursor = verInfo.canArchive ? 'pointer' : 'not-allowed';
+            btnCanArchive.title = verInfo.canArchive ? (verInfo.isModified ? '协议发生修改：点击升版归档' : '首次归档当前协议为正式基准') : '当前协议已归档且无改动，无需重复归档';
+            btnCanArchive.innerHTML = `<i class="fa-solid ${verInfo.archiveBtnIcon}" style="color:${verInfo.canArchive ? (verInfo.isModified ? 'var(--accent-color)' : '#059669') : 'var(--success)'};"></i> <span>${verInfo.archiveBtnText}</span>`;
+            btnCanArchive.onclick = () => {
+                if (window.handleProtocolArchive && p) window.handleProtocolArchive(p);
+            };
+        }
+
+        const btnCanUnarchive = document.getElementById('btn-can-unarchive');
+        if (btnCanUnarchive) {
+            const canUnarchive = Boolean(verInfo.hasArchiveRecord || verInfo.isArchived);
+            btnCanUnarchive.style.display = canUnarchive ? 'inline-flex' : 'none';
+            btnCanUnarchive.onclick = () => {
+                if (window.handleProtocolUnarchive && p) window.handleProtocolUnarchive(p);
+            };
         }
 
         updateCanPacketToolbar();
@@ -1507,15 +1542,6 @@
         }
     }
 
-    // 导出 Vector DBC 文件
-    function exportCanDbc() {
-        if (!currentCanProtocol) return;
-        const dbcText = ProtoView.CanHelper ? ProtoView.CanHelper.generateDbc(currentCanProtocol) : '';
-        const safeName = (currentCanProtocol.name || 'CAN_Protocol').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_');
-        downloadFile(dbcText, `${safeName}.dbc`, 'text/plain;charset=utf-8');
-        showToast(`已成功导出 Vector DBC 文件「${safeName}.dbc」！`, 'success');
-    }
-
     // 绑定 DOM 事件
     function bindCanEvents() {
         // 返回按钮
@@ -1743,7 +1769,6 @@
         updateCanIdFromFullHex,
         openCanIdFieldDictModal,
         openCanSignalDictModal,
-        exportCanDbc,
         copyCanHex,
         bindEvents: bindCanEvents
     };
@@ -1787,13 +1812,11 @@
     global.openCanIdFieldDictModal = openCanIdFieldDictModal;
     global.openCanSignalDictModal = openCanSignalDictModal;
 
-    // 仿真与导出
+    // 仿真
     global.updateCanSimByte = updateCanSimByte;
     global.randomizeCanSim = randomizeCanSim;
     global.resetCanSim = resetCanSim;
     global.copyCanHex = copyCanHex;
-    global.exportCanDbc = exportCanDbc;
-    global.exportCanDbcFile = exportCanDbc;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindCanEvents);
