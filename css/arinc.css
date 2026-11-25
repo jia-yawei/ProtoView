@@ -17,7 +17,8 @@
 
 /* 视图容器：铺满垂直空间 */
 #arinc429-view,
-#serial-view {
+#serial-view,
+#can-view {
     height: 100%;
     display: none;
     flex-direction: column;
@@ -27,7 +28,8 @@
 }
 
 #arinc429-view.active,
-#serial-view.active {
+#serial-view.active,
+#can-view.active {
     display: flex;
 }
 
@@ -37,7 +39,10 @@
 #arinc429-view select,
 #serial-view input[type="text"],
 #serial-view input[type="number"],
-#serial-view select {
+#serial-view select,
+#can-view input[type="text"],
+#can-view input[type="number"],
+#can-view select {
     box-sizing: border-box;
     margin: 0;
     padding: 0 8px;
@@ -55,17 +60,21 @@
 #arinc429-view input[type="number"]::-webkit-inner-spin-button,
 #arinc429-view input[type="number"]::-webkit-outer-spin-button,
 #serial-view input[type="number"]::-webkit-inner-spin-button,
-#serial-view input[type="number"]::-webkit-outer-spin-button {
+#serial-view input[type="number"]::-webkit-outer-spin-button,
+#can-view input[type="number"]::-webkit-inner-spin-button,
+#can-view input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
 #arinc429-view input[type="number"],
-#serial-view input[type="number"] {
+#serial-view input[type="number"],
+#can-view input[type="number"] {
     -moz-appearance: textfield;
 }
 
 #arinc429-view select,
-#serial-view select {
+#serial-view select,
+#can-view select {
     padding-right: 20px;
     cursor: pointer;
 }
@@ -73,7 +82,9 @@
 #arinc429-view input:focus,
 #arinc429-view select:focus,
 #serial-view input:focus,
-#serial-view select:focus {
+#serial-view select:focus,
+#can-view input:focus,
+#can-view select:focus {
     border-color: var(--accent-color);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
@@ -81,7 +92,9 @@
 #arinc429-view th,
 #arinc429-view td,
 #serial-view th,
-#serial-view td {
+#serial-view td,
+#can-view th,
+#can-view td {
     padding: 0 8px;
     margin: 0;
     font-size: 12px;
@@ -165,7 +178,11 @@
 }
 
 #arinc429-view .dense-select, 
-#arinc429-view .dense-input {
+#arinc429-view .dense-input,
+#serial-view .dense-select, 
+#serial-view .dense-input,
+#can-view .dense-select, 
+#can-view .dense-input {
     height: var(--control-height-sm, 28px);
     line-height: calc(var(--control-height-sm, 28px) - 2px);
     padding: 0 8px;
@@ -215,7 +232,8 @@
 }
 
 #arinc-packet-select-wrap,
-#serial-packet-select-wrap {
+#serial-packet-select-wrap,
+#can-packet-select-wrap {
     display: inline-flex !important;
     align-items: center !important;
     gap: 5px !important;
@@ -230,7 +248,8 @@
 }
 
 #arinc-packet-select,
-#serial-packet-select {
+#serial-packet-select,
+#can-packet-select {
     width: 130px !important;
     min-width: 105px !important;
     max-width: 165px !important;
@@ -275,7 +294,8 @@
 }
 
 #arinc-packet-direction,
-#serial-packet-direction {
+#serial-packet-direction,
+#can-packet-direction {
     width: 84px !important;
     min-width: 84px !important;
     max-width: 84px !important;
@@ -323,7 +343,8 @@
 
 /* 数据包快捷操作按钮：重命名与新增数据包高密度统一体系 (24x24 极简正方形图标按钮) */
 #btn-rename-arinc-packet,
-#btn-rename-serial-packet {
+#btn-rename-serial-packet,
+#btn-rename-can-packet {
     width: 24px !important;
     min-width: 24px !important;
     max-width: 24px !important;
@@ -353,7 +374,8 @@
 }
 
 #btn-rename-arinc-packet i,
-#btn-rename-serial-packet i {
+#btn-rename-serial-packet i,
+#btn-rename-can-packet i {
     font-size: 11.5px !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -362,19 +384,22 @@
 }
 
 #btn-rename-arinc-packet span,
-#btn-rename-serial-packet span {
+#btn-rename-serial-packet span,
+#btn-rename-can-packet span {
     display: none !important;
 }
 
 #btn-rename-arinc-packet:hover,
-#btn-rename-serial-packet:hover {
+#btn-rename-serial-packet:hover,
+#btn-rename-can-packet:hover {
     background: var(--border-color) !important;
     color: var(--accent-color) !important;
     border-color: var(--accent-color) !important;
 }
 
 #btn-add-arinc-packet,
-#btn-add-serial-packet {
+#btn-add-serial-packet,
+#btn-add-can-packet {
     width: 24px !important;
     min-width: 24px !important;
     max-width: 24px !important;
@@ -404,7 +429,8 @@
 }
 
 #btn-add-arinc-packet i,
-#btn-add-serial-packet i {
+#btn-add-serial-packet i,
+#btn-add-can-packet i {
     font-size: 11.5px !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -413,7 +439,8 @@
 }
 
 #btn-add-arinc-packet span,
-#btn-add-serial-packet span {
+#btn-add-serial-packet span,
+#btn-add-can-packet span {
     display: none !important;
 }
 
@@ -429,7 +456,8 @@
 }
 
 #btn-add-arinc-packet:hover,
-#btn-add-serial-packet:hover {
+#btn-add-serial-packet:hover,
+#btn-add-can-packet:hover {
     background: var(--accent-hover) !important;
     border-color: var(--accent-hover) !important;
     box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
@@ -437,7 +465,8 @@
 }
 
 #btn-add-arinc-packet:active,
-#btn-add-serial-packet:active {
+#btn-add-serial-packet:active,
+#btn-add-can-packet:active {
     transform: translateY(0);
 }
 
@@ -805,7 +834,8 @@ body.resizing-active .workbench-resizer {
 }
 
 #words-count-badge,
-#serial-bytes-count-badge {
+#serial-bytes-count-badge,
+#can-frames-count-badge {
     background: rgba(59, 130, 246, 0.1);
     color: var(--accent-color);
     font-size: 11px;
@@ -824,7 +854,9 @@ body.resizing-active .workbench-resizer {
     background: var(--bg-primary);
 }
 
-#arinc429-view .dense-input-sm {
+#arinc429-view .dense-input-sm,
+#serial-view .dense-input-sm,
+#can-view .dense-input-sm {
     height: 26px;
     padding: 0 8px;
     font-size: 12px;
@@ -937,8 +969,35 @@ body.resizing-active .workbench-resizer {
     padding: 0 2px !important;
     text-overflow: clip !important;
     white-space: nowrap;
-    width: 36px;
-    min-width: 36px;
+    width: 32px;
+    min-width: 32px;
+    box-sizing: border-box;
+}
+
+.dense-word-row td.col-dir,
+.col-dir {
+    padding: 0 4px !important;
+    text-align: center;
+    width: 52px;
+    min-width: 52px;
+    box-sizing: border-box;
+}
+
+.dense-word-row td.col-count,
+.col-count {
+    padding: 0 4px !important;
+    text-align: center;
+    width: 50px;
+    min-width: 50px;
+    box-sizing: border-box;
+}
+
+.dense-word-row td.col-action,
+.col-action {
+    padding: 0 2px !important;
+    text-align: center;
+    width: 32px;
+    min-width: 32px;
     box-sizing: border-box;
 }
 
@@ -964,11 +1023,15 @@ body.resizing-active .workbench-resizer {
 .dense-dir-tag {
     font-size: 11px;
     font-weight: 600;
-    padding: 1.5px 8px;
+    padding: 1.5px 6px;
     border-radius: var(--radius-pill, 9999px);
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     line-height: 1.2;
+    white-space: nowrap;
+    box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 .dir-tx {

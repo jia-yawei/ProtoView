@@ -115,7 +115,7 @@
             return; // 已处于目标视图，避免重复重绘与事件风暴循环
         }
 
-        if (!force && currentActive && (currentActive.id === 'arinc429-view' || currentActive.id === 'serial-view')) {
+        if (!force && currentActive && (currentActive.id === 'arinc429-view' || currentActive.id === 'serial-view' || currentActive.id === 'can-view')) {
             if (ProtoView.DraftManager && ProtoView.DraftManager.hasUnsavedChanges()) {
                 if (typeof ProtoView.confirmUnsavedNavigation === 'function') {
                     ProtoView.confirmUnsavedNavigation('离开当前编辑页面', () => {
@@ -153,7 +153,7 @@
 
         const mainContent = document.querySelector('.main-content');
         if (mainContent) {
-            if (viewId === 'arinc429-view' || viewId === 'serial-view' || viewId === 'protocol-viewer-view' || viewId === 'protocol-version-view') {
+            if (viewId === 'arinc429-view' || viewId === 'serial-view' || viewId === 'can-view' || viewId === 'protocol-viewer-view' || viewId === 'protocol-version-view') {
                 mainContent.classList.add('dense-workbench-active');
             } else {
                 mainContent.classList.remove('dense-workbench-active');
@@ -311,11 +311,155 @@
         });
     }
 
+    /**
+     * 8. 全局自定义输入弹窗 (Promise 异步化，彻底取代原生浏览器 prompt)
+     * @param {Object} options
+     *   - title: 弹窗标题 (默认: '重命名')
+     *   - label: 输入提示文案 (默认: '请输入新的名称：')
+     *   - value: 初始默认值
+     *   - placeholder: 输入框占位符
+     *   - hint: 补充提示文案
+     *   - icon: 图标类名 (默认: 'fa-pen-to-square')
+     *   - confirmText: 确认按钮文字 (默认: '确定')
+     *   - cancelText: 取消按钮文字 (默认: '取消')
+     *   - allowEmpty: 是否允许提交空值 (默认: false)
+     *   - emptyMessage: 空值时的提示文案
+     * @returns {Promise<string|null>} 用户输入的文本，取消则返回 null
+     */
+    let activePromptCleanup = null;
+    function showPrompt(options = {}) {
+        if (typeof activePromptCleanup === 'function') {
+            activePromptCleanup(null);
+        }
+        return new Promise((resolve) => {
+            const modal = document.getElementById('global-prompt-modal');
+            const input = document.getElementById('gpm-input');
+            if (!modal || !input) {
+                const nativeVal = window.prompt(options.label || options.title || '请输入：', options.value || '');
+                resolve(nativeVal);
+                return;
+            }
+
+            const titleEl = document.getElementById('gpm-title');
+            const labelEl = document.getElementById('gpm-label');
+            const hintEl = document.getElementById('gpm-hint');
+            const errorEl = document.getElementById('gpm-error');
+            const iconEl = document.getElementById('gpm-icon');
+            const btnConfirm = document.getElementById('gpm-btn-confirm');
+            const btnCancel = document.getElementById('gpm-btn-cancel');
+            const btnClose = document.getElementById('gpm-btn-close');
+
+            if (titleEl) titleEl.textContent = options.title || '重命名';
+            if (labelEl) labelEl.textContent = options.label || '请输入新的名称：';
+            if (iconEl) iconEl.className = `fa-solid ${options.icon || 'fa-pen-to-square'}`;
+            if (btnConfirm) btnConfirm.textContent = options.confirmText || '确定';
+            if (btnCancel) btnCancel.textContent = options.cancelText || '取消';
+
+            if (hintEl) {
+                if (options.hint) {
+                    hintEl.textContent = options.hint;
+                    hintEl.style.display = 'block';
+                } else {
+                    hintEl.style.display = 'none';
+                }
+            }
+            if (errorEl) {
+                errorEl.style.display = 'none';
+                errorEl.textContent = '';
+            }
+
+            const initVal = options.value !== undefined && options.value !== null
+                ? options.value
+                : (options.defaultValue !== undefined && options.defaultValue !== null ? options.defaultValue : '');
+            input.value = String(initVal);
+            input.placeholder = options.placeholder || '请输入...';
+
+            let isResolved = false;
+            let backdropDownTarget = null;
+
+            function cleanup(result) {
+                if (isResolved) return;
+                isResolved = true;
+                activePromptCleanup = null;
+                modal.classList.remove('active');
+                window.removeEventListener('keydown', handleKey);
+                modal.removeEventListener('mousedown', handleMouseDown);
+                modal.removeEventListener('click', handleBackdropClick);
+                input.removeEventListener('input', clearError);
+                if (btnConfirm) btnConfirm.onclick = null;
+                if (btnCancel) btnCancel.onclick = null;
+                if (btnClose) btnClose.onclick = null;
+                resolve(result);
+            }
+            activePromptCleanup = cleanup;
+
+            function clearError() {
+                if (errorEl) errorEl.style.display = 'none';
+            }
+
+            function submit() {
+                const val = input.value.trim();
+                if (!options.allowEmpty && !val) {
+                    if (errorEl) {
+                        errorEl.textContent = options.emptyMessage || '请输入有效内容，不能为空';
+                        errorEl.style.display = 'block';
+                    }
+                    input.focus();
+                    return;
+                }
+                cleanup(options.allowEmpty ? input.value : val);
+            }
+
+            function handleKey(e) {
+                if (e.isComposing) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cleanup(null);
+                } else if (e.key === 'Enter' && document.activeElement === input) {
+                    e.preventDefault();
+                    submit();
+                }
+            }
+
+            function handleMouseDown(e) {
+                backdropDownTarget = e.target;
+            }
+
+            function handleBackdropClick(e) {
+                const selection = window.getSelection ? window.getSelection().toString() : '';
+                if (selection && selection.length > 0) {
+                    backdropDownTarget = null;
+                    return;
+                }
+                if (e.target === modal && backdropDownTarget === modal) {
+                    cleanup(null);
+                }
+                backdropDownTarget = null;
+            }
+
+            input.addEventListener('input', clearError);
+            if (btnConfirm) btnConfirm.onclick = submit;
+            if (btnCancel) btnCancel.onclick = () => cleanup(null);
+            if (btnClose) btnClose.onclick = () => cleanup(null);
+
+            modal.addEventListener('mousedown', handleMouseDown);
+            modal.addEventListener('click', handleBackdropClick);
+            window.addEventListener('keydown', handleKey);
+            modal.classList.add('active');
+
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 30);
+        });
+    }
+
     // 组装挂载命名空间
     ProtoView.Utils = {
         escapeHTML,
         showToast,
         showConfirm,
+        showPrompt,
         copyTextToClipboard,
         fallbackCopy,
         downloadFile
@@ -326,6 +470,7 @@
     };
     ProtoView.Controllers = {};
     ProtoView.showConfirm = showConfirm;
+    ProtoView.showPrompt = showPrompt;
 
     global.ProtoView = ProtoView;
 
@@ -333,6 +478,7 @@
     global.escapeHTML = escapeHTML;
     global.showToast = showToast;
     global.showConfirmDialog = showConfirm;
+    global.showPromptDialog = showPrompt;
     global.copyTextToClipboard = copyTextToClipboard;
     global.downloadFile = downloadFile;
     global.switchToView = switchToView;

@@ -20,28 +20,31 @@
  */
 
 /* 1. 主题变量与全局重置 */
-@import url("variables.css?v=20261119_24");
+@import url("variables.css?v=20261119_25");
 
 /* 2. 侧边导航与全局结构 */
-@import url("sidebar.css?v=20261119_24");
+@import url("sidebar.css?v=20261119_25");
 
 /* 3. 通用系统基础组件与模态框 */
-@import url("components.css?v=20261119_24");
+@import url("components.css?v=20261119_25");
 
 /* 4. ARINC 429 航电工作台 */
-@import url("arinc.css?v=20261119_24");
+@import url("arinc.css?v=20261124_09");
 
 /* 5. 串口总线协议工作台 */
-@import url("serial.css?v=20261119_24");
+@import url("serial.css?v=20261124_09");
 
-/* 6. 协议查阅中心与导出中心 */
-@import url("viewer.css?v=20261119_24");
+/* 6. CAN 总线与 DBC 矩阵工作台 */
+@import url("can.css?v=20261125_12");
 
-/* 7. 版本管理中心与 Git 时间轴 Diff 比对 */
-@import url("version-mgr.css?v=20261119_24");
+/* 7. 协议查阅中心与导出中心 */
+@import url("viewer.css?v=20261119_26");
 
-/* 8. 管理员控制台与全屏准入门户 */
-@import url("admin.css?v=20261119_14");
+/* 8. 版本管理中心与 Git 时间轴 Diff 比对 */
+@import url("version-mgr.css?v=20261119_26");
+
+/* 9. 管理员控制台与全屏准入门户 */
+@import url("admin.css?v=20261119_26");
 
 /* 9. 独立账号认证模块 */
 @import url("auth.css?v=20261119_14");

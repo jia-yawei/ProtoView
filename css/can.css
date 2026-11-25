@@ -1,0 +1,1049 @@
+/* ========================================================
+   CAN 总线工程工作台 (CAN 2.0A/B & CAN FD / DBC 矩阵) 专用样式
+   ======================================================== */
+
+/* 顶部工具栏徽章与微型控件 */
+.badge-proto-can-solid {
+    background: rgba(16, 185, 129, 0.12) !important;
+    color: #059669 !important;
+    border: 1px solid rgba(16, 185, 129, 0.25) !important;
+    font-weight: 700 !important;
+}
+
+[data-theme="dark"] .badge-proto-can-solid {
+    background: rgba(16, 185, 129, 0.2) !important;
+    color: #34d399 !important;
+    border-color: rgba(52, 211, 153, 0.35) !important;
+}
+
+/* 报文主控条 (突出 CAN ID、格式类型、报文名、DLC 与周期) */
+/* CAN 醒目标号 ID 模块 (继承与微调 prominent-label-card，完美对齐 429 规范) */
+#can-inspector-panel .prominent-label-card {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    height: 30px;
+}
+
+#can-inspector-panel .prominent-label-card .plc-tag {
+    color: #059669;
+}
+
+[data-theme="dark"] #can-inspector-panel .prominent-label-card {
+    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(52, 211, 153, 0.4);
+}
+
+[data-theme="dark"] #can-inspector-panel .prominent-label-card .plc-tag {
+    color: #34d399;
+}
+
+#can-inspector-panel .prominent-octal-input {
+    width: 96px !important;
+    font-size: 13.5px !important;
+    color: #059669 !important;
+    background: rgba(16, 185, 129, 0.12) !important;
+    border-color: rgba(16, 185, 129, 0.3) !important;
+    text-transform: uppercase;
+}
+
+[data-theme="dark"] #can-inspector-panel .prominent-octal-input {
+    color: #34d399 !important;
+    background: rgba(52, 211, 153, 0.15) !important;
+    border-color: rgba(52, 211, 153, 0.4) !important;
+}
+
+#can-inspector-panel .prominent-octal-input:focus {
+    border-color: #059669 !important;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
+}
+
+/* CAN 报文表格行高亮选中与悬浮样式 */
+.can-frame-row.active {
+    background: rgba(16, 185, 129, 0.08) !important;
+    border-left: 3px solid #10b981 !important;
+}
+.can-frame-row:hover {
+    background: rgba(16, 185, 129, 0.04);
+}
+
+.can-frame-primary-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 6px);
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.can-id-card {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    border-radius: var(--radius-sm, 6px);
+    padding: 0 6px;
+    height: var(--control-height-sm, 28px);
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.can-id-prefix {
+    font-size: 11px;
+    font-weight: 700;
+    color: #059669;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+[data-theme="dark"] .can-id-prefix {
+    color: #34d399;
+}
+
+.can-id-input {
+    width: 90px;
+    border: none !important;
+    background: transparent !important;
+    font-family: 'JetBrains Mono', Consolas, monospace !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    color: var(--text-primary) !important;
+    outline: none !important;
+    padding: 0 !important;
+    height: 24px !important;
+    line-height: 24px !important;
+}
+
+.can-id-helper-pill {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    background: rgba(0, 0, 0, 0.04);
+    padding: 2px 7px;
+    border-radius: var(--radius-pill, 9999px);
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .can-id-helper-pill {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.can-frame-name-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 180px;
+}
+
+.can-frame-name-input {
+    width: 100%;
+    height: var(--control-height-sm, 28px);
+    padding: 0 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 6px);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.can-frame-name-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+/* ========================================================
+   CAN 8×8 (64-Bit) 矩阵位图拓扑全景图 (DBC Bit Matrix Visualizer)
+   ======================================================== */
+.can-matrix-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 6px);
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}
+
+.can-matrix-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.can-matrix-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.can-matrix-stats {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.can-stat-chip {
+    padding: 1.5px 7px;
+    border-radius: var(--radius-pill, 9999px);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+}
+
+.can-matrix-table-wrap {
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.can-matrix-grid {
+    display: table;
+    border-collapse: separate;
+    border-spacing: 3px;
+    width: 100%;
+    min-width: 520px;
+}
+
+.cmg-head-row, .cmg-data-row {
+    display: table-row;
+}
+
+.cmg-corner-th, .cmg-col-th, .cmg-row-th, .cmg-cell {
+    display: table-cell;
+    vertical-align: middle;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.cmg-corner-th {
+    width: 58px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 2px 4px;
+    text-align: left;
+}
+
+.cmg-col-th {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    padding: 2px 0 4px 0;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.cmg-row-th {
+    width: 58px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    text-align: left;
+    white-space: nowrap;
+    padding: 0 4px;
+}
+
+/* 单元格 (每个 Bit 一个方块) */
+.cmg-cell {
+    height: 30px;
+    min-width: 32px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    user-select: none;
+    transition: all 0.12s ease;
+    position: relative;
+}
+
+.cmg-cell:hover {
+    transform: scale(1.06);
+    border-color: var(--accent-color);
+    z-index: 5;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.cmg-cell.cell-occupied {
+    font-weight: 700;
+    color: #ffffff;
+}
+
+/* 8 种信号色卡配色 (低饱和度优雅工程感) */
+.cmg-cell.sig-color-0 { background: #2563eb; border-color: #1d4ed8; }
+.cmg-cell.sig-color-1 { background: #059669; border-color: #047857; }
+.cmg-cell.sig-color-2 { background: #d97706; border-color: #b45309; }
+.cmg-cell.sig-color-3 { background: #7c3aed; border-color: #6d28d9; }
+.cmg-cell.sig-color-4 { background: #0891b2; border-color: #0e7490; }
+.cmg-cell.sig-color-5 { background: #db2777; border-color: #be185d; }
+.cmg-cell.sig-color-6 { background: #4f46e5; border-color: #4338ca; }
+.cmg-cell.sig-color-7 { background: #ea580c; border-color: #c2410c; }
+
+/* 起始位高亮小标记 (MSB / LSB) */
+.cmg-cell.is-start-bit::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+/* 冲突位告警 (两信号占位重叠) */
+.cmg-cell.cell-conflict {
+    background: #ef4444 !important;
+    border-color: #b91c1c !important;
+    color: #ffffff !important;
+    animation: canPulseWarning 1.2s infinite;
+}
+
+@keyframes canPulseWarning {
+    0%, 100% { box-shadow: 0 0 0 1px #ef4444; }
+    50% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.4); }
+}
+
+/* 高亮选中信号关联的所有位 */
+.cmg-cell.cell-highlight {
+    outline: 2px solid #ffffff;
+    box-shadow: 0 0 0 3px var(--accent-color) !important;
+    transform: scale(1.08);
+    z-index: 6;
+}
+
+/* ========================================================
+   CAN 信号规格卡片列表 (DBC 规范独立卡片)
+   ======================================================== */
+.can-signals-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.can-signals-cards-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.can-signal-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 6px);
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    transition: all 0.15s ease;
+    border-left: 3px solid var(--border-color);
+    position: relative;
+}
+
+.can-signal-card:hover {
+    border-color: var(--accent-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.can-signal-card.active {
+    border-left-color: var(--accent-color) !important;
+    background: rgba(59, 130, 246, 0.02);
+    box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.can-sig-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.can-sig-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.can-sig-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: var(--radius-pill, 9999px);
+    color: #ffffff;
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.can-sig-name-input {
+    flex: 1;
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    color: var(--text-primary) !important;
+    background: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius-sm, 6px);
+    padding: 0 8px !important;
+    height: var(--control-height-sm, 28px) !important;
+    outline: none;
+    transition: all 0.12s ease;
+    min-width: 130px;
+}
+
+[data-theme="dark"] .can-sig-name-input {
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.can-sig-ident-input {
+    width: 140px;
+    font-family: 'JetBrains Mono', Consolas, monospace !important;
+    font-size: 11.5px !important;
+    height: var(--control-height-sm, 28px) !important;
+    border-radius: var(--radius-sm, 6px) !important;
+    padding: 0 8px !important;
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-secondary) !important;
+}
+
+.can-sig-span-pill {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 10.5px;
+    padding: 1.5px 7px;
+    border-radius: var(--radius-pill, 9999px);
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .can-sig-span-pill {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.can-sig-props-flow {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px 8px;
+    flex-wrap: wrap;
+}
+
+.can-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex-shrink: 0;
+}
+
+.can-cell label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.can-input, .can-select {
+    height: var(--control-height-sm, 28px);
+    line-height: 26px;
+    padding: 0 6px !important;
+    font-size: 11.5px !important;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 6px);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    outline: none;
+    transition: all 0.12s ease;
+    box-sizing: border-box;
+}
+
+.can-input:focus, .can-select:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.can-cell-remark {
+    flex: 1;
+    min-width: 140px;
+    flex-shrink: 1;
+}
+
+.can-cell-remark input {
+    width: 100%;
+}
+
+/* ========================================================
+   CAN 极简高密度仿真与物理值解码底栏 (Simulation & Decode Bar)
+   ======================================================== */
+.can-bottom-sim-bar {
+    height: 38px;
+    min-height: 38px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    border-radius: 0 0 var(--radius-sm, 6px) var(--radius-sm, 6px);
+    overflow-x: auto;
+}
+
+.can-sim-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.can-sim-bytes-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.can-sim-byte-input {
+    width: 32px;
+    height: 24px;
+    padding: 0;
+    text-align: center;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--accent-color);
+    outline: none;
+}
+
+.can-sim-byte-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.can-sim-decode-pills {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.can-decode-item {
+    font-size: 11px;
+    padding: 1.5px 8px;
+    border-radius: var(--radius-pill, 9999px);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.can-decode-item .cdi-val {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+/* ========================================================
+   12 字节 CAN 协议分段架构 (前 4 字节固定 CAN ID + 后 8 字节数据)
+   ======================================================== */
+.can-fields-block {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 6px);
+    margin-bottom: 10px;
+    padding: 8px 10px;
+}
+
+.can-id-block {
+    border-left: 3px solid #10b981;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.can-data-block {
+    border-left: 3px solid #0284c7;
+}
+
+.can-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.can-block-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.can-block-pill {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1.5px 7px;
+    border-radius: var(--radius-pill, 9999px);
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.can-block-pill.data-pill {
+    background: rgba(2, 132, 199, 0.12);
+    color: #0284c7;
+    border-color: rgba(2, 132, 199, 0.25);
+}
+
+/* 4 字节十六进制直接填写栏 */
+.can-id-bytes-fill-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.cib-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.cib-group {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 4px;
+    gap: 3px;
+}
+
+.cib-sub {
+    font-size: 10px;
+    font-weight: 700;
+    color: #059669;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.cib-input {
+    width: 26px;
+    height: 20px;
+    line-height: 20px;
+    padding: 0;
+    text-align: center;
+    border: none;
+    background: transparent;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-primary);
+    outline: none;
+    text-transform: uppercase;
+}
+
+.cib-input:focus {
+    background: rgba(16, 185, 129, 0.15);
+    border-radius: 2px;
+}
+
+.cib-equal {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.cib-allbits {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #059669;
+    background: rgba(16, 185, 129, 0.1);
+    padding: 1px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+/* ========================================================
+   CAN ID 结构体定义区 (tagCAN_FRAME_ID_OBJ 联合体 7 位域网格 - 紧凑布局)
+   ======================================================== */
+.can-id-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 5px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.can-id-header .can-block-title {
+    font-size: 11.5px;
+}
+
+.can-id-header .can-block-pill {
+    font-size: 9.5px;
+    padding: 1px 6px;
+}
+
+.can-id-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cip-allbits-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.cip-allbits-group label {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin: 0;
+}
+
+.cip-allbits-group .cip-input-hex {
+    width: 98px;
+    height: 21px;
+    line-height: 19px;
+    font-size: 11.5px;
+    font-weight: 800;
+    text-align: center;
+    color: #059669 !important;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 4px;
+}
+
+[data-theme="dark"] .cip-allbits-group .cip-input-hex {
+    color: #34d399 !important;
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(52, 211, 153, 0.4);
+}
+
+/* 7个结构体字段高能响应式网格 (单行紧缩呈现) */
+.can-id-struct-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+@media (max-width: 960px) {
+    .can-id-struct-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .can-id-struct-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.cip-struct-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 4px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.cip-struct-card:hover {
+    border-color: rgba(16, 185, 129, 0.5);
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.08);
+}
+
+.csc-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 3px;
+    line-height: 14px;
+    white-space: nowrap;
+}
+
+.csc-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.csc-ident {
+    font-size: 9.5px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-weight: 600;
+    color: #059669;
+    flex-shrink: 0;
+}
+
+[data-theme="dark"] .csc-ident {
+    color: #34d399;
+}
+
+.csc-bits {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.csc-range {
+    color: var(--text-secondary);
+    font-size: 9.5px;
+    opacity: 0.85;
+}
+
+.csc-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.cip-struct-card .cip-sc-input {
+    flex: 1;
+    min-width: 0;
+    height: 21px;
+    line-height: 19px;
+    padding: 0 4px;
+    font-size: 11.5px;
+    font-weight: 800;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.cip-struct-card .cip-sc-input:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.csc-dict-preview {
+    font-size: 9.5px;
+    color: #059669;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 0;
+    line-height: 12px;
+}
+
+.csc-dict-preview:empty {
+    display: none;
+}
+
+[data-theme="dark"] .csc-dict-preview {
+    color: #34d399;
+}
+
+.cip-dict-btn {
+    width: 21px;
+    height: 21px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    border-radius: 3px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 10px;
+    padding: 0;
+    transition: all 0.12s ease;
+    flex-shrink: 0;
+}
+
+.cip-dict-btn:hover {
+    color: #059669;
+    border-color: #059669;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+[data-theme="dark"] .cip-allbits-chip {
+    color: #34d399;
+}
+
+.can-data-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.can-fields-empty-card {
+    padding: 32px 16px;
+    text-align: center;
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border-color);
+    border-radius: 6px;
+}
+
+/* 12 字节全包实时仿真排布 */
+.can-sim-bytes-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.can-sim-byte-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.csb-idx {
+    font-size: 9.5px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.can-sim-byte-chip.id-byte .csb-idx {
+    color: #059669;
+}
+
+.can-sim-byte-chip.data-byte .csb-idx {
+    color: #0284c7;
+}
+
+.csb-input {
+    width: 32px;
+    height: 24px;
+    line-height: 24px;
+    padding: 0;
+    text-align: center;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    outline: none;
+    text-transform: uppercase;
+}
+
+.can-sim-byte-chip.id-byte .csb-input {
+    color: #059669;
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+.can-sim-byte-chip.id-byte .csb-input:focus {
+    border-color: #059669;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.can-sim-byte-chip.data-byte .csb-input {
+    color: #0284c7;
+    background: rgba(2, 132, 199, 0.06);
+    border-color: rgba(2, 132, 199, 0.3);
+}
+
+.can-sim-byte-chip.data-byte .csb-input:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+}
+
+.can-decode-item.id-item {
+    background: rgba(16, 185, 129, 0.06);
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+/* 对齐 ARINC 429 规范的高密度报文表格与工具栏主题适配 */
+#can-view .dense-word-row.selected {
+    background: rgba(16, 185, 129, 0.12) !important;
+    border-left: 3px solid #10b981 !important;
+}
+
+#can-view .dense-word-row:hover {
+    background: rgba(16, 185, 129, 0.05);
+}
+
+[data-theme="dark"] #can-view .dense-word-row.selected {
+    background: rgba(16, 185, 129, 0.18) !important;
+    border-left: 3px solid #34d399 !important;
+}
+
+#can-frames-panel .dense-words-table td.col-label {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#can-frames-count-badge {
+    background: rgba(16, 185, 129, 0.12) !important;
+    color: #059669 !important;
+}
+
+[data-theme="dark"] #can-frames-count-badge {
+    background: rgba(16, 185, 129, 0.22) !important;
+    color: #34d399 !important;
+}
+
+#btn-add-can-packet,
+#btn-panel-add-can-frame {
+    background: #10b981 !important;
+    border-color: #10b981 !important;
+    color: #ffffff !important;
+}
+
+#btn-add-can-packet:hover,
+#btn-panel-add-can-frame:hover {
+    background: #059669 !important;
+    border-color: #059669 !important;
+}
+

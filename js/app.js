@@ -165,6 +165,14 @@
                     return;
                 }
 
+                const canView = document.getElementById('can-view');
+                if (canView && canView.classList.contains('active')) {
+                    if (typeof window.saveCurrentCanProtocol === 'function') {
+                        window.saveCurrentCanProtocol();
+                    }
+                    return;
+                }
+
                 const arincView = document.getElementById('arinc429-view');
                 if (arincView && arincView.classList.contains('active')) {
                     if (typeof window.saveCurrentArincProtocol === 'function') {
@@ -215,6 +223,17 @@
                     }
                     return;
                 }
+
+                const canView = document.getElementById('can-view');
+                if (canView && canView.classList.contains('active')) {
+                    e.preventDefault();
+                    if (isUndo && typeof window.performCanUndo === 'function') {
+                        window.performCanUndo();
+                    } else if (isRedo && typeof window.performCanRedo === 'function') {
+                        window.performCanRedo();
+                    }
+                    return;
+                }
             }
         });
     }
@@ -260,6 +279,11 @@
                 if (typeof window.ensureSerialProtocolLoaded === 'function') window.ensureSerialProtocolLoaded();
                 if (typeof window.setMobileSerialView === 'function' && window.innerWidth <= 768) {
                     window.setMobileSerialView('packets');
+                }
+            } else if (viewId === 'can-view') {
+                if (typeof window.ensureCanProtocolLoaded === 'function') window.ensureCanProtocolLoaded();
+                if (typeof window.setMobileCanView === 'function' && window.innerWidth <= 768) {
+                    window.setMobileCanView('frames');
                 }
             } else if (viewId === 'admin-view') {
                 if (!isAdmin) {
@@ -358,6 +382,13 @@
             if (typeof window.ensureSerialProtocolLoaded === 'function') await window.ensureSerialProtocolLoaded();
         } catch (err) {
             console.error("ProtoView: ensureSerialProtocolLoaded 失败:", err);
+        }
+
+        // 6. CAN 工作台协议载入
+        try {
+            if (typeof window.ensureCanProtocolLoaded === 'function') await window.ensureCanProtocolLoaded();
+        } catch (err) {
+            console.error("ProtoView: ensureCanProtocolLoaded 失败:", err);
         }
     }
 

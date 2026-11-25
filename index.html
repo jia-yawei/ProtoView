@@ -28,7 +28,7 @@
         })();
     </script>
     <!-- 引入自定义样式 (增加版本后缀强制穿透缓存) -->
-    <link rel="stylesheet" href="css/style.css?v=20261119_24">
+    <link rel="stylesheet" href="css/style.css?v=20261125_12">
     
     <!-- Dexie.js 简化 IndexedDB -->
     <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
@@ -303,7 +303,7 @@
             <section id="protocol-view" class="view-section active">
                 <header class="view-header compact-view-header">
                     <div class="view-header-title-box">
-                        <h1><i class="fa-solid fa-layer-group" style="color:var(--accent-color); font-size: 1.15rem;"></i> 协议库</h1>
+                        <h1><i class="fa-solid fa-layer-group" style="color:var(--accent-color); font-size: 1.15rem;"></i> 我的协议</h1>
                         <span class="view-header-desc">集中管理全机 ARINC 429、CAN 及串口总线通信协议</span>
                     </div>
                     <div class="view-header-actions">
@@ -364,8 +364,8 @@
                 <!-- 查阅中心顶部工具栏 -->
                 <header class="viewer-dense-toolbar">
                     <div class="viewer-tb-left">
-                        <button type="button" class="dense-btn" id="btn-viewer-back" title="返回协议管理列表">
-                            <i class="fa-solid fa-arrow-left"></i> 列表
+                        <button type="button" class="dense-btn" id="btn-viewer-back" onclick="if(typeof window.switchToView === 'function') window.switchToView('protocol-view');" title="返回我的协议">
+                            <i class="fa-solid fa-arrow-left"></i> 我的协议
                         </button>
                         <div class="viewer-title-group">
                             <span class="viewer-proto-title" id="viewer-proto-title">通信协议</span>
@@ -488,7 +488,7 @@
                 <!-- 极简高密度顶部工具栏 (约42px高度，精简对齐串口视图) -->
                 <header class="arinc-dense-toolbar">
                     <div class="dense-tb-left">
-                        <button type="button" class="dense-btn" id="btn-arinc-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 列表</button>
+                        <button type="button" class="dense-btn" id="btn-arinc-back" onclick="if(typeof window.switchToView === 'function') window.switchToView('protocol-view');" title="返回我的协议"><i class="fa-solid fa-arrow-left"></i> 我的协议</button>
                         <span class="dense-tb-title" id="toolbar-proto-title" title="ARINC 429 通信协议"><i class="fa-solid fa-plane-departure" style="color: var(--accent-color);"></i> 429 协议</span>
 
                         <span class="dense-tb-divider" style="height: 18px; margin: 0 4px;"></span>
@@ -502,7 +502,7 @@
                             <div id="arinc-packet-select-wrap" style="display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin: 0; padding: 0;">
                                 <select id="arinc-packet-select" class="dense-select-xs" style="font-weight: 700; width: 130px; min-width: 105px; max-width: 165px; flex: 0 0 auto; margin: 0;" title="切换当前编辑的 429 数据包 (双击可直接重命名)" ondblclick="if(window.renameCurrentArincPacket){window.renameCurrentArincPacket();}"></select>
                                 <button type="button" class="dense-btn dense-btn-primary" id="btn-add-arinc-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" title="新建 429 数据包"><i class="fa-solid fa-plus"></i></button>
-                                <button type="button" class="dense-btn dense-btn-xs" id="btn-rename-arinc-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" onclick="if(window.renameCurrentArincPacket){window.renameCurrentArincPacket();}else if(window.ProtoView&&window.ProtoView.renameCurrentArincPacket){window.ProtoView.renameCurrentArincPacket();}" title="直接修改当前数据包名称"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-rename-arinc-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" title="修改当前数据包名称"><i class="fa-solid fa-pen-to-square"></i></button>
                             </div>
 
                             <span class="dense-tb-divider" style="display: inline-block; width: 1px; min-width: 1px; max-width: 1px; height: 16px; margin: 0 6px; flex: 0 0 1px; background: var(--border-color);"></span>
@@ -629,11 +629,11 @@
                             <table class="dense-table dense-words-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 36px; text-align: center;">#</th>
+                                        <th style="width: 32px; text-align: center;">#</th>
                                         <th>Label (八进制)</th>
-                                        <th style="width: 40px; text-align: center;">方向</th>
-                                        <th style="width: 42px; text-align: center;">字段数</th>
-                                        <th style="width: 30px; text-align: center;">操作</th>
+                                        <th style="width: 52px; text-align: center;">方向</th>
+                                        <th style="width: 50px; text-align: center;">字段数</th>
+                                        <th style="width: 32px; text-align: center;">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="arinc-words-list">
@@ -798,7 +798,7 @@
                 <!-- 极简高密度顶部工具栏 (约42px高度) -->
                 <header class="arinc-dense-toolbar">
                     <div class="dense-tb-left">
-                        <button type="button" class="dense-btn" id="btn-serial-back" title="返回协议管理列表"><i class="fa-solid fa-arrow-left"></i> 列表</button>
+                        <button type="button" class="dense-btn" id="btn-serial-back" onclick="if(typeof window.switchToView === 'function') window.switchToView('protocol-view');" title="返回我的协议"><i class="fa-solid fa-arrow-left"></i> 我的协议</button>
                         <span class="dense-tb-title" id="serial-toolbar-proto-title" title="串口总线通信协议"><i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 串口协议</span>
 
                         <span class="dense-tb-divider" style="height: 18px; margin: 0 4px;"></span>
@@ -812,7 +812,7 @@
                             <div id="serial-packet-select-wrap" style="display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin: 0; padding: 0;">
                                 <select id="serial-packet-select" class="dense-select-xs" style="font-weight: 700; width: 130px; min-width: 105px; max-width: 165px; flex: 0 0 auto; margin: 0;" title="切换当前编辑的数据包 (双击可直接重命名)" ondblclick="if(window.renameCurrentSerialPacket){window.renameCurrentSerialPacket();}"></select>
                                 <button type="button" class="dense-btn dense-btn-primary" id="btn-add-serial-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" title="新建串口数据包"><i class="fa-solid fa-plus"></i></button>
-                                <button type="button" class="dense-btn dense-btn-xs" id="btn-rename-serial-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" onclick="if(window.renameCurrentSerialPacket){window.renameCurrentSerialPacket();}else if(window.ProtoView&&window.ProtoView.renameCurrentSerialPacket){window.ProtoView.renameCurrentSerialPacket();}" title="直接修改当前数据包名称"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-rename-serial-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" title="修改当前数据包名称"><i class="fa-solid fa-pen-to-square"></i></button>
                             </div>
 
                             <span class="dense-tb-divider" style="display: inline-block; width: 1px; min-width: 1px; max-width: 1px; height: 16px; margin: 0 6px; flex: 0 0 1px; background: var(--border-color);"></span>
@@ -1010,6 +1010,364 @@
 
                             <div class="dense-fields-cards-scroll" id="serial-fields-container">
                                 <!-- 由 JS 渲染每个字段的独立卡片 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 视图 3.5：CAN 总线与 DBC 矩阵工作台 (支持 11位标准/29位扩展/J1939、8×8 64位矩阵映射、DBC 信号卡片与实时仿真) -->
+            <section id="can-view" class="view-section">
+                <!-- 顶部高密度工具栏 (统一44px高度，完全对齐 ARINC 429 与串口工作台) -->
+                <header class="arinc-dense-toolbar" id="can-toolbar">
+                    <div class="dense-tb-left">
+                        <button type="button" class="dense-btn" id="btn-can-back" onclick="if(typeof window.switchToView === 'function') window.switchToView('protocol-view');" title="返回我的协议"><i class="fa-solid fa-arrow-left"></i> 我的协议</button>
+                        <span class="dense-tb-title" id="can-toolbar-proto-title" title="CAN 通信协议"><i class="fa-solid fa-network-wired" style="color: #10b981;"></i> CAN 协议</span>
+
+                        <span class="dense-tb-divider" style="height: 18px; margin: 0 4px;"></span>
+
+                        <!-- CAN 数据包切换与方向周期 (完全对齐 ARINC 429 与串口，支持多包/功能域管理) -->
+                        <div class="dense-tb-packet-selector" id="can-packet-selector-strip" style="display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;">
+                            <span style="display:inline-flex; align-items:center; color: var(--accent-color); font-size: 13px; flex: 0 0 auto;" title="CAN 数据包切换">
+                                <i class="fa-solid fa-box-archive"></i>
+                            </span>
+                            <div id="can-packet-select-wrap" style="display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin: 0; padding: 0;">
+                                <select id="can-packet-select" class="dense-select-xs" style="font-weight: 700; width: 220px; min-width: 160px; max-width: 280px; flex: 0 0 auto; margin: 0;" title="切换当前编辑的 CAN 数据包 (一个 ID 占据一包 CAN 协议，双击可直接重命名)" ondblclick="if(window.renameCurrentCanPacket){window.renameCurrentCanPacket();}"></select>
+                                <button type="button" class="dense-btn dense-btn-primary" id="btn-add-can-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" title="新建 CAN 数据包"><i class="fa-solid fa-plus"></i></button>
+                                <button type="button" class="dense-btn dense-btn-xs" id="btn-rename-can-packet" style="width: 24px; min-width: 24px; max-width: 24px; height: 24px; padding: 0; flex: 0 0 24px; margin: 0;" title="修改当前数据包名称"><i class="fa-solid fa-pen-to-square"></i></button>
+                            </div>
+
+                            <span class="dense-tb-divider" style="display: inline-block; width: 1px; min-width: 1px; max-width: 1px; height: 16px; margin: 0 6px; flex: 0 0 1px; background: var(--border-color);"></span>
+
+                            <div class="dense-form-item" title="该包通信方向 (严格单向：要么发送要么接收)" style="margin: 0; padding: 0; flex: 0 0 auto; display: inline-flex; align-items: center;">
+                                <select id="can-packet-direction" class="dense-select-xs" style="font-weight: 700; width: 84px; min-width: 84px; max-width: 84px; flex: 0 0 84px; margin: 0;">
+                                    <option value="Tx">发送</option>
+                                    <option value="Rx">接收</option>
+                                </select>
+                            </div>
+
+                            <div class="dense-form-item" id="can-packet-period-item" title="发送通讯周期 (ms)" style="margin: 0 0 0 2px; padding: 0; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px;">
+                                <label for="can-packet-period" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;">
+                                    <i class="fa-regular fa-clock" style="color: var(--text-secondary); font-size: 11px;"></i>
+                                    <span style="font-size: 11px;">周期:</span>
+                                </label>
+                                <input type="number" id="can-packet-period" class="dense-input-xs" style="width: 48px; min-width: 48px; flex: 0 0 48px; margin: 0;" min="1" max="10000" placeholder="50">
+                                <span style="font-size: 11px; color: var(--text-secondary); flex: 0 0 auto;">ms</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dense-tb-spacer"></div>
+
+                    <div class="dense-tb-actions">
+                        <!-- 协议版本与归档状态药丸 (紧凑状态呈现) -->
+                        <div class="dense-version-group" id="can-version-group" title="协议版本与归档状态">
+                            <span class="proto-version-pill" id="can-ver-pill" onclick="if(window.openProtocolVersionView && window.currentCanProtocol){window.openProtocolVersionView(window.currentCanProtocol);}else if(window.openProtocolVersionModal && window.currentCanProtocol){window.openProtocolVersionModal(window.currentCanProtocol);}" title="版本号：点击打开协议版本管理与发展历程">v1.0</span>
+                            <span class="proto-archive-badge not-archived" id="can-archive-badge" onclick="if(window.handleProtocolArchive && window.currentCanProtocol){window.handleProtocolArchive(window.currentCanProtocol);}" title="归档状态：点击进行归档">未归档</span>
+                        </div>
+
+                        <!-- 归档按钮 (直接外显在顶栏，不在更多里面，符合操作习惯) -->
+                        <button type="button" class="dense-btn" id="btn-can-archive" onclick="if(window.handleProtocolArchive && window.currentCanProtocol){window.handleProtocolArchive(window.currentCanProtocol);}" title="归档当前协议：未归档直接归档当前版本，已归档可升版并建立冻结快照">
+                            <i class="fa-solid fa-box-archive" style="color:#059669;"></i> <span>归档</span>
+                        </button>
+
+                        <!-- 导出 DBC 按钮 -->
+                        <button type="button" class="dense-btn" id="btn-can-export-dbc" onclick="if(window.exportCanDbcFile){window.exportCanDbcFile();}" title="一键导出标准 Vector DBC 文件 (*.dbc)">
+                            <i class="fa-solid fa-file-export" style="color: #0284c7;"></i> 导出 DBC
+                        </button>
+
+                        <!-- 查阅模式 (高频核心切换，保留在外侧) -->
+                        <button type="button" class="dense-btn" id="btn-can-switch-viewer" title="切换至只读查阅模式：清晰查看位域拓扑与规格书"><i class="fa-solid fa-eye" style="color:var(--accent-color);"></i> 查阅模式</button>
+
+                        <!-- [··· 更多] 下拉菜单：收纳属性、版本管理及数据包操作 -->
+                        <div class="dense-dropdown" id="can-more-dropdown">
+                            <button type="button" class="dense-btn dense-dropdown-trigger" id="btn-can-more-toggle" title="更多协议与数据包操作">
+                                <i class="fa-solid fa-ellipsis"></i> 更多 <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                            </button>
+                            <div class="dense-dropdown-menu" id="can-more-menu">
+                                <div class="dense-dropdown-header">协议操作</div>
+                                <button type="button" class="dense-dropdown-item" id="btn-view-can-props" title="查看或修改 CAN 物理参数">
+                                    <i class="fa-solid fa-sliders"></i><span>CAN 物理属性</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-can-diff" onclick="if(window.openProtocolVersionView && window.currentCanProtocol){window.openProtocolVersionView(window.currentCanProtocol);}else if(window.openProtocolVersionModal && window.currentCanProtocol){window.openProtocolVersionModal(window.currentCanProtocol);}" title="查看协议版本演进历程与比对差异">
+                                    <i class="fa-solid fa-code-branch" style="color:var(--accent-color);"></i><span>协议版本管理</span>
+                                </button>
+                                <div class="dense-dropdown-divider"></div>
+                                <div class="dense-dropdown-header">数据包操作</div>
+                                <button type="button" class="dense-dropdown-item" id="btn-menu-add-can-packet" title="添加新 CAN 数据包">
+                                    <i class="fa-solid fa-plus" style="color: var(--accent-color);"></i><span>新增数据包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-menu-rename-can-packet" title="重命名当前 CAN 数据包">
+                                    <i class="fa-solid fa-pen-to-square"></i><span>重命名当前包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item" id="btn-duplicate-can-packet" title="克隆当前数据包及其报文">
+                                    <i class="fa-solid fa-copy"></i><span>克隆当前数据包</span>
+                                </button>
+                                <button type="button" class="dense-dropdown-item item-danger" id="btn-delete-can-packet" title="删除当前数据包">
+                                    <i class="fa-solid fa-trash"></i><span>删除当前数据包</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="button" class="dense-btn dense-btn-primary" id="btn-can-save" onclick="window.saveCurrentCanProtocol && window.saveCurrentCanProtocol()" title="保存修改 (Ctrl + S)"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+                    </div>
+                </header>
+
+                <!-- 草稿自动恢复通知条 -->
+                <div class="workbench-draft-banner" id="can-draft-banner" style="display:none;">
+                    <div class="wdb-left">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        <span>已自动恢复本地未保存草稿 (最后编辑于 <b id="can-draft-time">刚才</b>)</span>
+                    </div>
+                    <div class="wdb-actions">
+                        <button type="button" class="btn-draft-action btn-draft-discard" id="btn-can-draft-discard" title="放弃草稿并恢复到最近一次持久化的版本">放弃草稿</button>
+                        <button type="button" class="btn-draft-action btn-draft-save" id="btn-can-draft-save" title="立即保存当前草稿到本地与云端">立即保存</button>
+                    </div>
+                </div>
+
+                <!-- 移动端专属 Tab 切换条 (仅窄屏显示) -->
+                <div class="arinc-mobile-tab-bar" id="can-mobile-tab-bar">
+                    <button type="button" class="arinc-mobile-tab-btn active" id="btn-can-mobile-tab-frames">
+                        <i class="fa-solid fa-list"></i> 字节列表 (<span id="mobile-can-frames-count">8</span>)
+                    </button>
+                    <button type="button" class="arinc-mobile-tab-btn" id="btn-can-mobile-tab-detail">
+                        <i class="fa-solid fa-wave-square"></i> 字节位域与配置 (<span id="mobile-active-can-frame-id">Byte 0</span>)
+                    </button>
+                </div>
+
+                <!-- 高数据密度主工作区 (双栏布局) -->
+                <div class="arinc-dense-workbench mobile-view-words" id="can-dense-workbench">
+                    <!-- 左栏：CAN 字节列表 (高密度表格，一包 CAN 对应一个 CAN ID，左侧为该包的 8 个数据字节) -->
+                    <div class="arinc-dense-words-panel" id="can-frames-panel" style="width: 290px;">
+                        <div class="dense-panel-header">
+                            <span class="dense-panel-title">
+                                <i class="fa-solid fa-layer-group"></i> 字节列表 (<span id="can-frames-count-badge">8</span>)
+                            </span>
+                            <div class="dense-panel-actions">
+                                <button type="button" class="dense-btn dense-btn-primary dense-btn-xs" id="btn-panel-add-can-frame" onclick="if(window.addCanByte){window.addCanByte();}" title="添加新字节 (标准 CAN 为 8 字节)">
+                                    <i class="fa-solid fa-plus"></i> 添加字节
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 搜索与筛选工具栏 -->
+                        <div class="dense-filter-strip">
+                            <input type="text" id="can-frame-search" class="dense-input-sm" placeholder="搜索 字节/字段名称/信号..." style="width: 100%;">
+                        </div>
+
+                        <!-- 高密度字节表格容器：4列 (序号、字节名称、字段数、操作) -->
+                        <div class="dense-words-table-wrap">
+                            <table class="dense-table dense-words-table" id="can-frames-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 36px; text-align: center;">序号</th>
+                                        <th>字节名称</th>
+                                        <th style="width: 52px; text-align: center;">字段数</th>
+                                        <th style="width: 36px; text-align: center;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="can-frames-list">
+                                    <!-- 由 JS 渲染高密度行 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 左右分栏可拖拽调整尺寸手柄 -->
+                    <div class="workbench-resizer" id="can-workbench-resizer" title="左右拖动调整字节列表宽度"></div>
+
+                    <!-- 右栏：选中的单字节详细配置与当前包 CAN ID 结构 (前4字节固定 CAN ID + 后8字节数据段) -->
+                    <div class="arinc-dense-detail-panel" id="can-inspector-panel">
+                        <!-- 核心控制栏：醒目 CAN ID、数据包名称与克隆 -->
+                        <div class="dense-word-primary-bar">
+                            <button type="button" class="dense-btn dense-btn-xs mobile-back-words-btn" id="btn-can-mobile-back-frames" title="返回字节列表">
+                                <i class="fa-solid fa-arrow-left"></i> 字节列表
+                            </button>
+
+                            <!-- 1. 醒目 CAN ID 标识卡片 (AllBits 32位，支持直接输入修改) -->
+                            <div class="prominent-label-card" id="card-active-can-id" title="CAN 32位标识符 (AllBits，支持直接输入修改)">
+                                <span class="plc-tag"><i class="fa-solid fa-hashtag"></i> ID:</span>
+                                <input type="text" id="can-frame-id-input" class="prominent-octal-input mono-input" value="0x18F00100" title="CAN 32位十六进制标识符，支持直接回车修改">
+                                <span id="can-frame-id-val" style="display:none;">0x18F00100</span>
+                            </div>
+
+                            <!-- 2. 醒目数据包名称输入区 -->
+                            <div class="prominent-word-name-box">
+                                <i class="fa-solid fa-cube word-name-icon"></i>
+                                <input type="text" id="can-frame-name-input" class="prominent-word-name-input" placeholder="输入 CAN 数据包名称 (如: 发动机状态与转速包)">
+                            </div>
+
+                            <!-- 3. 操作按钮 -->
+                            <div class="dense-row-actions">
+                                <button type="button" class="dense-clone-btn" id="btn-clone-can-frame" onclick="if(window.cloneCanPacket){window.cloneCanPacket();}" title="克隆当前数据包"><i class="fa-solid fa-copy"></i> 克隆数据包</button>
+                            </div>
+                        </div>
+
+                        <!-- 字段编辑区 (前4字节固定 CAN ID + 后8字节数据位) -->
+                        <div class="dense-fields-section can-signals-section">
+                            <div class="dense-fields-cards-scroll can-signals-cards-scroll" id="can-signals-container">
+                                <!-- Part 1: CAN ID 结构体定义 (tagCAN_FRAME_ID_OBJ 联合体) -->
+                                <div class="can-fields-block can-id-block">
+                                    <div class="can-block-header can-id-header">
+                                        <div class="can-block-title">
+                                            <i class="fa-solid fa-id-card-clip" style="color: #059669;"></i>
+                                            <span>CAN 帧 ID 结构体 (CAN_FRAME_ID_OBJ)</span>
+                                            <span class="can-block-pill" style="font-family:'JetBrains Mono',monospace;">union tagCAN_FRAME_ID_OBJ</span>
+                                        </div>
+                                        <div class="can-id-header-right">
+                                            <div class="cip-allbits-group" title="32位十六进制整帧 ID (与下方结构体字段实时双向同步)">
+                                                <label for="can-id-direct-hex"><i class="fa-solid fa-hashtag"></i> 32位 AllBits:</label>
+                                                <input type="text" class="cip-input cip-input-hex mono-input" id="can-id-direct-hex" placeholder="0x18F00100" value="0x18F00100">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 7个结构体字段输入网格 (严格按照 C 语言 tagCAN_FRAME_ID_OBJ 字段定义) -->
+                                    <div class="can-id-struct-grid" id="can-id-struct-grid">
+                                        <!-- 1. 自定义 (SelfDefine : 8) -->
+                                        <div class="cip-struct-card" title="SelfDefine : 8; // 自定义 (Bit 0~7, 范围 0x00~0xFF)">
+                                            <div class="csc-meta">
+                                                <span class="csc-name">自定义</span>
+                                                <span class="csc-ident">SelfDefine:8</span>
+                                            </div>
+                                            <div class="csc-input-wrap">
+                                                <input type="text" class="cip-sc-input mono-input" id="struct-val-selfDefine" placeholder="0x00" value="0x00" title="Bit 0~7 (0x00~0xFF)" onchange="window.updateCanIdFieldVal('selfDefine', this.value)">
+                                                <button type="button" class="cip-dict-btn" onclick="window.openCanIdFieldDictModal('selfDefine')" title="配置「自定义」状态字典"><i class="fa-solid fa-book"></i></button>
+                                            </div>
+                                            <div class="csc-dict-preview" id="struct-dict-preview-selfDefine"></div>
+                                        </div>
+
+                                        <!-- 2. RCI (Rci : 2) -->
+                                        <div class="cip-struct-card" title="Rci : 2; // RCI (Bit 8~9, 范围 0~3)">
+                                            <div class="csc-meta">
+                                                <span class="csc-name">RCI</span>
+                                                <span class="csc-ident">Rci:2</span>
+                                            </div>
+                                            <div class="csc-input-wrap">
+                                                <input type="text" class="cip-sc-input mono-input" id="struct-val-rci" placeholder="0~3" value="1" title="Bit 8~9 (0~3)" onchange="window.updateCanIdFieldVal('rci', this.value)">
+                                                <button type="button" class="cip-dict-btn" onclick="window.openCanIdFieldDictModal('rci')" title="配置「RCI」状态字典"><i class="fa-solid fa-book"></i></button>
+                                            </div>
+                                            <div class="csc-dict-preview" id="struct-dict-preview-rci"></div>
+                                        </div>
+
+                                        <!-- 3. 源ID (SourceId : 6) -->
+                                        <div class="cip-struct-card" title="SourceId : 6; // 源ID (Bit 10~15, 范围 0~63)">
+                                            <div class="csc-meta">
+                                                <span class="csc-name">源ID</span>
+                                                <span class="csc-ident">SourceId:6</span>
+                                            </div>
+                                            <div class="csc-input-wrap">
+                                                <input type="text" class="cip-sc-input mono-input" id="struct-val-sourceId" placeholder="0~63" value="0" title="Bit 10~15 (0~63)" onchange="window.updateCanIdFieldVal('sourceId', this.value)">
+                                                <button type="button" class="cip-dict-btn" onclick="window.openCanIdFieldDictModal('sourceId')" title="配置「源ID」节点字典"><i class="fa-solid fa-book"></i></button>
+                                            </div>
+                                            <div class="csc-dict-preview" id="struct-dict-preview-sourceId"></div>
+                                        </div>
+
+                                        <!-- 4. 指令类型 (CmdType : 8) -->
+                                        <div class="cip-struct-card" title="CmdType : 8; // 指令类型 (Bit 16~23, 范围 0x00~0xFF)">
+                                            <div class="csc-meta">
+                                                <span class="csc-name">指令类型</span>
+                                                <span class="csc-ident">CmdType:8</span>
+                                            </div>
+                                            <div class="csc-input-wrap">
+                                                <input type="text" class="cip-sc-input mono-input" id="struct-val-cmdType" placeholder="0xF0" value="0xF0" title="Bit 16~23 (0x00~0xFF)" onchange="window.updateCanIdFieldVal('cmdType', this.value)">
+                                                <button type="button" class="cip-dict-btn" onclick="window.openCanIdFieldDictModal('cmdType')" title="配置「指令类型」字典"><i class="fa-solid fa-book"></i></button>
+                                            </div>
+                                            <div class="csc-dict-preview" id="struct-dict-preview-cmdType"></div>
+                                        </div>
+
+                                        <!-- 5. 消息类型 (MsgType : 2) -->
+                                        <div class="cip-struct-card" title="MsgType : 2; // 消息类型 (Bit 24~25, 范围 0~3)">
+                                            <div class="csc-meta">
+                                                <span class="csc-name">消息类型</span>
+                                                <span class="csc-ident">MsgType:2</span>
+                                            </div>
+                                            <div class="csc-input-wrap">
+                                                <input type="text" class="cip-sc-input mono-input" id="struct-val-msgType" placeholder="0~3" value="0" title="Bit 24~25 (0~3)" onchange="window.updateCanIdFieldVal('msgType', this.value)">
+                                                <button type="button" class="cip-dict-btn" onclick="window.openCanIdFieldDictModal('msgType')" title="配置「消息类型」字典"><i class="fa-solid fa-book"></i></button>
+                                            </div>
+                                            <div class="csc-dict-preview" id="struct-dict-preview-msgType"></div>
+                                        </div>
+
+                                        <!-- 6. LCC (Lcc : 3) -->
+                                        <div class="cip-struct-card" title="Lcc : 3; // LCC (Bit 26~28, 范围 0~7)">
+                                            <div class="csc-meta">
+                                                <span class="csc-name">LCC</span>
+                                                <span class="csc-ident">Lcc:3</span>
+                                            </div>
+                                            <div class="csc-input-wrap">
+                                                <input type="text" class="cip-sc-input mono-input" id="struct-val-lcc" placeholder="0~7" value="6" title="Bit 26~28 (0~7)" onchange="window.updateCanIdFieldVal('lcc', this.value)">
+                                                <button type="button" class="cip-dict-btn" onclick="window.openCanIdFieldDictModal('lcc')" title="配置「LCC」字典"><i class="fa-solid fa-book"></i></button>
+                                            </div>
+                                            <div class="csc-dict-preview" id="struct-dict-preview-lcc"></div>
+                                        </div>
+
+                                        <!-- 7. 保留 (Rsvd : 3) -->
+                                        <div class="cip-struct-card" title="Rsvd : 3; // 保留 (Bit 29~31, 范围 0~7)">
+                                            <div class="csc-meta">
+                                                <span class="csc-name">保留</span>
+                                                <span class="csc-ident">Rsvd:3</span>
+                                            </div>
+                                            <div class="csc-input-wrap">
+                                                <input type="text" class="cip-sc-input mono-input" id="struct-val-rsvd" placeholder="0~7" value="0" title="Bit 29~31 (0~7)" onchange="window.updateCanIdFieldVal('rsvd', this.value)">
+                                            </div>
+                                            <div class="csc-dict-preview" id="struct-dict-preview-rsvd"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Part 2: 当前选中字节的字段定义 (8 Bits) -->
+                                <div class="can-fields-block can-data-block">
+                                    <div class="can-block-header">
+                                        <div class="can-block-title" style="display:flex; align-items:center; gap:8px;">
+                                            <i class="fa-solid fa-cube" style="color: #0284c7;"></i>
+                                            <span id="can-active-byte-title">Byte 0 字段列表</span>
+                                            <input type="text" id="can-byte-name-input" class="dense-input-sm" style="width: 160px; height: 24px; font-size: 11.5px;" placeholder="字节别名 (如: 转速低字节)" onchange="if(window.updateCanByteName){window.updateCanByteName(this.value);}" title="设置当前字节的别名或备注">
+                                            <span class="can-block-pill data-pill" id="can-active-byte-alloc">已占用: 0 / 8 Bits</span>
+                                        </div>
+                                        <button type="button" class="dense-btn dense-btn-primary dense-btn-xs" id="btn-add-can-signal" onclick="if(window.addCanSignal){window.addCanSignal();}" title="为当前字节添加位域字段 (最多 8 位)">
+                                            <i class="fa-solid fa-plus"></i> 添加数据字段
+                                        </button>
+                                    </div>
+
+                                    <!-- 数据位卡片列表 -->
+                                    <div class="can-data-cards-list" id="can-data-fields-list">
+                                        <!-- 由 JS 渲染数据位字段卡片 -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 底部实时 12 字节仿真与物理值解码体验区 -->
+                        <div class="can-bottom-sim-bar" id="can-bottom-sim-bar">
+                            <div class="can-sim-header">
+                                <div class="can-sim-title">
+                                    <i class="fa-solid fa-microchip" style="color: #0284c7;"></i>
+                                    <span>实时 12 字节全包仿真与物理值解码 (4B CAN ID + 8B 数据)</span>
+                                </div>
+                                <div class="can-sim-actions">
+                                    <button type="button" class="dense-btn dense-btn-xs" id="btn-can-sim-randomize" title="随机生成全包测试数据">
+                                        <i class="fa-solid fa-dice"></i> 随机数值
+                                    </button>
+                                    <button type="button" class="dense-btn dense-btn-xs" id="btn-can-sim-reset" title="将 12 字节全包重置为 00">
+                                        <i class="fa-solid fa-rotate-left"></i> 清零
+                                    </button>
+                                    <button type="button" class="dense-btn dense-btn-xs" id="btn-can-sim-copy-hex" title="复制完整 12 字节十六进制字符串">
+                                        <i class="fa-solid fa-copy"></i> 复制 12B Hex
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="can-sim-body">
+                                <!-- 12 字节 Hex 输入框组 (B0~B3: ID, B4~B11: 数据) -->
+                                <div class="can-sim-bytes-row" id="can-sim-bytes-row">
+                                    <!-- 由 JS 渲染 12 个单字节 Hex 输入框 -->
+                                </div>
+
+                                <!-- 实时解码信号流 -->
+                                <div class="can-sim-decode-flow" id="can-sim-decode-flow">
+                                    <!-- 由 JS 渲染各字段的即时解析与工程物理量 -->
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1341,8 +1699,8 @@
                 <!-- 顶栏：高密度对比工具栏 (完全聚焦协议变化，不显示升版归档操作) -->
                 <header class="viewer-dense-toolbar vm-top-toolbar">
                     <div class="viewer-tb-left">
-                        <button type="button" class="dense-btn" id="btn-vm-back" title="返回上一个页面">
-                            <i class="fa-solid fa-arrow-left"></i> 列表
+                        <button type="button" class="dense-btn" id="btn-vm-back" onclick="if(typeof window.switchToView === 'function') window.switchToView('protocol-view');" title="返回我的协议">
+                            <i class="fa-solid fa-arrow-left"></i> 我的协议
                         </button>
                         <div class="viewer-title-group" style="display: flex; align-items: center; gap: 8px;">
                             <span class="viewer-proto-title" style="display: flex; align-items: center; gap: 6px;">
@@ -2315,6 +2673,55 @@ CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
         </div>
     </div>
 
+    <!-- 弹窗 12.5：系统统一自定义输入弹窗 (取代原生浏览器 prompt，用于重命名等交互) -->
+    <div class="modal" id="global-prompt-modal" style="z-index: 1055;">
+        <div class="modal-content glass-effect" style="max-width: 440px; width: 92vw; border-radius: 10px; overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,0.22);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 14px 20px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div id="gpm-icon-box" style="width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; background: rgba(59, 130, 246, 0.12); color: var(--accent-color);">
+                        <i class="fa-solid fa-pen-to-square" id="gpm-icon"></i>
+                    </div>
+                    <h2 id="gpm-title" style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">重命名</h2>
+                </div>
+                <button type="button" class="close-modal" id="gpm-btn-close" title="取消"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body-scroll" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+                <label id="gpm-label" for="gpm-input" style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0;">请输入新的名称：</label>
+                <input type="text" id="gpm-input" class="form-control" style="width: 100%; height: 36px; padding: 6px 12px; font-size: 13.5px; font-weight: 600; border-radius: 6px;" placeholder="请输入名称...">
+                <div id="gpm-hint" style="font-size: 11.5px; color: var(--text-secondary); display: none;"></div>
+            </div>
+            <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: var(--bg-secondary);">
+                <button type="button" class="btn btn-secondary btn-sm" id="gpm-btn-cancel" style="padding: 6px 16px; font-size: 12.5px;">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" id="gpm-btn-confirm" style="padding: 6px 18px; font-size: 12.5px; font-weight: 600;">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 12.5：系统统一自定义输入弹窗 (取代原生浏览器 prompt) -->
+    <div class="modal" id="global-prompt-modal" style="z-index: 1055;">
+        <div class="modal-content glass-effect" style="max-width: 440px; width: 92vw; border-radius: 10px; overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,0.22);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 14px 20px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div id="gpm-icon-box" style="width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; background: rgba(59, 130, 246, 0.12); color: var(--accent-color);">
+                        <i class="fa-solid fa-pen-to-square" id="gpm-icon"></i>
+                    </div>
+                    <h2 id="gpm-title" style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">重命名</h2>
+                </div>
+                <button type="button" class="close-modal" id="gpm-btn-close" title="取消"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body-scroll" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+                <label id="gpm-label" for="gpm-input" style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0;">请输入新的名称：</label>
+                <input type="text" id="gpm-input" style="width: 100%; height: 36px; line-height: 34px; padding: 0 12px; font-size: 13.5px; font-weight: 600;" placeholder="请输入...">
+                <div id="gpm-error" style="font-size: 11.5px; color: #ef4444; font-weight: 600; display: none;"></div>
+                <div id="gpm-hint" style="font-size: 11.5px; color: var(--text-secondary); display: none;"></div>
+            </div>
+            <div class="modal-actions" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: var(--bg-secondary);">
+                <button type="button" class="btn btn-secondary btn-sm" id="gpm-btn-cancel" style="padding: 6px 16px; font-size: 12.5px;">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" id="gpm-btn-confirm" style="padding: 6px 18px; font-size: 12.5px; font-weight: 600;">确定</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 弹窗 13：全局系统设置中心 (规则、字节序、命名模板、快捷键与云端同步) -->
     <div class="modal" id="system-settings-modal" style="z-index: 1040;">
         <div class="modal-content glass-effect system-settings-modal-content">
@@ -2575,22 +2982,24 @@ CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
     </div>
 
     <!-- 模块化架构分层脚本 (强制穿透静态缓存) -->
-    <script src="js/core.js?v=20261119_23"></script>
-    <script src="js/db.js?v=20261119_23"></script>
-    <script src="js/settings.js?v=20261119_23"></script>
-    <script src="js/auth.js?v=20261119_23"></script>
-    <script src="js/draft-sync.js?v=20261119_23"></script>
-    <script src="js/workspace-sync.js?v=20261119_23"></script>
-    <script src="js/parser.js?v=20261119_23"></script>
-    <script src="js/arinc429.js?v=20261119_23"></script>
-    <script src="js/serial.js?v=20261119_23"></script>
-    <script src="js/product-ctrl.js?v=20261119_23"></script>
-    <script src="js/arinc-ctrl.js?v=20261119_23"></script>
-    <script src="js/serial-ctrl.js?v=20261119_23"></script>
-    <script src="js/admin-ctrl.js?v=20261119_23"></script>
-    <script src="js/viewer-ctrl.js?v=20261119_23"></script>
-    <script src="js/export-ctrl.js?v=20261119_23"></script>
-    <script src="js/version-diff.js?v=20261119_23"></script>
-    <script src="js/app.js?v=20261119_23"></script>
+    <script src="js/core.js?v=20261125_13"></script>
+    <script src="js/db.js?v=20261119_25"></script>
+    <script src="js/settings.js?v=20261119_25"></script>
+    <script src="js/auth.js?v=20261119_25"></script>
+    <script src="js/draft-sync.js?v=20261119_25"></script>
+    <script src="js/workspace-sync.js?v=20261119_25"></script>
+    <script src="js/parser.js?v=20261119_26"></script>
+    <script src="js/arinc429.js?v=20261119_26"></script>
+    <script src="js/serial.js?v=20261119_26"></script>
+    <script src="js/can.js?v=20261124_10"></script>
+    <script src="js/product-ctrl.js?v=20261124_09"></script>
+    <script src="js/arinc-ctrl.js?v=20261125_13"></script>
+    <script src="js/serial-ctrl.js?v=20261125_13"></script>
+    <script src="js/can-ctrl.js?v=20261125_13"></script>
+    <script src="js/admin-ctrl.js?v=20261119_26"></script>
+    <script src="js/viewer-ctrl.js?v=20261119_26"></script>
+    <script src="js/export-ctrl.js?v=20261124_09"></script>
+    <script src="js/version-diff.js?v=20261124_09"></script>
+    <script src="js/app.js?v=20261124_09"></script>
 </body>
 </html>

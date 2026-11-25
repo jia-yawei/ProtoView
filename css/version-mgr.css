@@ -6,8 +6,8 @@
 .proto-version-pill {
     display: inline-flex;
     align-items: center;
-    padding: 1.5px 8px;
-    font-size: 11px;
+    padding: 1.5px 6px;
+    font-size: 10.5px;
     font-weight: 600;
     font-family: 'JetBrains Mono', Consolas, monospace;
     border-radius: var(--radius-pill, 9999px);
@@ -43,9 +43,9 @@
 .proto-archive-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 1.5px 9px;
-    font-size: 11px;
+    gap: 3px;
+    padding: 1.5px 6.5px;
+    font-size: 10.5px;
     font-weight: 500;
     border-radius: var(--radius-pill, 9999px);
     white-space: nowrap;

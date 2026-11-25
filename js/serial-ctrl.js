@@ -752,10 +752,8 @@
             card.setAttribute('data-sig-index', sIdx);
 
             let curType = (sig.dataType || '').toLowerCase();
-            if (curType !== 'bool' && curType !== 'u8' && curType !== 'u16') {
-                if (curType === 'uint16' || curType === 'i16') curType = 'u16';
-                else if (curType === 'discrete') curType = 'bool';
-                else curType = 'u8';
+            if (curType !== 'bool') {
+                curType = 'u8';
             }
 
             const parsed = parseBitRangeHelper(sig);
@@ -763,6 +761,8 @@
             let bitCount = parsed.bitCount;
             if (curType === 'bool') {
                 bitCount = 1;
+            } else if (bitCount > 8) {
+                bitCount = 8;
             }
 
             // 核心：第2个及以后的字段，自动顺延上一字段的 (起始位 + 占用位数)
@@ -777,14 +777,7 @@
             sig.bitCount = bitCount;
             sig.length = bitCount;
             sig.dataType = curType;
-
-            let endianness = sig.endianness;
-            if (curType !== 'u16') {
-                endianness = 'none';
-            } else if (endianness !== 'big') {
-                endianness = 'little';
-            }
-            sig.endianness = endianness;
+            sig.endianness = 'none';
 
             const endBit = startBit + bitCount - 1;
             const isOverflow = endBit > 7;
@@ -835,10 +828,9 @@
                 <div class="field-card-props-flow">
                     <div class="field-card-cell" style="width: 76px;">
                         <label class="field-card-label"><i class="fa-solid fa-cube"></i> 类型</label>
-                        <select class="field-in-type field-card-select" title="数据类型 (bool / u8 / u16)">
+                        <select class="field-in-type field-card-select" title="数据类型 (bool / u8)">
                             <option value="bool" ${curType === 'bool' ? 'selected' : ''}>bool</option>
                             <option value="u8" ${curType === 'u8' ? 'selected' : ''}>u8</option>
-                            <option value="u16" ${curType === 'u16' ? 'selected' : ''}>u16</option>
                         </select>
                     </div>
 
@@ -853,23 +845,16 @@
                     <div class="field-card-cell" style="width: 56px;">
                         <label class="field-card-label"><i class="fa-solid fa-ruler-horizontal"></i> 占用</label>
                         <div class="field-card-input-wrap">
-                            <input type="number" class="field-in-bitcount field-card-input" min="1" max="${curType === 'bool' ? 1 : (curType === 'u8' ? 8 : 16)}" value="${curType === 'bool' ? 1 : bitCount}" ${curType === 'bool' ? 'disabled style="opacity:0.6;cursor:not-allowed;"' : ''} title="占用的位数 (1~16位)">
+                            <input type="number" class="field-in-bitcount field-card-input" min="1" max="${curType === 'bool' ? 1 : 8}" value="${curType === 'bool' ? 1 : bitCount}" ${curType === 'bool' ? 'disabled style="opacity:0.6;cursor:not-allowed;"' : ''} title="占用的位数 (bool: 1位, u8: 1~8位)">
                             <span class="field-card-addon">b</span>
                         </div>
                     </div>
 
                     <div class="field-card-cell" style="width: 86px;">
                         <label class="field-card-label"><i class="fa-solid fa-arrows-left-right"></i> 字节序</label>
-                        ${curType === 'u16' ? `
-                        <select class="field-in-endian field-card-select" title="字节序定义 (仅 u16 支持大端/小端)">
-                            <option value="little" ${endianness === 'little' ? 'selected' : ''}>小端(LSB)</option>
-                            <option value="big" ${endianness === 'big' ? 'selected' : ''}>大端(MSB)</option>
-                        </select>
-                        ` : `
-                        <select class="field-in-endian field-card-select" disabled title="只有 u16 类型才支持配置字节序" style="opacity: 0.45; cursor: not-allowed;">
+                        <select class="field-in-endian field-card-select" disabled title="8位及以内单字节字段无需配置字节序" style="opacity: 0.45; cursor: not-allowed;">
                             <option value="none">- 无 -</option>
                         </select>
-                        `}
                     </div>
 
                     <div class="field-card-cell" style="width: 66px;">
@@ -928,14 +913,14 @@
 
                 let bCount = parseInt(inBitCount.value, 10);
                 if (isNaN(bCount) || bCount < 1) bCount = 1;
-                const maxBits = (currentType === 'bool' ? 1 : (currentType === 'u8' ? 8 : 16));
+                const maxBits = (currentType === 'bool' ? 1 : 8);
                 if (bCount > maxBits) bCount = maxBits;
                 inBitCount.value = bCount;
 
                 sig.startBit = sBit;
                 sig.bitCount = bCount;
                 sig.length = bCount;
-                sig.endianness = (currentType === 'u16' && inEndian) ? inEndian.value : 'none';
+                sig.endianness = 'none';
 
                 const eBit = sBit + bCount - 1;
                 sig.bitRange = `bit${sBit}${bCount > 1 ? `-${eBit}` : ''}`;
@@ -1000,48 +985,22 @@
                     inBitCount.disabled = true;
                     inBitCount.style.opacity = '0.6';
                     inBitCount.style.cursor = 'not-allowed';
-                    if (inEndian) {
-                        inEndian.disabled = true;
-                        inEndian.style.opacity = '0.45';
-                        inEndian.style.cursor = 'not-allowed';
-                        inEndian.innerHTML = '<option value="none">- 无 -</option>';
-                        inEndian.value = 'none';
-                    }
-                    sig.endianness = 'none';
-                } else if (selType === 'u8') {
+                } else {
                     const curC = parseInt(inBitCount.value, 10) || 8;
                     inBitCount.max = '8';
                     inBitCount.disabled = false;
                     inBitCount.style.opacity = '1';
                     inBitCount.style.cursor = 'auto';
                     if (curC > 8 || curC < 1) inBitCount.value = '8';
-                    if (inEndian) {
-                        inEndian.disabled = true;
-                        inEndian.style.opacity = '0.45';
-                        inEndian.style.cursor = 'not-allowed';
-                        inEndian.innerHTML = '<option value="none">- 无 -</option>';
-                        inEndian.value = 'none';
-                    }
-                    sig.endianness = 'none';
-                } else {
-                    inBitCount.max = '16';
-                    inBitCount.disabled = false;
-                    inBitCount.style.opacity = '1';
-                    inBitCount.style.cursor = 'auto';
-                    inBitCount.value = '16';
-                    if (inEndian) {
-                        inEndian.disabled = false;
-                        inEndian.style.opacity = '1';
-                        inEndian.style.cursor = 'pointer';
-                        const targetEndian = (sig.endianness === 'big') ? 'big' : 'little';
-                        inEndian.innerHTML = `
-                            <option value="little" ${targetEndian === 'little' ? 'selected' : ''}>小端(LSB)</option>
-                            <option value="big" ${targetEndian === 'big' ? 'selected' : ''}>大端(MSB)</option>
-                        `;
-                        inEndian.value = targetEndian;
-                        sig.endianness = targetEndian;
-                    }
                 }
+                if (inEndian) {
+                    inEndian.disabled = true;
+                    inEndian.style.opacity = '0.45';
+                    inEndian.style.cursor = 'not-allowed';
+                    inEndian.innerHTML = '<option value="none">- 无 -</option>';
+                    inEndian.value = 'none';
+                }
+                sig.endianness = 'none';
                 onCardChange();
                 onFieldPropCommit('类型');
             });
@@ -1088,15 +1047,20 @@
             const btnClone = card.querySelector('.btn-clone-serial-sig');
             if (btnClone) {
                 btnClone.addEventListener('click', () => {
-                    captureSerialMutation('克隆字段卡片');
-                    const cloned = JSON.parse(JSON.stringify(sig));
-                    cloned.name = sig.name ? `${sig.name}_副本` : '新字段';
-                    cloned.key = `sig_${Date.now().toString().slice(-6)}`;
-
-                    // 若当前整个单字节只有一个 8 位字段，克隆代表用户希望拆解子字段，自动将首字段置为 1 位开关
                     const curStart = Number(sig.startBit !== undefined ? sig.startBit : 0);
                     let curCount = Number(sig.bitCount || sig.length || 1);
-                    if (sIdx === 0 && field.signals.length === 1 && curCount === 8 && curStart === 0) {
+
+                    // 若当前整个单字节只有一个 8 位字段，克隆代表用户希望拆解子字段，自动将首字段置为 1 位开关
+                    const isSingle8Bit = sIdx === 0 && field.signals.length === 1 && curCount === 8 && curStart === 0;
+
+                    let totalAlloc = 0;
+                    field.signals.forEach(s => totalAlloc += Number(s.bitCount || s.length || 1));
+                    if (totalAlloc >= 8 && !isSingle8Bit) {
+                        showToast('当前单字节已占满 8 位 (bit0~bit7)，无法继续克隆新字段！', 'warning');
+                        return;
+                    }
+
+                    if (isSingle8Bit) {
                         sig.bitCount = 1;
                         sig.length = 1;
                         sig.dataType = 'bool';
@@ -1105,12 +1069,21 @@
                     }
 
                     const nextStart = curStart + curCount;
+                    if (nextStart >= 8) {
+                        showToast('当前单字节剩余空间不足 (起始位最多为 7)，无法继续克隆！', 'warning');
+                        return;
+                    }
+
+                    captureSerialMutation('克隆字段卡片');
+                    const cloned = JSON.parse(JSON.stringify(sig));
+                    cloned.name = sig.name ? `${sig.name}_副本` : '新字段';
+                    cloned.key = `sig_${Date.now().toString().slice(-6)}`;
                     cloned.startBit = nextStart;
                     if (cloned.dataType === 'bool') {
                         cloned.bitCount = 1;
                         cloned.length = 1;
                     } else if (cloned.dataType === 'u8') {
-                        cloned.bitCount = Math.max(1, Math.min(curCount, 8 - (nextStart <= 7 ? nextStart : 0)));
+                        cloned.bitCount = Math.max(1, Math.min(curCount, 8 - nextStart));
                         cloned.length = cloned.bitCount;
                     }
                     const endB = cloned.startBit + cloned.bitCount - 1;
@@ -1176,14 +1149,22 @@
         }
         if (!field.signals) field.signals = [];
 
-        captureSerialMutation('添加字段卡片');
+        // 检查当前字节是否已占满 8 位 (bit0~bit7)
+        let totalAlloc = 0;
+        field.signals.forEach(s => totalAlloc += Number(s.bitCount || s.length || 1));
+        const isSingle8Bit = field.signals.length === 1 && (Number(field.signals[0].bitCount || field.signals[0].length) === 8 || field.signals[0].bitRange === 'bit0-7') && Number(field.signals[0].startBit || 0) === 0;
+
+        if (totalAlloc >= 8 && !isSingle8Bit) {
+            showToast('当前单字节已占满 8 位 (bit0~bit7)，无法继续添加字段！', 'warning');
+            return;
+        }
 
         let nextStart = 0;
         let defaultCount = 1;
         if (field.signals.length > 0) {
             const lastSig = field.signals[field.signals.length - 1];
             // 若原先是单个 8 位字段，拆解为开关位
-            if (field.signals.length === 1 && (Number(lastSig.bitCount || lastSig.length) === 8 || lastSig.bitRange === 'bit0-7') && Number(lastSig.startBit || 0) === 0) {
+            if (isSingle8Bit) {
                 lastSig.bitCount = 1;
                 lastSig.length = 1;
                 lastSig.dataType = 'bool';
@@ -1192,8 +1173,14 @@
             const lastStart = Number(lastSig.startBit !== undefined ? lastSig.startBit : 0);
             const lastCount = Number(lastSig.bitCount || lastSig.length || 1);
             nextStart = lastStart + lastCount;
-            defaultCount = (nextStart < 8) ? Math.min(1, 8 - nextStart) : 1;
+            if (nextStart >= 8) {
+                showToast('当前单字节已占满 8 位 (bit0~bit7)，无法继续添加字段！', 'warning');
+                return;
+            }
+            defaultCount = Math.min(1, 8 - nextStart);
         }
+
+        captureSerialMutation('添加字段卡片');
 
         const count = field.signals.length;
         const newSig = {
@@ -1571,12 +1558,19 @@
         showToast('数据包已删除', 'info');
     }
 
-    // 直接修改串口数据包名称 (原生输入，杜绝新增容器与遮挡位移)
-    function renameCurrentSerialPacket() {
+    // 修改串口数据包名称 (系统统一自定义输入弹窗)
+    async function renameCurrentSerialPacket() {
         const activePkt = getCurrentSerialPacket();
         if (!activePkt) return;
         const oldName = activePkt.name || `数据包 ${currentSerialPacketIndex + 1}`;
-        const newName = prompt('请输入数据包名称：', oldName);
+        const newName = await (ProtoView.showPrompt ? ProtoView.showPrompt({
+            title: '修改串口数据包名称',
+            label: '请输入新的数据包名称：',
+            defaultValue: oldName,
+            placeholder: '如: 心跳遥测数据包',
+            confirmText: '保存名称',
+            cancelText: '取消'
+        }) : Promise.resolve(prompt('请输入数据包名称：', oldName)));
         if (newName === null) return;
         const trimmed = newName.trim();
         if (!trimmed || trimmed === oldName) return;

@@ -148,10 +148,15 @@
             const viewerView = document.getElementById('protocol-viewer-view');
             const arincView = document.getElementById('arinc429-view');
             const serialView = document.getElementById('serial-view');
+            const canView = document.getElementById('can-view');
 
             if (viewerView && viewerView.classList.contains('active')) {
                 if (ProtoView.Controllers.Viewer && ProtoView.Controllers.Viewer.getCurrentProtocol) {
                     p = ProtoView.Controllers.Viewer.getCurrentProtocol();
+                }
+            } else if (canView && canView.classList.contains('active')) {
+                if (ProtoView.Controllers.Can && ProtoView.Controllers.Can.getCurrentProtocol) {
+                    p = ProtoView.Controllers.Can.getCurrentProtocol();
                 }
             } else if (serialView && serialView.classList.contains('active')) {
                 if (ProtoView.Controllers.Serial && ProtoView.Controllers.Serial.getCurrentProtocol) {
@@ -164,6 +169,9 @@
             }
 
             // 二次兜底
+            if (!p && ProtoView.Controllers.Can && ProtoView.Controllers.Can.getCurrentProtocol) {
+                p = ProtoView.Controllers.Can.getCurrentProtocol();
+            }
             if (!p && ProtoView.Controllers.Arinc && ProtoView.Controllers.Arinc.getCurrentProtocol) {
                 p = ProtoView.Controllers.Arinc.getCurrentProtocol();
             }

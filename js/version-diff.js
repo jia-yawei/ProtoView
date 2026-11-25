@@ -2072,13 +2072,13 @@
 
         // 初始化顶栏协议切换与快捷跳转按钮
         initToolbarControls() {
-            // 顶栏「返回」按钮：精准退回上一级页面 (工作台 / 查阅 / 协议列表)
+            // 顶栏「返回」按钮：精准退回上一级页面 (工作台 / 查阅 / 我的协议)
             const btnBack = document.getElementById('btn-vm-back');
             if (btnBack) {
                 const returnId = this.returnViewId || 'protocol-view';
-                let backLabel = '列表';
-                let backTitle = '返回协议管理列表';
-                if (returnId === 'arinc429-view' || returnId === 'serial-view') {
+                let backLabel = '我的协议';
+                let backTitle = '返回我的协议';
+                if (returnId === 'arinc429-view' || returnId === 'serial-view' || returnId === 'can-view') {
                     backLabel = '工作台';
                     backTitle = '返回协议编辑工作台';
                 } else if (returnId === 'protocol-viewer-view') {
@@ -2118,6 +2118,12 @@
                             window.openArincProtocol(this.currentProto);
                         } else if (typeof window.switchToView === 'function') {
                             window.switchToView('arinc429-view');
+                        }
+                    } else if (this.currentProto.type === 'CAN') {
+                        if (typeof window.loadCanProtocolIntoEditor === 'function') {
+                            window.loadCanProtocolIntoEditor(this.currentProto.id || this.currentProto);
+                        } else if (typeof window.switchToView === 'function') {
+                            window.switchToView('can-view');
                         }
                     } else {
                         if (typeof window.openSerialProtocol === 'function') {

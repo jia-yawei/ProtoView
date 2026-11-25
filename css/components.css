@@ -1091,7 +1091,7 @@ td {
 
 .product-protocols-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
     gap: 14px;
     background: rgba(0, 0, 0, 0.02);
     border: 1px solid rgba(0, 0, 0, 0.045);
@@ -1261,13 +1261,16 @@ body.protocol-dragging-active .product-group-card {
 .card-drag-handle {
     cursor: grab;
     color: var(--text-secondary);
-    padding: 2px 4px;
-    font-size: 13px;
-    opacity: 0.5;
-    transition: opacity 0.15s ease;
+    padding: 0 2px;
+    font-size: 12px;
+    opacity: 0.45;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+    line-height: 1;
 }
 .card-drag-handle:hover {
     opacity: 1;
+    color: var(--accent-color);
 }
 
 .protocol-card:hover {
@@ -1286,38 +1289,42 @@ body.protocol-dragging-active .product-group-card {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 8px;
+    min-width: 0;
+    flex-wrap: wrap; /* 极端紧凑视口下自动防重叠安全换行，彻底杜绝层叠碰撞 */
 }
 
 .pct-left {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
+    flex-shrink: 0;
 }
 
 .pct-right {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    gap: 6px;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 /* 协议卡片右上角同步状态徽章 (独立于底层业务/工程参数 - 低饱和度胶囊样式) */
 .card-cloud-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    font-size: 11px;
+    gap: 3.5px;
+    font-size: 10.5px;
     font-weight: 500;
-    padding: 1.5px 8px;
+    padding: 1.5px 6.5px;
     border-radius: var(--radius-pill, 9999px);
     line-height: 1.35;
     white-space: nowrap;
     user-select: none;
     transition: all 0.15s ease;
+    flex-shrink: 0;
 }
 
 .card-cloud-badge.is-synced {
@@ -1340,6 +1347,26 @@ body.protocol-dragging-active .product-group-card {
 
 .card-cloud-badge:hover {
     transform: translateY(-0.5px);
+}
+
+/* 侧边栏展开或视口收窄时，自动折叠云端文本为纯图标，留出充裕排版空间杜绝挤压 */
+.sidebar:not(.collapsed) ~ .main-content .card-cloud-badge .cloud-badge-text {
+    display: none;
+}
+
+@media (max-width: 1360px) {
+    .card-cloud-badge .cloud-badge-text {
+        display: none;
+    }
+}
+
+.card-ver-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+    user-select: none;
 }
 
 /* 协议卡片主标题区 (独占整行，消除截断换行) */
@@ -1387,15 +1414,16 @@ body.protocol-dragging-active .product-group-card {
 }
 
 .protocol-type-badge {
-    padding: 2px 9px;
+    padding: 1.5px 7px;
     border-radius: var(--radius-pill, 9999px);
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 600;
     white-space: nowrap;
     flex-shrink: 0;
     line-height: 1.35;
     display: inline-flex;
     align-items: center;
+    gap: 4px;
     justify-content: center;
     background: rgba(59, 130, 246, 0.08);
     color: var(--accent-color);
@@ -1668,9 +1696,9 @@ body.protocol-dragging-active .product-group-card {
 }
 
 .btn-card-more {
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
     border: 1px solid transparent;
     background: transparent;
     color: var(--text-secondary);
@@ -1678,9 +1706,10 @@ body.protocol-dragging-active .product-group-card {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
     transition: all 0.15s ease;
     padding: 0;
+    flex-shrink: 0;
 }
 
 .btn-card-more:hover,

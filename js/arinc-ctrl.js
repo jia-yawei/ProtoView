@@ -451,12 +451,19 @@
         showToast('已成功删除该数据包', 'info');
     }
 
-    // 直接修改 429 数据包名称 (原生输入，绝无多余容器与遮挡位移)
-    function renameCurrentArincPacket() {
+    // 修改 429 数据包名称 (系统统一自定义输入弹窗)
+    async function renameCurrentArincPacket() {
         const activePkt = getCurrentArincPacket();
         if (!activePkt) return;
         const oldName = activePkt.name || `数据包 ${currentArincPacketIndex + 1}`;
-        const newName = prompt('请输入数据包名称：', oldName);
+        const newName = await (ProtoView.showPrompt ? ProtoView.showPrompt({
+            title: '修改 429 数据包名称',
+            label: '请输入新的数据包名称：',
+            defaultValue: oldName,
+            placeholder: '如: 主航电发送包',
+            confirmText: '保存名称',
+            cancelText: '取消'
+        }) : Promise.resolve(prompt('请输入数据包名称：', oldName)));
         if (newName === null) return;
         const trimmed = newName.trim();
         if (!trimmed || trimmed === oldName) return;
@@ -1656,9 +1663,29 @@
             const btnClone = card.querySelector('.btn-clone-field');
             if (btnClone) {
                 btnClone.addEventListener('click', () => {
+                    const isBitstream = (currentArincProtocol && currentArincProtocol.mode === 'bitstream') || (word.editMode === 'bitstream');
+                    const defaultStart = isBitstream ? 9 : 11;
+                    const maxPayloadBit = 29;
+                    const maxCapacity = isBitstream ? 21 : 19;
+
+                    let totalAllocated = 0;
+                    word.signals.forEach(s => totalAllocated += Number(s.bitCount || s.length || 1));
+                    if (totalAllocated >= maxCapacity) {
+                        showToast(`当前标号字有效数据位已占满 (${maxCapacity} 位)，无法继续克隆新字段！`, 'warning');
+                        return;
+                    }
+
+                    const curStart = Number(field.startBit !== undefined ? field.startBit : defaultStart);
+                    const curCount = Number(field.bitCount || field.length || 1);
+                    const nextStart = curStart + curCount;
+                    if (nextStart > maxPayloadBit) {
+                        showToast('当前标号字剩余位空间不足 (上限为 B29)，无法继续克隆！', 'warning');
+                        return;
+                    }
+
                     captureArincMutation('克隆字段');
                     const cloned = JSON.parse(JSON.stringify(field));
-                    cloned.name = field.name || '字段';
+                    cloned.name = field.name ? `${field.name}_副本` : '字段';
                     cloned.key = `sig_${Date.now().toString().slice(-6)}`;
                     word.signals.splice(fIdx + 1, 0, cloned);
 
@@ -1679,6 +1706,7 @@
                     updateCompactSim(word);
                     renderArincWordsList();
                     triggerArincDraftSave();
+                    showToast(`已克隆字段「${cloned.name}」(起始位: B${cloned.startBit})`, 'success');
                 });
             }
 
@@ -1723,11 +1751,18 @@
         if (!word) return;
         if (!word.signals) word.signals = [];
 
-        captureArincMutation('添加字段');
-
         const isBitstream = (currentArincProtocol && currentArincProtocol.mode === 'bitstream') || (word.editMode === 'bitstream');
         const defaultStart = isBitstream ? 9 : 11;
         const maxPayloadBit = 29;
+        const maxCapacity = isBitstream ? 21 : 19;
+
+        // 检查当前数据字是否已经占满有效载荷位数
+        let totalAllocated = 0;
+        word.signals.forEach(s => totalAllocated += Number(s.bitCount || s.length || 1));
+        if (totalAllocated >= maxCapacity) {
+            showToast(`当前标号字有效数据位已占满 (${maxCapacity} 位，B${defaultStart}~B29)，无法继续添加字段！`, 'warning');
+            return;
+        }
 
         let nextStartBit = defaultStart;
         if (word.signals.length > 0) {
@@ -1747,6 +1782,13 @@
         } else {
             nextStartBit = defaultStart;
         }
+
+        if (nextStartBit > maxPayloadBit) {
+            showToast(`当前标号字有效数据位已达上限 (B29)，无法继续添加字段！`, 'warning');
+            return;
+        }
+
+        captureArincMutation('添加字段');
 
         const maxAvail = Math.max(1, maxPayloadBit - nextStartBit + 1);
         const defaultLen = maxAvail >= 16 ? 16 : Math.max(1, maxAvail);

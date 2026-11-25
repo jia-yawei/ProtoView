@@ -103,7 +103,8 @@
             const isInsideDetailOrWorkbench = activeView && (
                 activeView.id === 'protocol-viewer-view' ||
                 activeView.id === 'arinc429-view' ||
-                activeView.id === 'serial-view'
+                activeView.id === 'serial-view' ||
+                activeView.id === 'can-view'
             );
             if (isInsideDetailOrWorkbench) {
                 card.style.display = 'none';
@@ -771,7 +772,7 @@
             : { versionText: p.version || 'v1.0', statusLabel: p.isArchived ? '已归档' : '未归档', statusClass: p.isArchived ? 'is-archived' : 'not-archived', versionPillClass: 'proto-version-pill', tooltip: '' };
 
         const archiveBadgeHtml = `
-            <div class="card-ver-wrap" style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;" onclick="event.stopPropagation(); if(window.openProtocolVersionModal){window.openProtocolVersionModal('${p.id}');}" title="点击打开版本管理与发展历程">
+            <div class="card-ver-wrap" onclick="event.stopPropagation(); if(window.openProtocolVersionModal){window.openProtocolVersionModal('${p.id}');}" title="点击打开版本管理与发展历程">
                 <span class="${verInfo.versionPillClass}">${escapeHTML(verInfo.versionText)}</span>
                 <span class="proto-archive-badge ${verInfo.statusClass}">${verInfo.statusLabel}</span>
             </div>
@@ -782,7 +783,7 @@
         const isCloudSynced = Boolean(p._fromCloud || p._cloudKey || p._cloudUpdated || (localStorage.getItem('protoview_auth_token') && !localStorage.getItem('protoview_auth_token').startsWith('local_dev_token_')));
         const cloudBadgeHtml = `
             <span class="card-cloud-badge ${isCloudSynced ? 'is-synced' : 'is-local'}" title="${isCloudSynced ? '数据已持久化同步至 Cloudflare 分布式云端' : '数据保存在本地 IndexedDB 离线环境'}">
-                <i class="fa-solid ${isCloudSynced ? 'fa-cloud' : 'fa-database'}"></i> ${isCloudSynced ? '云端保存' : '本地就绪'}
+                <i class="fa-solid ${isCloudSynced ? 'fa-cloud' : 'fa-database'}"></i><span class="cloud-badge-text"> ${isCloudSynced ? '云端' : '本地'}</span>
             </span>
         `;
 
@@ -1808,7 +1809,15 @@
             return;
         }
 
-        // CAN / 其它总线协议属性配置
+        if (p.type === 'CAN') {
+            if (typeof window.switchToView === 'function') window.switchToView('can-view');
+            if (typeof window.loadCanProtocolIntoEditor === 'function') {
+                await window.loadCanProtocolIntoEditor(p.id);
+            }
+            return;
+        }
+
+        // 其它总线协议属性配置
         await openProtocolPropsModal(p);
     }
 
@@ -2556,7 +2565,12 @@
                             if (protocolConfigModal) protocolConfigModal.classList.remove('active');
                             await loadProtocols();
                             await loadProtocolsForSelect();
-                            showToast(`已成功创建 CAN 通信协议「${newProto.name}」！`, 'success');
+
+                            if (typeof window.switchToView === 'function') window.switchToView('can-view');
+                            if (typeof window.loadCanProtocolIntoEditor === 'function') {
+                                await window.loadCanProtocolIntoEditor(id);
+                            }
+                            showToast(`已成功创建 CAN 通信协议「${newProto.name}」并进入工作台！`, 'success');
                             return;
                         }
 
@@ -2859,6 +2873,213 @@
                 await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(demoSerial);
             }
 
+            // 3. 预置标准 CAN 2.0B / J1939 动力与状态报文示例协议
+            const demoCan = {
+                name: '机电综合动力与发动机CAN通信协议',
+                product: '机电综合管理系统',
+                type: 'CAN',
+                subType: 'CAN',
+                canStandard: 'CAN2.0B',
+                baudRate: 500000,
+                device: '动力电驱与发动机控制器 (EEC/FADEC)',
+                period: 20,
+                description: '标准 SAE J1939 动力发动机电子控制单元 (EEC1) 与动力电池管理周期报文协议',
+                lifecycleStatus: 'active',
+                frames: [
+                    {
+                        id: '0x0CF00400',
+                        isExtended: true,
+                        name: '电子发动机控制器1 (EEC1)',
+                        dlc: 8,
+                        period: 20,
+                        direction: 'Tx',
+                        transmitter: 'EEC_ECU',
+                        signals: [
+                            {
+                                name: '发动机转速高8位 (Engine Speed H)',
+                                key: 'EngineSpeedH',
+                                startBit: 24,
+                                bitLength: 8,
+                                byteOrder: 'intel',
+                                dataType: 'u8',
+                                factor: 32,
+                                offset: 0,
+                                min: 0,
+                                max: 8160,
+                                unit: 'rpm',
+                                description: '发动机转速采样高8位'
+                            },
+                            {
+                                name: '发动机运行标志 (Engine Run)',
+                                key: 'EngineRun',
+                                startBit: 32,
+                                bitLength: 1,
+                                byteOrder: 'intel',
+                                dataType: 'bool',
+                                factor: 1,
+                                offset: 0,
+                                min: 0,
+                                max: 1,
+                                unit: '',
+                                description: '0-停机, 1-运行中'
+                            },
+                            {
+                                name: '实际发动机扭矩百分比 (Actual Torque)',
+                                key: 'ActualTorque',
+                                startBit: 16,
+                                bitLength: 8,
+                                byteOrder: 'intel',
+                                dataType: 'u8',
+                                factor: 1,
+                                offset: -125,
+                                min: -125,
+                                max: 125,
+                                unit: '%',
+                                description: '当前发动机实际输出扭矩百分比'
+                            },
+                            {
+                                name: '发动机扭矩模式 (Engine Torque Mode)',
+                                key: 'EngTorqueMode',
+                                startBit: 0,
+                                bitLength: 4,
+                                byteOrder: 'intel',
+                                dataType: 'u8',
+                                factor: 1,
+                                offset: 0,
+                                min: 0,
+                                max: 15,
+                                unit: '',
+                                description: '当前扭矩控制模式状态',
+                                choices: {
+                                    '0': '低怠速控制 (Low Idle)',
+                                    '1': '加速踏板控制 (Pedal)',
+                                    '2': '巡航控制 (Cruise)',
+                                    '3': 'PTO 动力输出控制'
+                                }
+                            },
+                            {
+                                name: '启动机状态 (Starter Status)',
+                                key: 'StarterStatus',
+                                startBit: 48,
+                                bitLength: 4,
+                                byteOrder: 'intel',
+                                dataType: 'u8',
+                                factor: 1,
+                                offset: 0,
+                                min: 0,
+                                max: 15,
+                                unit: '',
+                                description: '起动机当前啮合与启动状态',
+                                choices: {
+                                    '0': '启动机未啮合 (Start Not Initiated)',
+                                    '1': '启动机啮合中 (Starter Active)',
+                                    '2': '发动机已点火成功 (Engine Cranked)',
+                                    '3': '启动报错 (Starter Error)'
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        id: '0x180',
+                        isExtended: false,
+                        name: '高压配电与电池状态 (BMS_Status)',
+                        dlc: 8,
+                        period: 50,
+                        direction: 'Tx',
+                        transmitter: 'BMS_Master',
+                        signals: [
+                            {
+                                name: '动力母线总电压 (Pack Voltage)',
+                                key: 'PackVoltage',
+                                startBit: 0,
+                                bitLength: 8,
+                                byteOrder: 'intel',
+                                dataType: 'u8',
+                                factor: 2,
+                                offset: 0,
+                                min: 0,
+                                max: 510,
+                                unit: 'V',
+                                description: '动力电池包高压母线总电压'
+                            },
+                            {
+                                name: '母线实时电流 (Pack Current)',
+                                key: 'PackCurrent',
+                                startBit: 16,
+                                bitLength: 8,
+                                byteOrder: 'intel',
+                                dataType: 'u8',
+                                factor: 1,
+                                offset: 0,
+                                min: 0,
+                                max: 255,
+                                unit: 'A',
+                                description: '母线实时电流采样值'
+                            },
+                            {
+                                name: '电池荷电状态 (Pack SOC)',
+                                key: 'PackSOC',
+                                startBit: 32,
+                                bitLength: 8,
+                                byteOrder: 'intel',
+                                dataType: 'u8',
+                                factor: 0.5,
+                                offset: 0,
+                                min: 0,
+                                max: 100,
+                                unit: '%',
+                                description: 'State of Charge 荷电状态百分比'
+                            },
+                            {
+                                name: '高压接触器吸合状态 (HV Contactor)',
+                                key: 'HV_Contactor',
+                                startBit: 40,
+                                bitLength: 2,
+                                byteOrder: 'intel',
+                                dataType: 'u8',
+                                factor: 1,
+                                offset: 0,
+                                min: 0,
+                                max: 3,
+                                unit: '',
+                                description: '主正主负高压继电器吸合状态',
+                                choices: {
+                                    '0': '断开 (Open)',
+                                    '1': '吸合 (Closed)',
+                                    '2': '预充中 (Precharging)',
+                                    '3': '粘连故障 (Welded)'
+                                }
+                            },
+                            {
+                                name: '高压就绪状态 (HV_Ready)',
+                                key: 'HV_Ready',
+                                startBit: 42,
+                                bitLength: 1,
+                                byteOrder: 'intel',
+                                dataType: 'bool',
+                                factor: 1,
+                                offset: 0,
+                                min: 0,
+                                max: 1,
+                                unit: '',
+                                description: '高压系统就绪与闭合标志 (0:未就绪, 1:就绪)'
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            if (ProtoView.VersionManager) {
+                ProtoView.VersionManager.ensureProtocolVersion(demoCan);
+            }
+            if (window.dbHelper && typeof window.dbHelper.saveProtocol === 'function') {
+                const idCan = await window.dbHelper.saveProtocol(demoCan);
+                demoCan.id = idCan;
+            }
+            if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud === 'function') {
+                await ProtoView.WorkspaceSync.saveProtocolToWorkspaceAndCloud(demoCan);
+            }
+
             // 4. 同步产品至云端
             if (ProtoView.WorkspaceSync && typeof ProtoView.WorkspaceSync.syncProductsToCloud === 'function') {
                 await ProtoView.WorkspaceSync.syncProductsToCloud();
@@ -2872,7 +3093,7 @@
             await loadProtocols();
             await loadProtocolsForSelect();
 
-            showToast('已成功载入「机电综合管理系统」示例工程！已为您预置标准 429 配电与串口遥测协议。', 'success');
+            showToast('已成功载入「机电综合管理系统」示例工程！已为您预置标准 ARINC 429、RS422 串口与 CAN 总线 (J1939) 协议。', 'success');
         } catch (err) {
             console.error('加载示例工程失败:', err);
             alert('加载示例工程出现异常: ' + (err.message || err));
