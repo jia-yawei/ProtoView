@@ -51,3 +51,6 @@
 
 /* 10. 移动端与响应式适配 (置于末尾) */
 @import url("responsive.css?v=20261119_06");
+
+/* 11. AI 协议助手抽屉与大模型配置 */
+@import url("ai-assistant.css?v=20261125_01");

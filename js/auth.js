@@ -227,7 +227,6 @@
                     const char = (displayName || user.username || 'U').charAt(0).toUpperCase();
                     sidebarUserAvatar.innerHTML = `
                         <span class="avatar-char">${escapeHTML(char)}</span>
-                        <span class="avatar-online-dot" title="在线状态"></span>
                     `;
                     if (isAdmin) {
                         sidebarUserAvatar.classList.add('avatar-admin');

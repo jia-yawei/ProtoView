@@ -511,8 +511,8 @@
                         #${idx + 1}
                     </td>
                     <td class="col-label" style="padding: 0 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                        <span class="octal-num" style="background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.28); border-radius: 3px; padding: 1px 4px; font-size: 11px;">${byteLabel}</span>
-                        ${byteName ? `<span class="word-mini-name" title="${escapeHTML(byteName)}" style="font-weight:600; font-size:12px; color:var(--text-primary); margin-left:4px;">${escapeHTML(byteName)}</span>` : ''}
+                        <span style="font-family:'JetBrains Mono',Consolas,monospace; font-weight:700; font-size:12px; color:#059669;">${byteLabel}</span>
+                        ${byteName ? `<span class="word-mini-name" title="${escapeHTML(byteName)}" style="font-weight:600; font-size:12px; color:var(--text-primary); margin-left:6px;">${escapeHTML(byteName)}</span>` : ''}
                     </td>
                     <td class="col-count" style="text-align:center; width:52px;">
                         <span class="dense-count-pill" style="min-width:22px; padding:1px 6px;">${sigCount}</span>
@@ -589,9 +589,6 @@
 
         // 渲染 Part 2: 当前选中字节的字段卡片列表
         renderCurrentByteSignals(currentByte, allocBits);
-
-        // 渲染仿真底栏 (12 字节全包)
-        renderSimulationBar();
     }
 
     // 渲染 Part 1: CAN ID 结构体定义面板
@@ -1088,208 +1085,6 @@
         showToast(`已添加 Byte ${nextIdx}`, 'success');
     }
 
-    // 渲染 12 字节全包实时仿真底栏与物理值即时解码 (前4字节 CAN ID + 后8字节数据载荷)
-    function renderSimulationBar() {
-        const container = document.getElementById('can-sim-bytes-row') || document.getElementById('can-sim-bytes-container');
-        const decodeContainer = document.getElementById('can-sim-decode-flow') || document.getElementById('can-sim-decode-container');
-        if (!container || !decodeContainer) return;
-
-        const pkt = getCurrentCanPacket();
-        if (!pkt) return;
-
-        while (simBytes.length < 12) simBytes.push(0);
-
-        // 渲染 12 个字节 Hex 块 (B0~B3: ID, B4~B11: 数据)
-        let bytesHtml = '';
-        for (let i = 0; i < 12; i++) {
-            const byteVal = simBytes[i] || 0;
-            const hex = byteVal.toString(16).padStart(2, '0').toUpperCase();
-            const isId = i < 4;
-            const label = isId ? `ID-B${i}` : `D-B${i - 4}`;
-            const title = isId 
-                ? `Byte ${i}: 固定 CAN ID 位 (全包第 ${i} 字节)` 
-                : `Byte ${i}: 数据位载荷 (全包第 ${i} 字节，数据段 Byte ${i - 4})`;
-
-            bytesHtml += `
-                <div class="can-sim-byte-chip ${isId ? 'id-byte' : 'data-byte'}" title="${title}">
-                    <span class="csb-idx">${label}</span>
-                    <input type="text" class="csb-input mono-input" 
-                           maxlength="2" 
-                           value="${hex}" 
-                           title="修改十六进制值并实时联动解析"
-                           onchange="window.updateCanSimByte(${i}, this.value);">
-                </div>
-            `;
-        }
-        container.innerHTML = bytesHtml;
-
-        // 实时解码全包信息：CAN ID 位域 + 数据位字段
-        const allBits = ProtoView.CanHelper ? ProtoView.CanHelper.encodeCanIdFromBytes(simBytes[0], simBytes[1], simBytes[2], simBytes[3]) : 0;
-        const idObj = ProtoView.CanHelper ? ProtoView.CanHelper.decodeCanIdObj(allBits) : null;
-
-        let decodeHtml = '';
-
-        // 1. CAN ID 7 个位域解析标签
-        if (idObj) {
-            decodeHtml += `
-                <div class="can-decode-item id-item" title="固定 CAN ID: 0x${idObj.hex}">
-                    <span class="can-decode-sig-badge" style="background:#059669; color:#fff;">CAN ID</span>
-                    <span class="cdi-val" style="font-family:'JetBrains Mono',monospace; font-weight:700; color:#059669;">${idObj.hex}</span>
-                </div>
-                <div class="can-decode-item id-item" title="指令类型 (CmdType)">
-                    <span style="font-size:11px; color:var(--text-secondary);">CmdType:</span>
-                    <span class="cdi-val" style="font-family:'JetBrains Mono',monospace; font-weight:700;">0x${idObj.cmdType.toString(16).toUpperCase()}</span>
-                </div>
-                <div class="can-decode-item id-item" title="源节点 (SourceId)">
-                    <span style="font-size:11px; color:var(--text-secondary);">SourceId:</span>
-                    <span class="cdi-val" style="font-family:'JetBrains Mono',monospace; font-weight:700;">${idObj.sourceId}</span>
-                </div>
-                <div class="can-decode-item id-item" title="RCI (2b)">
-                    <span style="font-size:11px; color:var(--text-secondary);">RCI:</span>
-                    <span class="cdi-val" style="font-family:'JetBrains Mono',monospace; font-weight:700;">${idObj.rci}</span>
-                </div>
-                <div class="can-decode-item id-item" title="消息类型 (MsgType)">
-                    <span style="font-size:11px; color:var(--text-secondary);">MsgType:</span>
-                    <span class="cdi-val" style="font-family:'JetBrains Mono',monospace; font-weight:700;">${idObj.msgType}</span>
-                </div>
-                <div class="can-decode-item id-item" title="LCC (3b)">
-                    <span style="font-size:11px; color:var(--text-secondary);">LCC:</span>
-                    <span class="cdi-val" style="font-family:'JetBrains Mono',monospace; font-weight:700;">${idObj.lcc}</span>
-                </div>
-            `;
-        }
-
-        // 2. 数据载荷 (后 8 字节: simBytes[4..11]) 字段物理值解码
-        const dataBytes = simBytes.slice(4, 12);
-        const allSignals = [];
-        (pkt.bytes || []).forEach(b => {
-            (b.signals || []).forEach(s => {
-                allSignals.push({ ...s, byteOffset: b.byteOffset });
-            });
-        });
-
-        if (allSignals.length === 0) {
-            decodeHtml += `<span style="font-size:11px; color:var(--text-secondary); font-style:italic;">暂无数据字段定义</span>`;
-        } else {
-            allSignals.forEach((sig, sIdx) => {
-                const colorIdx = sIdx % 8;
-                const bVal = dataBytes[sig.byteOffset] || 0;
-                const mask = ((1 << (sig.bitLength || 1)) - 1);
-                const rawVal = (bVal >> (sig.startBit || 0)) & mask;
-                const physVal = (rawVal * (sig.factor !== undefined ? sig.factor : 1)) + (sig.offset || 0);
-                const unit = sig.unit ? ` ${escapeHTML(sig.unit)}` : '';
-                let displayVal = `${physVal}${unit}`;
-
-                // 检查字典映射
-                const dict = sig.dict || {};
-                if (dict[rawVal] !== undefined) {
-                    displayVal = `${physVal} (${dict[rawVal]})`;
-                } else if (Array.isArray(sig.enumDict) && sig.enumDict.length > 0) {
-                    const match = sig.enumDict.find(item => String(item.value) === String(rawVal) || String(item.val) === String(rawVal));
-                    if (match) displayVal = `${physVal} (${match.label})`;
-                }
-
-                decodeHtml += `
-                    <div class="can-decode-item" title="Byte ${sig.byteOffset} · ${escapeHTML(sig.name)}: 物理值 = Raw(${rawVal}) * ${sig.factor||1} + ${sig.offset||0}">
-                        <span class="can-decode-sig-badge sig-color-${colorIdx}">B${sig.byteOffset}</span>
-                        <span style="font-weight:600; font-size:11.5px;">${escapeHTML(sig.name)}:</span>
-                        <span class="cdi-val" style="font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--accent-color); font-size:12px;">${escapeHTML(displayVal)}</span>
-                    </div>
-                `;
-            });
-        }
-
-        decodeContainer.innerHTML = decodeHtml;
-    }
-
-    // 用户在 12 字节仿真底栏修改单字节十六进制
-    function updateCanSimByte(byteIdx, hexVal) {
-        let clean = (hexVal || '').replace(/[^0-9a-fA-F]/g, '');
-        if (!clean) clean = '00';
-        const val = parseInt(clean, 16) & 0xFF;
-        simBytes[byteIdx] = val;
-
-        const pkt = getCurrentCanPacket();
-        if (pkt && byteIdx < 4) {
-            // 前 4 字节修改自动同步到 CAN ID 位域
-            const allBits = ProtoView.CanHelper ? ProtoView.CanHelper.encodeCanIdFromBytes(simBytes[0], simBytes[1], simBytes[2], simBytes[3]) : 0;
-            const decoded = ProtoView.CanHelper ? ProtoView.CanHelper.decodeCanIdObj(allBits) : null;
-            if (decoded) {
-                const idFields = ensurePacketIdFields(pkt);
-                idFields.selfDefine = decoded.selfDefine;
-                idFields.rci = decoded.rci;
-                idFields.sourceId = decoded.sourceId;
-                idFields.cmdType = decoded.cmdType;
-                idFields.msgType = decoded.msgType;
-                idFields.lcc = decoded.lcc;
-                idFields.rsvd = decoded.rsvd;
-                pkt.canId = decoded.hex;
-
-                const topIdInput = document.getElementById('can-frame-id-input');
-                if (topIdInput) topIdInput.value = decoded.hex;
-                const idValEl = document.getElementById('can-frame-id-val');
-                if (idValEl) idValEl.textContent = decoded.hex;
-
-                renderCanIdCompactPanel(pkt, idFields, decoded.allBits);
-            }
-        }
-
-        renderSimulationBar();
-    }
-
-    // 随机生成 12 字节测试载荷数据
-    function randomizeCanSim() {
-        for (let i = 0; i < 12; i++) {
-            simBytes[i] = Math.floor(Math.random() * 256);
-        }
-        const pkt = getCurrentCanPacket();
-        if (pkt) {
-            const allBits = ProtoView.CanHelper ? ProtoView.CanHelper.encodeCanIdFromBytes(simBytes[0], simBytes[1], simBytes[2], simBytes[3]) : 0;
-            const decoded = ProtoView.CanHelper ? ProtoView.CanHelper.decodeCanIdObj(allBits) : null;
-            if (decoded) {
-                const idFields = ensurePacketIdFields(pkt);
-                idFields.selfDefine = decoded.selfDefine;
-                idFields.rci = decoded.rci;
-                idFields.sourceId = decoded.sourceId;
-                idFields.cmdType = decoded.cmdType;
-                idFields.msgType = decoded.msgType;
-                idFields.lcc = decoded.lcc;
-                idFields.rsvd = decoded.rsvd;
-                pkt.canId = decoded.hex;
-            }
-        }
-        renderByteDetail();
-        showToast('已随机生成 12 字节全包测试数据', 'info');
-    }
-
-    // 重置 12 字节模拟载荷 (CAN ID 恢复预设，数据位全置 0)
-    function resetCanSim() {
-        const pkt = getCurrentCanPacket();
-        if (pkt) {
-            const idFields = ensurePacketIdFields(pkt);
-            const allBits = ProtoView.CanHelper ? ProtoView.CanHelper.encodeCanIdObj(idFields) : 0x18F00100;
-            simBytes[0] = allBits & 0xFF;
-            simBytes[1] = (allBits >> 8) & 0xFF;
-            simBytes[2] = (allBits >> 16) & 0xFF;
-            simBytes[3] = (allBits >>> 24) & 0xFF;
-        } else {
-            simBytes[0] = 0; simBytes[1] = 0; simBytes[2] = 0; simBytes[3] = 0;
-        }
-        for (let i = 4; i < 12; i++) {
-            simBytes[i] = 0;
-        }
-        renderSimulationBar();
-        showToast('已重置 12 字节全包数据', 'info');
-    }
-
-    // 复制 12 字节十六进制
-    function copyCanHex() {
-        while (simBytes.length < 12) simBytes.push(0);
-        const hexStr = simBytes.map(b => (b || 0).toString(16).padStart(2, '0').toUpperCase()).join(' ');
-        copyTextToClipboard(hexStr);
-        showToast(`已复制 12 字节 Hex: ${hexStr}`, 'info');
-    }
-
     // 通用状态字典弹窗逻辑 (复用系统通用的 #dict-editor-modal)
     function openUniversalDictModal(dictObj, title, onSaveCallback) {
         const modal = document.getElementById('dict-editor-modal');
@@ -1648,14 +1443,6 @@
             });
         }
 
-        // 仿真底栏按钮
-        const btnRandom = document.getElementById('btn-can-sim-randomize');
-        if (btnRandom) btnRandom.addEventListener('click', randomizeCanSim);
-        const btnReset = document.getElementById('btn-can-sim-reset');
-        if (btnReset) btnReset.addEventListener('click', resetCanSim);
-        const btnCopyHex = document.getElementById('btn-can-sim-copy-hex');
-        if (btnCopyHex) btnCopyHex.addEventListener('click', copyCanHex);
-
         // 撤销 / 重做
         const btnUndo = document.getElementById('btn-can-undo');
         if (btnUndo) btnUndo.addEventListener('click', performCanUndo);
@@ -1763,13 +1550,11 @@
         duplicateCanSignal,
         deleteCanSignal,
         updateCanSignalProp,
-        updateCanSimByte,
         updateCanIdFieldVal,
         updateCanIdFieldComment,
         updateCanIdFromFullHex,
         openCanIdFieldDictModal,
         openCanSignalDictModal,
-        copyCanHex,
         bindEvents: bindCanEvents
     };
 
@@ -1811,12 +1596,6 @@
     global.updateCanIdFieldComment = updateCanIdFieldComment;
     global.openCanIdFieldDictModal = openCanIdFieldDictModal;
     global.openCanSignalDictModal = openCanSignalDictModal;
-
-    // 仿真
-    global.updateCanSimByte = updateCanSimByte;
-    global.randomizeCanSim = randomizeCanSim;
-    global.resetCanSim = resetCanSim;
-    global.copyCanHex = copyCanHex;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindCanEvents);

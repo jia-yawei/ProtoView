@@ -236,6 +236,11 @@
                     <span class="sidebar-mini-name">回收站</span>
                     <span class="nav-item-badge" id="sidebar-trash-count-badge" style="display:none; background:rgba(239, 68, 68, 0.15); color:#ef4444; font-weight:700;">0</span>
                 </button>
+                <button type="button" class="nav-tool-btn engineer-only" id="sidebar-tool-ai-chat" title="AI 协议助手：对话查询协议信息、上传 Word/Excel 协议对比">
+                    <span class="nav-icon-wrap"><i class="fa-solid fa-robot" style="color:#10b981;"></i></span>
+                    <span class="sidebar-text">AI 协议助手</span>
+                    <span class="sidebar-mini-name">AI助手</span>
+                </button>
 
                 <!-- 4. 管理员专属导航 (仅在管理员账号登录时显示) -->
                 <div class="nav-section-title sidebar-text admin-only" id="sidebar-admin-section-title" style="margin-top: 12px;">管理中心</div>
@@ -1339,39 +1344,6 @@
                                     <div class="can-data-cards-list" id="can-data-fields-list">
                                         <!-- 由 JS 渲染数据位字段卡片 -->
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 底部实时 12 字节仿真与物理值解码体验区 -->
-                        <div class="can-bottom-sim-bar" id="can-bottom-sim-bar">
-                            <div class="can-sim-header">
-                                <div class="can-sim-title">
-                                    <i class="fa-solid fa-microchip" style="color: #0284c7;"></i>
-                                    <span>实时 12 字节全包仿真与物理值解码 (4B CAN ID + 8B 数据)</span>
-                                </div>
-                                <div class="can-sim-actions">
-                                    <button type="button" class="dense-btn dense-btn-xs" id="btn-can-sim-randomize" title="随机生成全包测试数据">
-                                        <i class="fa-solid fa-dice"></i> 随机数值
-                                    </button>
-                                    <button type="button" class="dense-btn dense-btn-xs" id="btn-can-sim-reset" title="将 12 字节全包重置为 00">
-                                        <i class="fa-solid fa-rotate-left"></i> 清零
-                                    </button>
-                                    <button type="button" class="dense-btn dense-btn-xs" id="btn-can-sim-copy-hex" title="复制完整 12 字节十六进制字符串">
-                                        <i class="fa-solid fa-copy"></i> 复制 12B Hex
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="can-sim-body">
-                                <!-- 12 字节 Hex 输入框组 (B0~B3: ID, B4~B11: 数据) -->
-                                <div class="can-sim-bytes-row" id="can-sim-bytes-row">
-                                    <!-- 由 JS 渲染 12 个单字节 Hex 输入框 -->
-                                </div>
-
-                                <!-- 实时解码信号流 -->
-                                <div class="can-sim-decode-flow" id="can-sim-decode-flow">
-                                    <!-- 由 JS 渲染各字段的即时解析与工程物理量 -->
                                 </div>
                             </div>
                         </div>
@@ -2986,6 +2958,173 @@ CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
         </div>
     </div>
 
+    <!-- AI 协议助手右侧滑出抽屉 (对话与大模型配置) -->
+    <div class="ai-drawer-backdrop" id="ai-drawer-backdrop"></div>
+    <aside class="ai-assistant-drawer" id="ai-assistant-drawer" aria-label="AI 协议助手">
+        <div class="ai-drawer-header">
+            <div class="ai-drawer-title-wrap">
+                <div class="ai-drawer-avatar"><i class="fa-solid fa-robot"></i></div>
+                <div class="ai-drawer-title-info">
+                    <span class="ai-drawer-title">AI 协议助手</span>
+                    <span class="ai-model-status-pill" id="ai-model-status-pill" title="点击配置大模型">
+                        <span class="status-led"></span>
+                        <span>未配置模型 · 点击配置</span>
+                    </span>
+                </div>
+            </div>
+            <div class="ai-drawer-actions">
+                <button type="button" class="ai-icon-btn" id="btn-ai-toggle-config" title="大模型接口与密钥配置">
+                    <i class="fa-solid fa-sliders"></i>
+                </button>
+                <button type="button" class="ai-icon-btn" id="btn-ai-clear-chat" title="清空对话记录">
+                    <i class="fa-solid fa-broom"></i>
+                </button>
+                <button type="button" class="ai-icon-btn" id="btn-ai-close-drawer" title="关闭 AI 助手">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 大模型配置面板 -->
+        <div class="ai-config-panel" id="ai-config-panel">
+            <form id="ai-config-form" class="ai-config-card">
+                <div class="ai-config-section-title">
+                    <i class="fa-solid fa-plug-circle-bolt" style="color:var(--accent-color);"></i>
+                    <span>大模型接口配置 (OpenAI 兼容格式)</span>
+                </div>
+
+                <div class="ai-config-field">
+                    <label for="ai-cfg-preset">
+                        <span>服务商预设</span>
+                        <span class="ai-config-hint">选择后自动填充常用地址</span>
+                    </label>
+                    <select id="ai-cfg-preset" class="ai-config-select">
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="qwen">通义千问 (DashScope)</option>
+                        <option value="moonshot">Moonshot (Kimi)</option>
+                        <option value="zhipu">智谱 GLM</option>
+                        <option value="ollama">Ollama (本地部署)</option>
+                        <option value="custom">自定义 (OpenAI 兼容接口)</option>
+                    </select>
+                </div>
+
+                <div class="ai-config-field">
+                    <label for="ai-cfg-url">
+                        <span>API Base URL <span style="color:var(--danger);">*</span></span>
+                        <span class="ai-config-hint">支持 /v1 或完整路径</span>
+                    </label>
+                    <input type="url" id="ai-cfg-url" class="ai-config-input" required placeholder="如: https://api.deepseek.com/v1">
+                </div>
+
+                <div class="ai-config-field">
+                    <label for="ai-cfg-key">
+                        <span>API 密钥 (API Key)</span>
+                        <span class="ai-config-hint">仅保存在本地浏览器</span>
+                    </label>
+                    <div class="ai-key-input-wrap">
+                        <input type="password" id="ai-cfg-key" class="ai-config-input" placeholder="sk-..." autocomplete="off">
+                        <button type="button" class="ai-key-toggle-btn" id="btn-ai-toggle-key-vis" title="显示/隐藏密钥">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ai-config-field">
+                    <label for="ai-cfg-model">
+                        <span>模型名称 (Model) <span style="color:var(--danger);">*</span></span>
+                        <span class="ai-config-hint">可点击右侧获取或手动输入</span>
+                    </label>
+                    <div class="ai-model-input-row">
+                        <input type="text" id="ai-cfg-model" class="ai-config-input" required placeholder="如: deepseek-chat">
+                        <button type="button" class="btn btn-secondary btn-sm ai-fetch-models-btn" id="btn-ai-fetch-models" title="从接口自动拉取可用模型列表">
+                            <i class="fa-solid fa-arrows-rotate"></i> 获取模型
+                        </button>
+                    </div>
+                    <select id="ai-cfg-model-select" class="ai-config-select" style="display:none; margin-top:4px;" title="选择要使用的模型"></select>
+                </div>
+
+                <div class="ai-config-field">
+                    <label for="ai-cfg-temp">
+                        <span>温度 (Temperature)</span>
+                        <span class="ai-config-hint">0.0 ~ 1.0，协议分析建议 0.2~0.3</span>
+                    </label>
+                    <input type="number" id="ai-cfg-temp" class="ai-config-input" min="0" max="2" step="0.1" value="0.3">
+                </div>
+
+                <div id="ai-config-test-result" class="ai-config-test-result"></div>
+
+                <div class="ai-config-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-ai-test-conn">
+                        <i class="fa-solid fa-bolt"></i> 测试连接
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-ai-cancel-config">返回对话</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="btn-ai-save-config">
+                        <i class="fa-solid fa-check"></i> 保存配置
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 对话主区域 -->
+        <div class="ai-chat-body" id="ai-chat-body">
+            <div class="ai-chat-messages" id="ai-chat-messages">
+                <div class="ai-chat-welcome" id="ai-chat-welcome">
+                    <div class="ai-welcome-badge">
+                        <i class="fa-solid fa-microchip"></i>
+                    </div>
+                    <div class="ai-welcome-title">ProtoView AI 协议助手</div>
+                    <div class="ai-welcome-desc">
+                        支持配置任意 OpenAI 兼容大模型，后续将联动查询站内 ARINC 429 / CAN / 串口协议数据，并支持上传 Word / Excel 协议进行智能对比。
+                    </div>
+
+                    <div class="ai-unconfigured-banner" id="ai-unconfigured-banner">
+                        <span><i class="fa-solid fa-circle-exclamation"></i> 尚未配置大模型 URL 与密钥</span>
+                        <button type="button" class="btn btn-primary btn-xs" id="btn-ai-go-config" style="height:26px; font-size:11px; padding:0 10px;">去配置</button>
+                    </div>
+
+                    <div class="ai-quick-prompts">
+                        <button type="button" class="ai-quick-prompt-btn" data-prompt="请介绍一下 ARINC 429 协议中 Label、SDI、Data、SSM 和奇偶校验位的划分规范。">
+                            <i class="fa-solid fa-plane-departure"></i>
+                            <span>ARINC 429 32位字结构与校验规范是什么？</span>
+                        </button>
+                        <button type="button" class="ai-quick-prompt-btn" data-prompt="请帮我梳理 CAN 总线中 Intel 小端与 Motorola 大端字节序的区别。">
+                            <i class="fa-solid fa-network-wired"></i>
+                            <span>CAN 总线 Intel 与 Motorola 字节序有什么区别？</span>
+                        </button>
+                        <button type="button" class="ai-quick-prompt-btn" data-prompt="在串口通信协议中，常见的帧头、长度、校验和（CRC16/Sum）设计有哪些注意事项？">
+                            <i class="fa-solid fa-bolt"></i>
+                            <span>串口通信协议帧格式与校验设计建议</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ai-chat-input-area" id="ai-chat-input-area">
+                <div class="ai-attachment-preview" id="ai-attachment-preview"></div>
+                <div class="ai-input-toolbar">
+                    <div class="ai-input-tools-left">
+                        <input type="file" id="ai-doc-file-input" accept=".doc,.docx,.xls,.xlsx,.csv,.txt" style="display:none;">
+                        <button type="button" class="ai-tool-chip-btn" id="btn-ai-upload-doc" title="上传 Word / Excel 协议文件用于对比">
+                            <i class="fa-solid fa-file-arrow-up" style="color:#0ea5e9;"></i>
+                            <span>上传 Word / Excel</span>
+                        </button>
+                    </div>
+                    <label class="ai-context-toggle" title="对话时自动附带当前打开的协议上下文">
+                        <input type="checkbox" id="ai-include-context-toggle" checked>
+                        <span>关联当前协议</span>
+                    </label>
+                </div>
+                <div class="ai-input-box-row">
+                    <textarea id="ai-chat-input" class="ai-chat-textarea" rows="1" placeholder="输入问题（Enter 发送，Shift+Enter 换行）..."></textarea>
+                    <button type="button" class="ai-send-btn" id="btn-ai-send" title="发送消息">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
     <!-- 模块化架构分层脚本 (强制穿透静态缓存) -->
     <script src="js/core.js?v=20261125_13"></script>
     <script src="js/db.js?v=20261119_25"></script>
@@ -3005,6 +3144,7 @@ CREATE INDEX IF NOT EXISTS idx_protocols_username ON protocols(username);</pre>
     <script src="js/viewer-ctrl.js?v=20261119_26"></script>
     <script src="js/export-ctrl.js?v=20261124_09"></script>
     <script src="js/version-diff.js?v=20261124_09"></script>
+    <script src="js/ai-assistant.js?v=20261125_01"></script>
     <script src="js/app.js?v=20261124_09"></script>
 </body>
 </html>
