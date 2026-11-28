@@ -650,7 +650,8 @@
             this._compareBasicMeta(pA, pB, report);
 
             // 2. 数据包与帧/Label/字节层级多级对比
-            this._comparePacketsNested(pA, pB, isArinc, report);
+            const isCan = (pA.type === 'CAN') || (pB.type === 'CAN');
+            this._comparePacketsNested(pA, pB, isArinc, report, isCan);
 
             // 同步向后兼容的 summarySentences
             report.summarySentences = report.summary.summarySentences;
@@ -760,8 +761,75 @@
             return 0;
         },
 
+        // 为 CAN 数据包构建统一的对比帧列表：CAN ID 结构体 + Byte 0~7 数据域
+        _buildCanCompareItems(pkt) {
+            if (!pkt) return [];
+            const items = [];
+            const canIdHex = pkt.canId || '0x18F00100';
+            const idObj = (typeof CanHelper !== 'undefined' && CanHelper.decodeCanIdObj)
+                ? CanHelper.decodeCanIdObj(canIdHex)
+                : {};
+            const idFields = pkt.idFields || idObj || {};
+            const fieldDefs = (typeof CanHelper !== 'undefined' && CanHelper.CAN_ID_FIELDS) ? CanHelper.CAN_ID_FIELDS : [
+                { key: 'selfDefine', name: '自定义', ident: 'SelfDefine', startBit: 0, bitLength: 8, isHex: true },
+                { key: 'rci', name: 'RCI', ident: 'Rci', startBit: 8, bitLength: 2, isHex: false },
+                { key: 'sourceId', name: '源ID', ident: 'SourceId', startBit: 10, bitLength: 6, isHex: false },
+                { key: 'cmdType', name: '指令类型', ident: 'CmdType', startBit: 16, bitLength: 8, isHex: true },
+                { key: 'msgType', name: '消息类型', ident: 'MsgType', startBit: 24, bitLength: 2, isHex: false },
+                { key: 'lcc', name: 'LCC', ident: 'Lcc', startBit: 26, bitLength: 3, isHex: false },
+                { key: 'rsvd', name: '保留', ident: 'Rsvd', startBit: 29, bitLength: 3, isHex: false }
+            ];
+
+            const idSignals = fieldDefs.map(meta => {
+                const rawVal = idFields[meta.key] !== undefined ? idFields[meta.key] : (idObj[meta.key] || 0);
+                const valStr = meta.isHex ? ('0x' + Number(rawVal || 0).toString(16).toUpperCase().padStart(2, '0')) : String(rawVal || 0);
+                const fDict = (idFields.dicts && idFields.dicts[meta.key]) || {};
+                const comment = (idFields.comments && idFields.comments[meta.key]) || '';
+                const dictStr = Object.entries(fDict).map(([k, v]) => `${k}:${v}`).join('; ');
+                return {
+                    id: `can_id_${meta.key}`,
+                    key: meta.key,
+                    name: `${meta.name} (${meta.ident})`,
+                    startBit: meta.startBit,
+                    bitLength: meta.bitLength,
+                    dataType: `u${meta.bitLength}`,
+                    resolution: valStr,
+                    offset: 0,
+                    unit: '',
+                    dict: fDict,
+                    remark: [ `值:${valStr}`, dictStr ? `字典:[${dictStr}]` : '', comment ].filter(Boolean).join(' | ')
+                };
+            });
+
+            items.push({
+                isCanId: true,
+                key: 'can_id',
+                label: 'CAN ID',
+                name: `帧 ID 结构体 (${canIdHex})`,
+                canId: canIdHex,
+                signals: idSignals
+            });
+
+            const bytes = Array.isArray(pkt.bytes) ? pkt.bytes : [];
+            bytes.forEach((b, idx) => {
+                const off = b.byteOffset !== undefined ? b.byteOffset : idx;
+                items.push({
+                    offset: off,
+                    key: `byte_${off}`,
+                    name: b.name || `Byte ${off}`,
+                    signals: (b.signals || []).map(s => ({
+                        ...s,
+                        resolution: s.factor !== undefined ? s.factor : (s.resolution !== undefined ? s.resolution : 1),
+                        remark: s.description !== undefined ? s.description : (s.remark || '')
+                    }))
+                });
+            });
+
+            return items;
+        },
+
         // 嵌套数据包与帧/Label对比
-        _comparePacketsNested(pA, pB, isArinc, report) {
+        _comparePacketsNested(pA, pB, isArinc, report, isCan = false) {
             const pktsA = this._getPackets(pA);
             const pktsB = this._getPackets(pB);
             const maxLen = Math.max(pktsA.length, pktsB.length);
@@ -818,10 +886,11 @@
                 }
 
                 // Tier 2: 提取并对比帧/Label级 (frames)
-                const itemsA = pktA ? (isArinc ? (pktA.words || []) : (pktA.fields || [])) : [];
-                const itemsB = pktB ? (isArinc ? (pktB.words || []) : (pktB.fields || [])) : [];
+                const itemsA = pktA ? (isCan ? this._buildCanCompareItems(pktA) : (isArinc ? (pktA.words || []) : (pktA.fields || []))) : [];
+                const itemsB = pktB ? (isCan ? this._buildCanCompareItems(pktB) : (isArinc ? (pktB.words || []) : (pktB.fields || []))) : [];
 
                 const frameDiffs = this._compareFrames(itemsA, itemsB, isArinc, pktName, report);
+                packetDiff.type = isCan ? 'CAN' : (isArinc ? 'ARINC429' : 'Serial');
                 packetDiff.frames = frameDiffs;
                 report.packets.push(packetDiff);
                 report.frames.push(...frameDiffs);
@@ -833,6 +902,7 @@
             const frameDiffs = [];
             const getFrameKey = (it, idx) => {
                 if (!it) return `idx_${idx}`;
+                if (it.isCanId) return 'can_id';
                 if (isArinc) {
                     const lbl = (it.label !== undefined && it.label !== null ? String(it.label).trim() : String(idx)).padStart(3, '0');
                     let sdiStr = '';
@@ -866,9 +936,12 @@
                 const fA = mapA.get(k) || null;
                 const fB = mapB.get(k) || null;
 
-                const frameLabel = isArinc
-                    ? `${((fB || fA).label || '000').toString().padStart(3, '0')}₈`
-                    : `Byte ${(fB || fA).offset !== undefined ? (fB || fA).offset : ((fB || fA).key || '0')}`;
+                const refItem = fB || fA;
+                const frameLabel = refItem.isCanId
+                    ? 'CAN ID'
+                    : (isArinc
+                        ? `${(refItem.label || '000').toString().padStart(3, '0')}₈`
+                        : `Byte ${refItem.offset !== undefined ? refItem.offset : (refItem.key || '0')}`);
                 const frameName = (fB && fB.name) || (fA && fA.name) || '未命名';
 
                 const fDiff = {
@@ -2702,7 +2775,8 @@
                 return;
             }
 
-            const isArinc = (this.currentProto && this.currentProto.type === 'ARINC429') || (targetPacket && targetPacket.type === 'ARINC429') || true;
+            const isArinc = (this.currentProto && this.currentProto.type === 'ARINC429') || (targetPacket && targetPacket.type === 'ARINC429');
+            const isCan = (this.currentProto && this.currentProto.type === 'CAN') || (targetPacket && targetPacket.type === 'CAN');
             const { status, impact, baseWord, targetWord, label, name, bitfield, signals, wordChanges } = targetFrame;
 
             // ----------------------------------------------------
@@ -2712,13 +2786,15 @@
                 if (!word || cardStatus === 'ghost') {
                     return `
                         <div class="diff-word-card ghost-card">
-                            <span><i class="fa-solid fa-ban"></i> ${role === 'base' ? '上一版本中未定义此标号字' : '当前版本中已删除此标号字'}</span>
+                            <span><i class="fa-solid fa-ban"></i> ${role === 'base' ? '上一版本中未定义此项' : '当前版本中已删除此项'}</span>
                         </div>
                     `;
                 }
 
-                const octal = word.label || word.labelOctal || label || '000';
-                const wordName = word.name || name || '未命名标号字';
+                const octal = isArinc
+                    ? `${word.label || word.labelOctal || label || '000'}₈`
+                    : (word.isCanId ? 'CAN ID' : (label || `Byte ${word.offset !== undefined ? word.offset : 0}`));
+                const wordName = word.name || name || '未命名';
                 const period = word.period || (targetPacket ? targetPacket.period : '-') || '-';
                 const dir = word.direction || (targetPacket ? targetPacket.direction : 'tx') || 'tx';
                 const sdi = (word.sdi !== undefined && word.sdi !== null) ? word.sdi : '-';
@@ -2730,21 +2806,29 @@
                 if (cardStatus === 'breaking') cardClass = 'breaking';
                 else if (cardStatus === 'compatible') cardClass = 'compatible';
 
+                const metaChipsHtml = isArinc ? `
+                    <span class="dwc-prop-chip"><i class="fa-regular fa-clock"></i> 周期: <b>${escapeHTML(period)}</b></span>
+                    <span class="dwc-prop-chip">SDI: <b>${escapeHTML(String(sdi))}</b></span>
+                    <span class="dwc-prop-chip">SSM: <b>${escapeHTML(String(ssm))}</b></span>
+                    <span class="dwc-prop-chip">校验: <b>${escapeHTML(parity)}</b></span>
+                    <span class="dwc-prop-chip"><i class="fa-solid fa-cube"></i> 字段: <b>${(word.fields || word.signals || []).length} 个</b></span>
+                ` : `
+                    <span class="dwc-prop-chip"><i class="fa-regular fa-clock"></i> 周期: <b>${escapeHTML(period)}</b></span>
+                    ${word.canId ? `<span class="dwc-prop-chip">AllBits: <b>${escapeHTML(word.canId)}</b></span>` : ''}
+                    <span class="dwc-prop-chip"><i class="fa-solid fa-cube"></i> 位域/字段: <b>${(word.fields || word.signals || []).length} 个</b></span>
+                `;
+
                 return `
                     <div class="diff-word-card ${cardClass}">
                         <div class="dwc-top">
                             <div class="dwc-title-box">
-                                <span class="dwc-octal">${escapeHTML(octal)}₈</span>
+                                <span class="dwc-octal">${escapeHTML(octal)}</span>
                                 <span class="dwc-name">${escapeHTML(wordName)}</span>
                             </div>
                             <span class="dense-dir-tag ${dir === 'rx' ? 'dir-rx' : 'dir-tx'}" style="font-size:10px; padding:1px 6px;">${dir === 'rx' ? '接收' : '发送'}</span>
                         </div>
                         <div class="dwc-meta-row">
-                            <span class="dwc-prop-chip"><i class="fa-regular fa-clock"></i> 周期: <b>${escapeHTML(period)}</b></span>
-                            <span class="dwc-prop-chip">SDI: <b>${escapeHTML(String(sdi))}</b></span>
-                            <span class="dwc-prop-chip">SSM: <b>${escapeHTML(String(ssm))}</b></span>
-                            <span class="dwc-prop-chip">校验: <b>${escapeHTML(parity)}</b></span>
-                            <span class="dwc-prop-chip"><i class="fa-solid fa-cube"></i> 字段: <b>${(word.fields || word.signals || []).length} 个</b></span>
+                            ${metaChipsHtml}
                         </div>
                     </div>
                 `;
@@ -2845,7 +2929,7 @@
                 const startVal = isNaN(sStart) ? 1 : sStart;
                 const sLen = parseInt(sig.bitLength !== undefined && sig.bitLength !== null ? sig.bitLength : (sig.bitCount !== undefined ? sig.bitCount : (sig.length || sig.byteLength || 1)), 10) || 1;
                 const endVal = startVal + sLen - 1;
-                const sRange = isArinc
+                const sRange = (isArinc || isCan)
                     ? (sLen === 1 ? `Bit ${startVal}` : `B${startVal}~B${endVal}`)
                     : (sLen === 1 ? `Byte ${startVal}` : `Byte ${startVal}~${endVal}`);
                 const sRemark = sig.remark || '-';

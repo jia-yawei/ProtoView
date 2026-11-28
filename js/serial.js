@@ -1018,83 +1018,136 @@
         },
 
         /**
-         * 生成串口通信协议标准可打印独立 HTML 说明书 (支持打印/PDF)
+         * 生成串口通信协议标准可打印独立 HTML 说明书 (正式工程 Word/ICD 排版风格，与 CAN 保持一致，位域逐行清晰展开)
          */
         generateHtmlSpec(protocol) {
             if (!protocol) return '<h1>无有效协议</h1>';
             const pName = protocol.name || '串口通信协议';
-            const pProduct = protocol.product ? ` [${protocol.product}]` : '';
+            const pProduct = protocol.product ? `${protocol.product}` : '';
+            const pVer = protocol.version || 'v1.0';
             const pSubtype = protocol.subType || 'RS485';
             const baud = protocol.baudRate || 115200;
             const parityMap = { 'odd': '奇校验 (Odd)', 'even': '偶校验 (Even)', 'none': '无校验 (None)' };
             const parityStr = parityMap[protocol.parity] || '无校验';
             const formatStr = `${protocol.dataBits || 8}-${(protocol.parity || 'none')[0].toUpperCase()}-${protocol.stopBits || 1}`;
             const dev = protocol.device || '传感器/执行器节点';
-            const packets = protocol.packets || [];
+            const packets = Array.isArray(protocol.packets) ? protocol.packets : [];
+
+            const esc = (s) => String(s || '').replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[m]);
 
             let packetsHtml = '';
+            if (packets.length === 0) {
+                packetsHtml = `<div style="padding:24px; text-align:center; border:1px dashed #cbd5e1; color:#64748b; font-size:13px;">当前串口协议尚未配置数据包，请先进入工作台添加数据包与字节定义。</div>`;
+            }
+
             packets.forEach((pkt, pIdx) => {
                 const totalBytes = this.calcPacketTotalBytes ? this.calcPacketTotalBytes(pkt) : (pkt.fields ? pkt.fields.length : 0);
-                const isTx = (pkt.direction === 'Rx') ? 'Rx (接收)' : 'Tx (发送)';
+                const isTx = (pkt.direction === 'Rx') ? '接收 (Rx)' : '发送 (Tx)';
                 const pktPeriod = pkt.period !== undefined ? pkt.period : (protocol.period || 20);
 
                 let rowsHtml = '';
                 const fields = pkt.fields || [];
+                if (fields.length === 0) {
+                    rowsHtml = `<tr><td colspan="8" style="text-align:center; color:#94a3b8; padding:14px;">当前数据包暂无字节定义</td></tr>`;
+                }
+
                 fields.forEach((f, fIdx) => {
                     const off = f.byteOffset !== undefined ? f.byteOffset : fIdx;
                     const cnt = f.byteCount || 1;
                     const spanText = cnt > 1 ? `Byte ${off}~${off + cnt - 1}` : `Byte ${off}`;
                     const defHex = f.fixedHex ? `0x${f.fixedHex}` : (f.defaultValue !== undefined ? `0x${Number(f.defaultValue).toString(16).padStart(cnt * 2, '0').toUpperCase()}` : '-');
-                    const dType = f.dataType || 'u8';
-                    const scale = f.scale !== undefined && f.scale !== '' ? f.scale : (f.resolution !== undefined ? f.resolution : 1.0);
-                    const range = (f.min !== undefined && f.min !== '' && f.max !== undefined && f.max !== '') ? `${f.min} ~ ${f.max}` : '-';
-                    const unit = f.unit || '-';
+                    const byteName = f.name || '未命名';
+                    const sigs = (Array.isArray(f.signals) && f.signals.length > 0) ? f.signals : null;
 
-                    let noteHtml = [];
-                    if (f.dict && typeof f.dict === 'object' && Object.keys(f.dict).length > 0) {
-                        const dictStr = Object.entries(f.dict).map(([k, v]) => `<code>${k}</code>: ${v}`).join(', ');
-                        noteHtml.push(`<div><b>状态字典:</b> ${dictStr}</div>`);
-                    }
-                    if (f.signals && Array.isArray(f.signals) && f.signals.length > 0) {
-                        const bitStr = f.signals.map(s => {
-                            const dStr = (s.dict && Object.keys(s.dict).length > 0) ? ` (${Object.entries(s.dict).map(([k,v]) => `${k}:${v}`).join(',')})` : '';
-                            return `[${s.bitRange || `bit${s.startBit}`}] ${s.name || ''}${dStr}`;
-                        }).join('; ');
-                        noteHtml.push(`<div><b>位域开关:</b> ${bitStr}</div>`);
-                    }
-                    if (f.remark) noteHtml.push(`<div><b>备注:</b> ${f.remark}</div>`);
+                    if (!sigs) {
+                        const dType = f.dataType || 'u8';
+                        const scale = f.scale !== undefined && f.scale !== '' ? f.scale : (f.resolution !== undefined && f.resolution !== '' ? f.resolution : 1);
+                        const range = (f.min !== undefined && f.min !== '' && f.max !== undefined && f.max !== '') ? `${f.min} ~ ${f.max}` : '-';
+                        const unit = f.unit || '-';
+                        const notes = [];
+                        if (f.dict && typeof f.dict === 'object' && Object.keys(f.dict).length > 0) {
+                            const dictStr = Object.entries(f.dict).map(([k, v]) => `${esc(k)}：${esc(v)}`).join('；');
+                            notes.push(`<b>状态定义：</b>${dictStr}`);
+                        }
+                        if (f.remark) notes.push(esc(f.remark));
 
-                    rowsHtml += `
-                        <tr>
-                            <td style="text-align:center; font-weight:700; background:#f8fafc;">${spanText}</td>
-                            <td style="font-weight:600;">${f.name || '未命名'}</td>
-                            <td style="text-align:center; font-family:monospace;">${defHex}</td>
-                            <td style="text-align:center;"><code>${dType}</code></td>
-                            <td style="text-align:center;">${scale}</td>
-                            <td style="text-align:center;">${range}</td>
-                            <td style="text-align:center;">${unit}</td>
-                            <td style="font-size:11.5px;">${noteHtml.join('') || '-'}</td>
-                        </tr>
-                    `;
+                        rowsHtml += `
+                            <tr>
+                                <td class="cell-byte-idx">${esc(spanText)}</td>
+                                <td class="cell-byte-name">${esc(byteName)}</td>
+                                <td class="cell-bit-pos">整字节</td>
+                                <td style="font-weight:600;">${esc(byteName)}</td>
+                                <td style="text-align:center;">${esc(dType)}</td>
+                                <td style="text-align:center; font-family:Consolas,monospace;">${esc(scale)}${unit !== '-' ? ` (${esc(unit)})` : ''}</td>
+                                <td style="text-align:center;">${esc(range)}</td>
+                                <td>${notes.join('<br>') || '-'}</td>
+                            </tr>
+                        `;
+                    } else {
+                        sigs.forEach((s, sIdx) => {
+                            const bitSpan = s.bitRange || (s.bitCount > 1 ? `bit${s.startBit || 0}-${(Number(s.startBit) || 0) + Number(s.bitCount) - 1}` : `bit${s.startBit || 0}`);
+                            const dType = s.dataType || f.dataType || 'u8';
+                            const scale = s.resolution !== undefined && s.resolution !== '' ? s.resolution : (s.scale !== undefined && s.scale !== '' ? s.scale : 1);
+                            const offsetVal = s.offset !== undefined && s.offset !== '' ? s.offset : 0;
+                            const unit = s.unit || '';
+                            const conv = `${scale}${offsetVal ? (offsetVal > 0 ? ` / +${offsetVal}` : ` / ${offsetVal}`) : ''}${unit ? ` (${unit})` : ''}`;
+                            const range = (s.min !== undefined && s.min !== '' && s.max !== undefined && s.max !== '') ? `${s.min} ~ ${s.max}` : '-';
+
+                            const notes = [];
+                            if (s.dict && typeof s.dict === 'object' && Object.keys(s.dict).length > 0) {
+                                const dictStr = Object.entries(s.dict).map(([k, v]) => `${esc(k)}：${esc(v)}`).join('；');
+                                notes.push(`<b>状态定义：</b>${dictStr}`);
+                            }
+                            if (s.remark) notes.push(esc(s.remark));
+
+                            rowsHtml += `
+                                <tr>
+                                    ${sIdx === 0 ? `<td rowspan="${sigs.length}" class="cell-byte-idx">${esc(spanText)}<div class="td-sub mono-val">${esc(defHex)}</div></td>` : ''}
+                                    ${sIdx === 0 ? `<td rowspan="${sigs.length}" class="cell-byte-name">${esc(byteName)}</td>` : ''}
+                                    <td class="cell-bit-pos"><b>${esc(bitSpan)}</b></td>
+                                    <td style="font-weight:600;">${esc(s.name || byteName)}</td>
+                                    <td style="text-align:center;">${esc(dType)}</td>
+                                    <td style="text-align:center; font-family:Consolas,monospace;">${esc(conv)}</td>
+                                    <td style="text-align:center;">${esc(range)}</td>
+                                    <td>${notes.join('<br>') || '-'}</td>
+                                </tr>
+                            `;
+                        });
+                    }
                 });
 
                 packetsHtml += `
-                    <div class="packet-block" style="margin-bottom: 24px; page-break-inside: avoid; break-inside: avoid;">
-                        <div class="packet-hdr" style="background: #0f172a; color:#fff; padding: 8px 12px; border-radius: 4px 4px 0 0; display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-size:14px; font-weight:bold;">第 ${pIdx + 1} 包：${pkt.name || '数据包'}</span>
-                            <span style="font-size:12px; color:#cbd5e1;">方向: <b>${isTx}</b> · 周期: <b>${pktPeriod}ms</b> · 总长: <b>${totalBytes} Bytes</b> ${pkt.cmd ? `· CMD: <b>${pkt.cmd}</b>` : ''}</span>
+                    <div class="packet-block serial-packet-page">
+                        <div class="sec-heading">
+                            <span class="sec-title">2.${pIdx + 1} ${esc(pkt.name || `数据包 ${pIdx + 1}`)}</span>
+                            <span class="sec-page-tag">报文 ${pIdx + 1} / ${packets.length}</span>
                         </div>
-                        <table style="width:100%; border-collapse:collapse; border:1px solid #cbd5e1; font-size:12.5px;">
+
+                        <table class="icd-table icd-meta-table">
+                            <tbody>
+                                <tr>
+                                    <td class="meta-k">报文名称</td>
+                                    <td class="meta-v"><b>${esc(pkt.name || '数据包')}</b></td>
+                                    <td class="meta-k">传输方向 / 周期</td>
+                                    <td class="meta-v">${isTx} · ${pktPeriod} ms</td>
+                                    <td class="meta-k">整包总长</td>
+                                    <td class="meta-v"><b>${totalBytes} Bytes</b>${pkt.cmd ? ` · CMD: <span class="mono-val">${esc(pkt.cmd)}</span>` : ''}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="table-caption">表 2.${pIdx + 1}-1　串口数据包字节时序与逐 Bit 定义表</div>
+                        <table class="icd-table">
                             <thead>
-                                <tr style="background:#f1f5f9; text-align:center; font-weight:bold; border-bottom:1.5px solid #0f172a;">
-                                    <th style="padding:6px; width:100px;">字节偏移</th>
-                                    <th style="padding:6px;">字段名称</th>
-                                    <th style="padding:6px; width:70px;">默认Hex</th>
-                                    <th style="padding:6px; width:70px;">类型</th>
-                                    <th style="padding:6px; width:70px;">比例(LSB)</th>
-                                    <th style="padding:6px; width:90px;">有效量程</th>
-                                    <th style="padding:6px; width:60px;">单位</th>
-                                    <th style="padding:6px;">说明与字典</th>
+                                <tr>
+                                    <th style="width:72px;">字节 / Hex</th>
+                                    <th style="width:92px;">字节名称</th>
+                                    <th style="width:76px;">位段</th>
+                                    <th style="width:120px;">信号名称</th>
+                                    <th style="width:48px;">类型</th>
+                                    <th style="width:90px;">比例/偏置(单位)</th>
+                                    <th style="width:76px;">有效量程</th>
+                                    <th>功能说明与状态字典</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1109,39 +1162,162 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>${pName} - 串口通信协议规格书</title>
+  <title>${esc(pName)} - 串口通信协议规格书</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 20px; background: #f8fafc; color: #1e293b; }
-    .page-container { max-width: 1040px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
-    .no-print-bar { display: flex; justify-content: space-between; align-items: center; background: #f1f5f9; padding: 10px 16px; border-radius: 6px; margin-bottom: 24px; border: 1px solid #e2e8f0; }
-    .btn-action { background: #2563eb; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; }
-    .doc-header { border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
-    .doc-title { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 6px 0; }
-    .doc-meta { font-size: 12px; color: #64748b; line-height: 1.5; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 12.5px; }
-    table td, table th { border: 1px solid #cbd5e1; padding: 6px 8px; }
+    @page { size: A4 portrait; margin: 10mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Microsoft YaHei", "PingFang SC", "SimSun", -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #e2e8f0;
+      color: #111827;
+    }
+    .page-container {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 28px 34px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+    }
+    .no-print-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8fafc;
+      padding: 8px 14px;
+      border-radius: 4px;
+      margin-bottom: 18px;
+      border: 1px solid #cbd5e1;
+      font-size: 12.5px;
+    }
+    .btn-action {
+      background: #1e293b;
+      color: #ffffff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .btn-action:hover { background: #0f172a; }
+
+    .doc-cover-header {
+      border-bottom: 2px solid #111827;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+    }
+    .doc-top-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #4b5563;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #d1d5db;
+      padding-bottom: 4px;
+    }
+    .doc-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #111827;
+      margin: 4px 0;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+    .doc-subtitle-row {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      font-size: 11.5px;
+      color: #374151;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+
+    .serial-packet-page {
+      margin-bottom: 24px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .serial-packet-page:not(:first-child) {
+      page-break-before: always !important;
+      break-before: page !important;
+    }
+
+    .sec-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-left: 3.5px solid #1e293b;
+      padding-left: 8px;
+      margin: 6px 0 8px 0;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 4px;
+    }
+    .sec-title { font-size: 14px; font-weight: 700; color: #111827; }
+    .sec-page-tag { font-size: 11px; color: #6b7280; }
+    .table-caption { font-size: 11.5px; font-weight: 700; color: #1f2937; margin: 8px 0 4px 0; }
+
+    table.icd-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.5px solid #1e293b;
+      font-size: 11px;
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+    table.icd-table th {
+      background: #f3f4f6;
+      color: #111827;
+      font-weight: 700;
+      text-align: center;
+      border: 1px solid #9ca3af;
+      border-bottom: 1.5px solid #1e293b;
+      padding: 5px 5px;
+      white-space: nowrap;
+    }
+    table.icd-table td {
+      border: 1px solid #9ca3af;
+      padding: 4px 6px;
+      vertical-align: middle;
+      color: #111827;
+    }
+    .td-sub { font-size: 10px; color: #4b5563; margin-top: 2px; }
+    .mono-val { font-family: Consolas, "Courier New", monospace; font-weight: 700; color: #111827; }
+    .icd-meta-table td.meta-k { background: #f3f4f6; font-weight: 700; width: 105px; text-align: center; color: #1f2937; }
+    .icd-meta-table td.meta-v { background: #ffffff; }
+    .cell-byte-idx { text-align: center; font-weight: 700; background: #f9fafb; white-space: nowrap; }
+    .cell-byte-name { font-weight: 600; white-space: nowrap; }
+    .cell-bit-pos { text-align: center; font-family: Consolas, monospace; white-space: nowrap; }
+
     @media print {
-      body { background: #fff; padding: 0; }
+      body { background: #ffffff; padding: 0; }
       .page-container { box-shadow: none; padding: 0; max-width: 100%; }
       .no-print-bar { display: none !important; }
-      .packet-block { page-break-inside: avoid !important; break-inside: avoid !important; }
+      .serial-packet-page { margin-bottom: 0 !important; }
+      .doc-cover-header { margin-bottom: 10px; page-break-after: avoid; break-after: avoid; }
     }
   </style>
 </head>
 <body>
   <div class="page-container">
     <div class="no-print-bar">
-      <span><strong>串口协议 ICD 规格说明书</strong> (源自 ProtoView 工业通信总线设计系统)</span>
+      <span><strong>串口通信接口控制文件 (ICD)</strong> — 正式打印排版视图</span>
       <button class="btn-action" onclick="window.print()">🖨️ 打印 / 另存为 PDF</button>
     </div>
-    <div class="doc-header">
-      <div>
-        <h1 class="doc-title">${pName}${pProduct}</h1>
-        <div class="doc-meta">物理总线: <b>${pSubtype}</b> | 波特率: <b>${baud} bps</b> | 格式: <b>${formatStr}</b> (${parityStr}) | 对端: <b>${dev}</b></div>
+    <div class="doc-cover-header">
+      <div class="doc-top-meta">
+        <span>${pProduct ? `所属产品：${esc(pProduct)}` : '串口总线接口规范'}</span>
+        <span>文档版本：${esc(pVer)}</span>
+        <span>编制日期：${new Date().toLocaleDateString()}</span>
       </div>
-      <div class="doc-meta" style="text-align: right;">
-        <div>规约体系: 串口时序字节流</div>
-        <div>导出时间: ${new Date().toLocaleDateString()}</div>
+      <h1 class="doc-title">${esc(pName)}</h1>
+      <div class="doc-subtitle-row">
+        <span><b>物理总线：</b>${esc(pSubtype)}</span>
+        <span><b>波特率：</b>${esc(baud)} bps</span>
+        <span><b>帧格式：</b>${esc(formatStr)} (${esc(parityStr)})</span>
+        <span><b>对端系统：</b>${esc(dev)}</span>
       </div>
     </div>
     <div class="doc-body">

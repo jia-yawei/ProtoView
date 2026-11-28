@@ -1,6 +1,6 @@
 /**
  * @file can-ctrl.js
- * @brief ProtoView CAN 总线协议 (CAN 2.0A/B & CAN FD / DBC 矩阵) 工作台交互控制器
+ * @brief ProtoView CAN 总线协议 (CAN 2.0A/B & CAN FD) 工作台交互控制器
  * @author DeepMind Pair Programming
  * 
  * 核心架构规范：
@@ -101,7 +101,7 @@
         return pkt.idFields;
     }
 
-    // 同步生成兼顾兼容性的 frames 数组 (供外部 DBC 导出、規格书导出等消费)
+    // 同步生成兼顾兼容性的 frames 数组 (供外部规格书导出等消费)
     function syncPacketFrames(pkt) {
         if (!pkt) return;
         const allSignals = [];
@@ -436,7 +436,7 @@
                 const periodText = isRx ? '' : ` ${pktPeriod}ms`;
                 const canIdStr = p.canId || '0x18F00100';
                 const pktName = (p.name && p.name.trim()) ? p.name.trim() : `数据包 ${idx + 1}`;
-                opt.textContent = `[${canIdStr}] ${pktName}`;
+                opt.textContent = pktName;
                 opt.title = `[${isRx ? '接收' : '发送'}${periodText}] CAN ID: ${canIdStr} - ${pktName}`;
                 if (idx === currentCanPacketIndex) opt.selected = true;
                 select.appendChild(opt);
@@ -511,8 +511,8 @@
                         #${idx + 1}
                     </td>
                     <td class="col-label" style="padding: 0 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                        <span style="font-family:'JetBrains Mono',Consolas,monospace; font-weight:700; font-size:12px; color:#059669;">${byteLabel}</span>
-                        ${byteName ? `<span class="word-mini-name" title="${escapeHTML(byteName)}" style="font-weight:600; font-size:12px; color:var(--text-primary); margin-left:6px;">${escapeHTML(byteName)}</span>` : ''}
+                        <span style="font-weight:700; font-size:12px; color:#059669;">${byteLabel}</span>
+                        ${byteName ? `<span class="word-mini-name" title="${escapeHTML(byteName)}" style="font-weight:500; font-size:12px; color:var(--text-primary); margin-left:6px;">${escapeHTML(byteName)}</span>` : ''}
                     </td>
                     <td class="col-count" style="text-align:center; width:52px;">
                         <span class="dense-count-pill" style="min-width:22px; padding:1px 6px;">${sigCount}</span>
@@ -760,12 +760,6 @@
                             <label class="field-card-label"><i class="fa-solid fa-ruler-horizontal"></i> 位长度</label>
                             <div class="field-card-input-wrap">
                                 <input type="number" class="can-input field-card-input" min="1" max="${maxBits}" value="${bitLength}" ${curType === 'bool' ? 'disabled' : ''} title="位宽 (最多 ${maxBits} 位)" onchange="window.updateCanSignalProp(${sIdx}, 'bitLength', this.value);">
-                            </div>
-                        </div>
-                        <div class="field-card-cell can-cell" style="width:110px;">
-                            <label class="field-card-label"><i class="fa-solid fa-code"></i> DBC标识符</label>
-                            <div class="field-card-input-wrap">
-                                <input type="text" class="can-input field-card-input" value="${escapeHTML(sig.identifier || '')}" placeholder="英文标识符" title="DBC 唯一标识符" onchange="window.updateCanSignalProp(${sIdx}, 'identifier', this.value);">
                             </div>
                         </div>
                         <div class="field-card-cell can-cell" style="width:68px;">

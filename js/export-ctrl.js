@@ -199,6 +199,9 @@
         } else if (p.type === 'Serial' && typeof SerialHelper !== 'undefined' && typeof SerialHelper.generateMarkdownSpec === 'function') {
             currentExportMd = SerialHelper.generateMarkdownSpec(p);
             currentExportHtml = SerialHelper.generateHtmlSpec(p);
+        } else if (p.type === 'CAN' && typeof CanHelper !== 'undefined' && typeof CanHelper.generateMarkdownSpec === 'function') {
+            currentExportMd = CanHelper.generateMarkdownSpec(p);
+            currentExportHtml = CanHelper.generateHtmlSpec(p);
         } else {
             currentExportMd = generateGenericMarkdown(p);
             currentExportHtml = generateGenericHtml(p, currentExportMd);
@@ -249,58 +252,26 @@
             exportModalProtoBadge.className = `viewer-type-pill ${isArinc ? 'pill-arinc' : (isSerial ? 'pill-serial' : 'pill-can')}`;
         }
 
-        // 渲染预览内容
+        // 渲染预览内容（使用独立 iframe 100% 还原 PDF 打印排版，支持顺畅上下滚动）
         if (exportRenderedPreview) {
-            // 直接渲染规格说明书的可视化内容
-            if (p.type === 'ARINC429') {
-                const tablesHtml = currentExportMd
-                    .replace(/^#\s+[^\n]+\n+/, '')
-                    .replace(/###\s+[^\n]+/g, (m) => `<h3 style="margin: 1.5rem 0 0.8rem 0; font-size: 15px; color: #1e293b;">${m.replace(/###\s+/, '')}</h3>`)
-                    .replace(/---/g, '<hr style="border:none; border-top:1px dashed #cbd5e1; margin: 2rem 0;">');
-
-                exportRenderedPreview.innerHTML = `
-                    <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 20px; display:flex; justify-content:space-between; align-items:flex-end;">
-                        <div>
-                            <h2 style="margin:0; font-size: 20px; font-weight:bold; color:#0f172a;">${escapeHTML(p.name || 'ARINC 429 通信协议')}</h2>
-                            <div style="font-size:12px; color:#64748b; margin-top:4px;">所属产品: ${escapeHTML(p.product || '-')} | 设备来源: ${escapeHTML(p.device || p.source || '-')} | 速率: ${escapeHTML(p.speed || '100kbps')}</div>
-                        </div>
-                        <div style="text-align:right; font-size:12px; color:#64748b;">
-                            <div>符合标准: ARINC 429</div>
-                            <div>数位格式: 32位 航电双列对照</div>
-                        </div>
-                    </div>
-                    ${tablesHtml}
-                `;
-            } else if (p.type === 'Serial') {
-                // 提取 HTML 中的主体容器内容以便预览
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(currentExportHtml, 'text/html');
-                const pageContainer = doc.querySelector('.page-container');
-                if (pageContainer) {
-                    const noPrint = pageContainer.querySelector('.no-print-bar');
-                    if (noPrint) noPrint.remove();
-                    exportRenderedPreview.innerHTML = pageContainer.innerHTML;
-                } else {
-                    exportRenderedPreview.innerHTML = `<pre style="white-space:pre-wrap;">${escapeHTML(currentExportMd)}</pre>`;
-                }
-            } else {
-                exportRenderedPreview.innerHTML = `
-                    <h2>${escapeHTML(p.name || '通信协议')}</h2>
-                    <pre style="white-space:pre-wrap; font-size:13px; font-family:sans-serif;">${escapeHTML(currentExportMd)}</pre>
-                `;
-            }
+            const previewHtml = currentExportHtml.replace(
+                '</style>',
+                '.no-print-bar { display: none !important; } html, body { height: auto !important; min-height: 100%; overflow-y: auto !important; } body { padding: 16px !important; }</style>'
+            );
+            exportRenderedPreview.innerHTML = '';
+            const iframe = document.createElement('iframe');
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.minHeight = '420px';
+            iframe.style.border = 'none';
+            iframe.style.display = 'block';
+            iframe.srcdoc = previewHtml;
+            exportRenderedPreview.appendChild(iframe);
         }
 
-        if (exportMdCodeBlock) {
-            exportMdCodeBlock.textContent = currentExportMd;
+        if (exportPreviewContainer) {
+            exportPreviewContainer.style.display = 'block';
         }
-
-        if (exportJsonCodeBlock) {
-            exportJsonCodeBlock.textContent = currentExportJson;
-        }
-
-        // 默认显示规格书预览视图
-        switchExportTab('preview');
 
         // 打开弹窗
         if (exportModal) {
@@ -312,26 +283,7 @@
      * 切换弹窗内预览标签页
      */
     function switchExportTab(tabName) {
-        if (!tabBtnPreview || !tabBtnCode) return;
-
-        tabBtnPreview.classList.remove('dense-btn-active');
-        tabBtnCode.classList.remove('dense-btn-active');
-        if (tabBtnJson) tabBtnJson.classList.remove('dense-btn-active');
-
-        if (exportPreviewContainer) exportPreviewContainer.style.display = 'none';
-        if (exportCodeContainer) exportCodeContainer.style.display = 'none';
-        if (exportJsonContainer) exportJsonContainer.style.display = 'none';
-
-        if (tabName === 'code') {
-            tabBtnCode.classList.add('dense-btn-active');
-            if (exportCodeContainer) exportCodeContainer.style.display = 'block';
-        } else if (tabName === 'json') {
-            if (tabBtnJson) tabBtnJson.classList.add('dense-btn-active');
-            if (exportJsonContainer) exportJsonContainer.style.display = 'block';
-        } else {
-            tabBtnPreview.classList.add('dense-btn-active');
-            if (exportPreviewContainer) exportPreviewContainer.style.display = 'block';
-        }
+        if (exportPreviewContainer) exportPreviewContainer.style.display = 'block';
     }
 
     /**
